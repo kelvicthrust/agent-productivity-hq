@@ -1,6 +1,6 @@
 {
   "name": "@kelvicthrust/agent-productivity-hq",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Open the local Agent Productivity HQ dashboard.",
   "license": "MIT",
