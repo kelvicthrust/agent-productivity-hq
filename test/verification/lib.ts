@@ -319,7 +319,7 @@ export function readmeProblems(input: ReadmeInput): string[] {
   };
   const problems: string[] = [];
 
-  const launchHeading = '## Choose how to run it';
+  const launchHeading = '## Quick start';
   const sourceHeading = '## Run from source';
   const screenshot = /^!\[[^\]\n]+\]\(docs\/images\/overview\.(?:png|jpe?g)\)/m.exec(readme);
   if (!screenshot || screenshot.index > readme.indexOf(launchHeading))
