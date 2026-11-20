@@ -42,7 +42,7 @@ Install and open Agent Productivity HQ on the Mac that holds my agent activity. 
 | Launch method | Before you start                                                                                                                                        | Open the dashboard                              |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | Terminal      | Use an Apple Silicon Mac with [Node.js and npm](#node-compatibility). [Use a downloaded archive](docs/delivery/setup.md#run-a-release-archive-with-npx) | `npx --yes @kelvicthrust/agent-productivity-hq` |
-| Paseo         | Set up Tailscale and the [Agent HQ plugin](docs/delivery/setup.md#install-from-the-release-archive) on your Mac.                                        | Click **Agent HQ** in the Paseo sidebar.        |
+| Paseo         | Set up Tailscale on your Mac and install [Agent HQ from the Paseo plugin directory](https://paseo.sh/plugins/kelvicthrust/agent-productivity).          | Click **Agent HQ** in the Paseo sidebar.        |
 
 The Terminal command opens HQ in your browser. If needed, copy the address it prints into your browser. [Downloadable releases](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest)
 

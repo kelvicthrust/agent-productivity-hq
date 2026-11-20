@@ -336,7 +336,7 @@ export function readmeProblems(input: ReadmeInput): string[] {
       'docs/delivery/setup.md#run-a-release-archive-with-npx',
       `npx --yes ${input.cliPackage}`,
     ],
-    ['Paseo', 'docs/delivery/setup.md#install-from-the-release-archive', 'Agent HQ'],
+    ['Paseo', 'https://paseo.sh/plugins/kelvicthrust/agent-productivity', 'Agent HQ'],
   ] as const) {
     const row = launchRows.get(method);
     if (!row?.[1] || !linkTargets(row[1]).includes(setupLink))
