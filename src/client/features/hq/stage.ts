@@ -93,7 +93,7 @@ export function captionsCollide(
   stations: readonly Pick<Station, 'x'>[],
   size: number,
 ): boolean {
-  // 0.56 em a character is the wide end of Shantell Sans at the caption size (its real captions measure 0.44 to 0.56).
+  // Estimate 0.56 em a character so caption layout is available while the font loads.
   const width = (c: SceneCharacter) => c.caption.length * size * 0.56 + 4;
   return characters.some((c, i) => {
     const next = characters[i + 1];

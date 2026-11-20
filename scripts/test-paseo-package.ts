@@ -10,8 +10,8 @@ import { listMigrations } from '../src/server/db/migrate.ts';
 import {
   nunitoLicenseSource,
   nunitoNoticeFile,
-  shantellLicenseSource,
-  shantellNoticeFile,
+  playpenLicenseSource,
+  playpenNoticeFile,
   thirdPartyNoticesFile,
 } from './third-party-notices.ts';
 
@@ -43,9 +43,7 @@ function checkArchiveNotices(plugin: string) {
   );
   assert.ok(
     files.some((file) =>
-      /^package\/runtime\/app\/dist\/client\/assets\/shantell-sans-latin-wght-.*\.woff2$/.test(
-        file,
-      ),
+      /^package\/runtime\/app\/dist\/client\/assets\/playpen-sans-latin-wght-.*\.woff2$/.test(file),
     ),
     'The plugin archive must include the self-hosted HQ font',
   );
@@ -53,7 +51,7 @@ function checkArchiveNotices(plugin: string) {
     thirdPartyNoticesFile,
     `${app}/${thirdPartyNoticesFile}`,
     `${app}/${nunitoNoticeFile}`,
-    `${app}/${shantellNoticeFile}`,
+    `${app}/${playpenNoticeFile}`,
   ]) {
     assert.ok(files.includes(`package/${file}`), `The plugin archive is missing ${file}`);
   }
@@ -63,9 +61,9 @@ function checkArchiveNotices(plugin: string) {
     'The plugin archive must include the original Nunito OFL text',
   );
   assert.deepEqual(
-    readFileSync(join(plugin, app, shantellNoticeFile)),
-    readFileSync(shantellLicenseSource),
-    'The plugin archive must include the original Shantell Sans OFL text',
+    readFileSync(join(plugin, app, playpenNoticeFile)),
+    readFileSync(playpenLicenseSource),
+    'The plugin archive must include the original Playpen Sans OFL text',
   );
   const browser = readFileSync(join(plugin, app, thirdPartyNoticesFile), 'utf8');
   assert.match(browser, /^## react@\S+ \(MIT\)$/m);

@@ -15,9 +15,9 @@ import { SceneFilters, useSceneFilters } from './sceneFilters';
 // decorative: hidden from assistive technology, no focusable part, and the roster below it is the accessible account of the page.
 // Original art in the logbook-sketch style (DESIGN.md › HQ); the buddies stay the characters on every other screen.
 
-/** The in-scene handwriting, defined once: the self-hosted Shantell Sans (the @font-face in theme/globals.css), then system handwriting faces. */
+/** The in-scene handwriting, defined once: the self-hosted Playpen Sans (the @font-face in theme/globals.css), then system handwriting faces. */
 export const HAND_FONT =
-  "'Shantell Sans', 'Bradley Hand', 'Segoe Print', 'Chalkboard SE', 'Comic Sans MS', cursive";
+  "'Playpen Sans', 'Bradley Hand', 'Segoe Print', 'Chalkboard SE', 'Comic Sans MS', cursive";
 
 /** A room's drawing box, in its own units, by how many columns the building has. */
 const WIDTH = { 1: 290, 2: 420, 3: 360 } as const;

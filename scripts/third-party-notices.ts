@@ -4,9 +4,9 @@ import { join } from 'node:path';
 export const thirdPartyNoticesFile = 'THIRD-PARTY-NOTICES.txt';
 export const nunitoNoticeFile = 'licenses/Nunito-OFL.txt';
 export const nunitoLicenseSource = new URL('../src/client/theme/fonts/OFL.txt', import.meta.url);
-export const shantellNoticeFile = 'licenses/Shantell-Sans-OFL.txt';
-export const shantellLicenseSource = new URL(
-  '../src/client/theme/fonts/OFL-ShantellSans.txt',
+export const playpenNoticeFile = 'licenses/Playpen-Sans-OFL.txt';
+export const playpenLicenseSource = new URL(
+  '../src/client/theme/fonts/OFL-PlaypenSans.txt',
   import.meta.url,
 );
 

@@ -574,9 +574,9 @@ describe('a clean checkout starts on a first launch', () => {
       expect(readFileSync(join(client, 'licenses/Nunito-OFL.txt'))).toEqual(
         readFileSync(join(dir, 'src/client/theme/fonts/OFL.txt')),
       );
-      expect(assets).toContainEqual(expect.stringMatching(/^shantell-sans-latin-wght-.*\.woff2$/));
-      expect(readFileSync(join(client, 'licenses/Shantell-Sans-OFL.txt'))).toEqual(
-        readFileSync(join(dir, 'src/client/theme/fonts/OFL-ShantellSans.txt')),
+      expect(assets).toContainEqual(expect.stringMatching(/^playpen-sans-latin-wght-.*\.woff2$/));
+      expect(readFileSync(join(client, 'licenses/Playpen-Sans-OFL.txt'))).toEqual(
+        readFileSync(join(dir, 'src/client/theme/fonts/OFL-PlaypenSans.txt')),
       );
 
       const notices = readFileSync(join(client, 'THIRD-PARTY-NOTICES.txt'), 'utf8');
