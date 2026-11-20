@@ -7,7 +7,7 @@ import { failures, measureContainment } from './helpers/containment';
 import { ORIGIN } from './helpers/virtualOrigin';
 import { openWorld } from './helpers/world';
 
-// HQ's drawn text is the self-hosted Shantell Sans (theme/globals.css), the critters stand in for the buddies on every other screen,
+// HQ's drawn text is the self-hosted Playpen Sans (theme/globals.css), the critters stand in for the buddies on every other screen,
 // and none of it asks anything of the network beyond the dashboard's own origin.
 
 async function openHq(page: Page, width: number, hq: HqScenario = 'office'): Promise<void> {
@@ -20,7 +20,7 @@ async function openHq(page: Page, width: number, hq: HqScenario = 'office'): Pro
 }
 
 test.describe('HQ art', () => {
-  test('draws the scene text in the self-hosted Shantell Sans, from this origin only', async ({
+  test('draws the scene text in the self-hosted Playpen Sans, from this origin only', async ({
     page,
   }) => {
     const requests: string[] = [];
@@ -28,12 +28,12 @@ test.describe('HQ art', () => {
     await openHq(page, 1280);
 
     const loaded = await page.evaluate(async () => {
-      await document.fonts.load("600 15px 'Shantell Sans'");
+      await document.fonts.load("600 15px 'Playpen Sans'");
       await document.fonts.ready;
       return {
-        check: document.fonts.check("600 15px 'Shantell Sans'"),
+        check: document.fonts.check("600 15px 'Playpen Sans'"),
         faces: [...document.fonts]
-          .filter((face) => face.family.replaceAll('"', '') === 'Shantell Sans')
+          .filter((face) => face.family.replaceAll('"', '') === 'Playpen Sans')
           .map((face) => face.status),
       };
     });
@@ -49,13 +49,36 @@ test.describe('HQ art', () => {
       };
     });
     expect(families.count).toBeGreaterThan(8);
-    expect(families.families).toEqual(['"Shantell Sans"']);
+    expect(families.families).toEqual(['"Playpen Sans"']);
 
     // It is the dashboard's own file, and nothing in the whole page load went to another origin.
     const files = requests.filter((url) => /\.woff2(\?|$)/.test(url));
-    expect(files.filter((url) => /shantell-sans-latin-wght-.*\.woff2$/.test(url))).toHaveLength(1);
+    expect(files.filter((url) => /playpen-sans-latin-wght-.*\.woff2$/.test(url))).toHaveLength(1);
     expect(requests.filter((url) => new URL(url).origin !== ORIGIN)).toEqual([]);
     expect(requests.filter((url) => /fonts\.(googleapis|gstatic)/.test(url))).toEqual([]);
+  });
+
+  test('uses the handwriting fallback when Playpen Sans cannot load', async ({ page }) => {
+    await openWorld(page, { hq: 'office' });
+    await page.route(`${ORIGIN}/assets/playpen-sans-latin-wght-*.woff2`, (route) => route.abort());
+    await page.goto(`${ORIGIN}/hq`);
+
+    const sign = page.getByTestId('hq-room').first().locator('text').first();
+    await expect(sign).toBeVisible();
+    const rendered = await sign.evaluate(async (text) => {
+      await document.fonts.ready;
+      return {
+        status: [...document.fonts].find(
+          (face) => face.family.replaceAll('"', '') === 'Playpen Sans',
+        )?.status,
+        family: getComputedStyle(text).fontFamily,
+        width: text.getBoundingClientRect().width,
+      };
+    });
+    expect(rendered.status).toBe('error');
+    expect(rendered.family).toContain('Bradley Hand');
+    expect(rendered.family).toMatch(/cursive$/);
+    expect(rendered.width).toBeGreaterThan(0);
   });
 
   test('keeps the roster list in the UI fonts, not the scene handwriting', async ({ page }) => {
@@ -63,7 +86,7 @@ test.describe('HQ art', () => {
     const family = await page
       .getByRole('list', { name: 'Sessions', exact: true })
       .evaluate((list) => getComputedStyle(list).fontFamily);
-    expect(family).not.toContain('Shantell');
+    expect(family).not.toContain('Playpen Sans');
   });
 
   test('draws the critters beside the provider names on the roster', async ({ page }) => {

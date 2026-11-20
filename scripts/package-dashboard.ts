@@ -17,7 +17,7 @@ import { parse } from 'yaml';
 import {
   nunitoNoticeFile,
   packageNotices,
-  shantellNoticeFile,
+  playpenNoticeFile,
   thirdPartyNoticesFile,
 } from './third-party-notices.ts';
 
@@ -115,7 +115,7 @@ function stageDependencies(destination: string, kind: 'cli' | 'paseo'): Record<s
         : 'Third-party notices for Agent Productivity HQ',
       `Dashboard libraries: runtime/app/dist/client/${thirdPartyNoticesFile}`,
       `Nunito license: runtime/app/dist/client/${nunitoNoticeFile}`,
-      `Shantell Sans license: runtime/app/dist/client/${shantellNoticeFile}`,
+      `Playpen Sans license: runtime/app/dist/client/${playpenNoticeFile}`,
       '',
       packageNotices(bundled),
       '',

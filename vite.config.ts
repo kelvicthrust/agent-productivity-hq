@@ -7,8 +7,8 @@ import {
   nunitoLicenseSource,
   nunitoNoticeFile,
   packageNotices,
-  shantellLicenseSource,
-  shantellNoticeFile,
+  playpenLicenseSource,
+  playpenNoticeFile,
   thirdPartyNoticesFile,
 } from './scripts/third-party-notices.ts';
 
@@ -34,7 +34,7 @@ function browserNotices(): Plugin {
       this.emitFile({
         type: 'asset',
         fileName: thirdPartyNoticesFile,
-        source: `Third-party notices for the dashboard\n\nNunito license: ${nunitoNoticeFile}\nShantell Sans license: ${shantellNoticeFile}\n\n${packageNotices(dependencies)}\n`,
+        source: `Third-party notices for the dashboard\n\nNunito license: ${nunitoNoticeFile}\nPlaypen Sans license: ${playpenNoticeFile}\n\n${packageNotices(dependencies)}\n`,
       });
       this.emitFile({
         type: 'asset',
@@ -43,8 +43,8 @@ function browserNotices(): Plugin {
       });
       this.emitFile({
         type: 'asset',
-        fileName: shantellNoticeFile,
-        source: readFileSync(shantellLicenseSource),
+        fileName: playpenNoticeFile,
+        source: readFileSync(playpenLicenseSource),
       });
     },
   };

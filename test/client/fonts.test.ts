@@ -12,18 +12,20 @@ describe.each([
     file: 'nunito-latin-wght.woff2',
     licence: 'OFL.txt',
     copyright: 'Copyright 2014 The Nunito Project Authors',
+    maxBytes: 100_000,
   },
   {
-    family: 'Shantell Sans',
-    file: 'shantell-sans-latin-wght.woff2',
-    licence: 'OFL-ShantellSans.txt',
-    copyright: 'Copyright 2022 The Shantell Sans Project Authors',
+    family: 'Playpen Sans',
+    file: 'playpen-sans-latin-wght.woff2',
+    licence: 'OFL-PlaypenSans.txt',
+    copyright: 'Copyright 2023 The Playpen Sans Project Authors',
+    maxBytes: 200_000,
   },
-])('$family', ({ family, file, licence, copyright }) => {
+])('$family', ({ family, file, licence, copyright, maxBytes }) => {
   it('is a small woff2 file', () => {
     const bytes = readFileSync(new URL(file, fonts));
     expect(bytes.subarray(0, 4).toString('latin1')).toBe('wOF2');
-    expect(statSync(new URL(file, fonts)).size).toBeLessThan(100_000);
+    expect(statSync(new URL(file, fonts)).size).toBeLessThan(maxBytes);
   });
 
   it('keeps its licence beside it', () => {

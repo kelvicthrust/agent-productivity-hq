@@ -70,7 +70,7 @@ export function signTextWidth(sign: number, needs: boolean): number {
 
 /** How many characters of the scene's handwriting at `size` fit in `room` units. */
 function capacity(room: number, size: number): number {
-  // 0.54 em a character: Shantell Sans measures about 0.53 for repository names at the sign's size and weight, 0.44 to 0.56 for the small lines.
+  // Estimate 0.54 em a character so sign layout is available while the font loads.
   return Math.max(4, Math.floor(room / (size * 0.54)));
 }
 
