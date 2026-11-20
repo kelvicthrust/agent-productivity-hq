@@ -267,6 +267,7 @@ export interface ReadmeInput {
   scripts: Record<string, string>;
   engines: string;
   packageManager: string;
+  cliPackage: string;
   cliArchive: string;
   cliCommand: string;
   host: string;
@@ -329,17 +330,21 @@ export function readmeProblems(input: ReadmeInput): string[] {
   const launchRows = new Map(tableRows(section(readme, launchHeading)).map((row) => [row[0], row]));
   const archivePath = `/absolute/path/to/${input.cliArchive}`;
   const archiveCommand = `npx --package="${archivePath}" ${input.cliCommand}`;
-  for (const [method, anchor, actions] of [
-    ['Terminal', 'run-a-release-archive-with-npx', [archiveCommand]],
-    ['Paseo', 'install-from-the-release-archive', ['Agent HQ']],
+  for (const [method, setupLink, actions] of [
+    [
+      'Terminal',
+      'docs/delivery/setup.md#run-a-release-archive-with-npx',
+      [`npx --yes ${input.cliPackage}`],
+    ],
+    ['Paseo', 'docs/delivery/setup.md#install-from-the-release-archive', ['Agent HQ']],
     [
       'Agent skill',
-      'install-the-agent-skill',
+      '#install-the-agent-skill',
       ['/agent-productivity-hq', '$agent-productivity-hq'],
     ],
   ] as const) {
     const row = launchRows.get(method);
-    if (!row?.[1]?.includes(`docs/delivery/setup.md#${anchor}`))
+    if (!row?.[1] || !linkTargets(row[1]).includes(setupLink))
       problems.push(`The README launch table must link ${method} to its setup instructions`);
     if (!actions.every((action) => row?.[2]?.includes(action)))
       problems.push(

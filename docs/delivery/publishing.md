@@ -4,7 +4,29 @@ Public product distribution remains on hold pending resolution of the provider-a
 requirement in the [public release review](public-release-review.md). The maintainer runs this
 procedure after that hold is cleared and public release is authorized.
 
-## Prepare the GitHub release
+## Release with GitHub Actions
+
+The [Release workflow](../../.github/workflows/release.yml) builds both packages on a GitHub-hosted Apple Silicon runner. It runs `pnpm verify` and both package smoke tests, then uploads the tarballs and `SHA256SUMS` to the workflow run. Use **Actions → Release → Run workflow** to build and download these assets without publishing.
+
+### Configure npm once
+
+In npm package settings, add a GitHub Actions [trusted publisher](https://docs.npmjs.com/trusted-publishers/#for-github-actions) for each of `@kelvicthrust/agent-productivity-hq` and `@kelvicthrust/paseo-agent-productivity-hq`. Set the owner to `kelvicthrust`, the repository to `agent-productivity-hq`, and the workflow filename to `release.yml`. Leave the environment blank. Enable **Allow npm publish** and **Allow npm dist-tag**. npm requires the package maintainer's two-factor authentication for these settings. The workflow uses OpenID Connect for publishing.
+
+Configure both publishers when the first new release is ready. Each configuration expires unless it completes its first new publish within two days. A manual build or a comparison with an already published version leaves the configuration unvalidated. [npm expiry rules](https://docs.npmjs.com/trusted-publishers/#trusted-publisher-configuration-expiry)
+
+### Publish a new version
+
+1. Update the version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Merge the reviewed changes into `main`.
+2. Tag that commit with the matching stable version, such as `v1.0.1`, and push the tag to `origin`. GitHub Actions checks the version and that the commit is in `main`.
+3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, then creates a GitHub release using the same tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
+
+If publishing fails after one package reaches npm, rerun failed jobs to reuse the original artifacts. The workflow reuses a published version only when its integrity matches the original archive. If the artifacts expire or the bytes differ, use a new version. For a GitHub release that already exists, verify its tag and assets before completing it manually. The remaining skills.sh and Paseo catalog steps are described below.
+
+## Manual release
+
+Use this procedure when you need to exercise installed packages on your own Mac and Paseo daemon before promotion. The automated workflow exercises the local archives on its runner and checks the downloads against those tested bytes. Wait for any active release workflow to finish before moving npm tags manually.
+
+### Prepare the GitHub release
 
 1. Use the approved `1.0.0` build from the reviewed commit in the
    [release repository](https://github.com/kelvicthrust/agent-productivity-hq). Record its
@@ -33,7 +55,7 @@ Rebuild with `pnpm pack:cli` and `pnpm pack:paseo` on Apple Silicon if the appro
 Use Node.js 26 or newer for the source build and npm 11 on `PATH` to pack the Paseo publication lock.
 Publish the generated tarballs from `dist/cli` and `dist/paseo`.
 
-## Publish and verify npm packages
+### Publish and verify npm packages
 
 Run these commands from the directory with the verified tarballs. Sign in to npm with publishing
 rights for `@kelvicthrust` and confirm `npm whoami` returns the intended account. If
