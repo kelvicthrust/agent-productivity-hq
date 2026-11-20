@@ -1,0 +1,10 @@
+{
+  "id": "agent-productivity",
+  "name": "Agent HQ",
+  "description": "Open Agent Productivity HQ from Paseo to review live agents, local usage, and merged pull requests.",
+  "icon": "assets/logbook.png",
+  "requirements": {
+    "paseo": ">=0.16.1"
+  },
+  "media": ["assets/hq.png"]
+}

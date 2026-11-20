@@ -1,0 +1,14 @@
+{
+  "session_id": "SENTINEL_SESSION_8f21c4",
+  "transcript_path": "/SENTINEL_PATH/transcript.jsonl",
+  "cwd": "/SENTINEL_PATH/project",
+  "workspace": { "current_dir": "/SENTINEL_PATH/project", "project_dir": "/SENTINEL_PATH/project" },
+  "model": { "id": "SENTINEL_MODEL_3c91d2", "display_name": "SENTINEL_MODEL_NAME" },
+  "version": "2.1.0",
+  "cost": { "total_cost_usd": 12.34, "total_lines_added": 99 },
+  "session_name": "SENTINEL_TITLE_e4b1a7",
+  "rate_limits": {
+    "five_hour": { "used_percentage": 23.5, "resets_at": 4102441200 },
+    "seven_day": { "used_percentage": 41.2, "resets_at": 4102444800 }
+  }
+}

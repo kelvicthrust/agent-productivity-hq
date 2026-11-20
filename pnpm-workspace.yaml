@@ -1,0 +1,19 @@
+# pnpm settings for this single-package project (there is no workspace of packages).
+
+# Install scripts stay blocked unless listed here with a reason.
+allowBuilds:
+  # Denied: @astryxdesign/core's postinstall only prints a hint to run `astryx init`
+  # (read in full: it never writes files and never fails an install).
+  '@astryxdesign/core': false
+
+# Supply-chain age gate: refuse versions published less than pnpm's default window ago, and fail
+# instead of silently exempting them. A deliberate exception must be added by hand with a reason.
+minimumReleaseAgeStrict: true
+
+# Project-local package cache, like the project-local store. pnpm 11 checks the lockfile against the release-age
+# policy on every install and needs registry metadata for that. With only the user-level cache, a no-network
+# install (a sandbox that cannot write that cache, a crewmate's copy, a checker) fails with
+# ERR_PNPM_NO_OFFLINE_META as soon as the lockfile changes. Here an online install writes the metadata and the
+# verification record next to the store, so later installs work offline. Git-ignored; run an online
+# `pnpm install` after any dependency change to refresh it.
+cacheDir: .pnpm-cache

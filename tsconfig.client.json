@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "ESNext.Temporal", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "files": [],
+  "include": [
+    "src/client",
+    "src/shared",
+    "test/shell",
+    "test/client",
+    "test/components",
+    "test/e2e/harness"
+  ]
+}

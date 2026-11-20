@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-10-20T11:00:00Z","cwd":"/fixture/SENTINEL_CWD_dg/app","message":{"role":"user","content":"SENTINEL_PROMPT_dg"}}
+{"type":"assistant","timestamp":"2026-10-20T11:00:05Z","cwd":"/fixture/SENTINEL_CWD_dg/app","gitBranch":"SENTINEL_BRANCH_dg","requestId":"req_msg_m9","message":{"id":"msg_m9","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"SENTINEL_REPLY_dg"}],"usage":{"input_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":5}}}

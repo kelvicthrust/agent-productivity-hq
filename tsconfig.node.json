@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "ESNext.Temporal"],
+    "types": ["node"]
+  },
+  "files": [],
+  "include": ["scripts", "src/server", "src/shared", "test", "*.config.ts"],
+  "exclude": [
+    "test/shell",
+    "test/client",
+    "test/components",
+    "test/e2e",
+    "scripts/capture-fidelity.ts",
+    "scripts/measure-browser.ts"
+  ]
+}

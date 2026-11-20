@@ -1,0 +1,7 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "'node' 'SENTINEL_SCRIPT_5e1a09' --hook --dir 'SENTINEL_DIR_5e1a09' --role user --hold-ms 600",
+    "padding": 0
+  }
+}

@@ -1,0 +1,4 @@
+{"timestamp":"2026-11-06T10:00:00Z","type":"session_meta","payload":{"id":"bbbbbbbb-0000-4000-8000-000000000001","cwd":"/fixture-repo","git":{"branch":"SENTINEL_BRANCH_c3d4e5"}}}
+{"timestamp":"2026-11-06T10:05:00Z","type":"response_item","payload":{"type":"function_call_output","output":"[main 1a2b3c4] SENTINEL_TEXT_c0117a\n 1 file changed"}}
+{"timestamp":"2026-11-06T10:06:00Z","type":"response_item","payload":{"type":"function_call_output","output":"1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d\n"}}
+{"timestamp":"2026-11-06T10:07:00Z","type":"response_item","payload":{"type":"function_call_output","output":"{\"url\":\"https://api.github.com/repos/acme-crew/widgets/pulls/150\",\"note\":\"SENTINEL_TEXT_c0117b\"}"}}

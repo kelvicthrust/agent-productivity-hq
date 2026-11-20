@@ -1,0 +1,40 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": {
+      "result": {
+        "userAgent": "codex_app_server/0.0.0 (fixture)"
+      }
+    },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "apiKey"
+        },
+        "requiresOpenaiAuth": true
+      }
+    },
+    "account/usage/read": {
+      "error": {
+        "code": -32600,
+        "message": "SENTINEL_NOTE_a91c02: usage needs a ChatGPT sign-in"
+      }
+    },
+    "account/rateLimits/read": {
+      "result": {
+        "rateLimits": {
+          "primary": {
+            "usedPercent": 23,
+            "windowDurationMins": 300,
+            "resetsAt": 1762432800
+          },
+          "secondary": {
+            "usedPercent": 41,
+            "windowDurationMins": 10080,
+            "resetsAt": 1762857600
+          }
+        }
+      }
+    }
+  }
+}

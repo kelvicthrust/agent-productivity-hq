@@ -1,0 +1,4 @@
+{
+  "model": "SENTINEL_MODEL_3c91d2",
+  "permissions": { "allow": ["SENTINEL_RULE_71ab02"] }
+}

@@ -1,0 +1,1 @@
+No transcripts here on purpose (SENTINEL_NOTE_e3a701): E5 reads *.jsonl only, so this folder is read and finds nothing.

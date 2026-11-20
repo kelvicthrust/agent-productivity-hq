@@ -1,0 +1,290 @@
+{
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://api.github.com/user",
+      "once": true,
+      "response": {
+        "status": 200,
+        "json": {
+          "login": "SENTINEL_LOGIN_a1b2c3",
+          "id": 1001,
+          "type": "User"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://api.github.com/graphql",
+      "once": true,
+      "response": {
+        "status": 200,
+        "json": {
+          "data": {
+            "repository": {
+              "pullRequests": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": null
+                },
+                "nodes": [
+                  {
+                    "id": "SENTINEL_NODE_0065",
+                    "number": 101,
+                    "title": "SENTINEL_TITLE_9a8b65",
+                    "url": "https://github.com/acme-crew/widgets/pull/101",
+                    "mergedAt": "2026-11-05T10:00:00Z",
+                    "updatedAt": "2026-11-05T10:30:00Z",
+                    "author": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "mergedBy": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "headRefName": "SENTINEL_BRANCH_77a1",
+                    "baseRefName": "main",
+                    "mergeCommit": {
+                      "oid": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
+                    },
+                    "commits": {
+                      "totalCount": 2,
+                      "nodes": [
+                        {
+                          "commit": {
+                            "oid": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e"
+                          }
+                        },
+                        {
+                          "commit": {
+                            "oid": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "SENTINEL_NODE_0066",
+                    "number": 102,
+                    "title": "SENTINEL_TITLE_9a8b66",
+                    "url": "https://github.com/acme-crew/widgets/pull/102",
+                    "mergedAt": "2026-11-05T10:00:00Z",
+                    "updatedAt": "2026-11-05T10:30:00Z",
+                    "author": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "mergedBy": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "headRefName": "SENTINEL_BRANCH_77a2",
+                    "baseRefName": "main",
+                    "mergeCommit": {
+                      "oid": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f"
+                    },
+                    "commits": {
+                      "totalCount": 1,
+                      "nodes": [
+                        {
+                          "commit": {
+                            "oid": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "rateLimit": {
+              "remaining": 4990,
+              "resetAt": "2026-11-08T13:00:00Z",
+              "cost": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://github.com/login/device/code",
+      "bodyIncludes": "client_id",
+      "response": {
+        "status": 200,
+        "json": {
+          "device_code": "SENTINEL_DEVICE_5e1a09",
+          "user_code": "WXYZ-0000",
+          "verification_uri": "https://github.com/login/device",
+          "expires_in": 900,
+          "interval": 0
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://github.com/login/oauth/access_token",
+      "bodyIncludes": "\"device_code\"",
+      "response": {
+        "status": 200,
+        "json": {
+          "error": "access_denied"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/user",
+      "response": {
+        "status": 200,
+        "json": {
+          "login": "SENTINEL_LOGIN_a1b2c3",
+          "id": 1001,
+          "type": "User"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://api.github.com/graphql",
+      "response": {
+        "status": 200,
+        "json": {
+          "data": {
+            "repository": {
+              "pullRequests": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": null
+                },
+                "nodes": [
+                  {
+                    "id": "SENTINEL_NODE_0065",
+                    "number": 101,
+                    "title": "SENTINEL_TITLE_9a8b65",
+                    "url": "https://github.com/acme-crew/widgets/pull/101",
+                    "mergedAt": "2026-11-05T10:00:00Z",
+                    "updatedAt": "2026-11-05T10:30:00Z",
+                    "author": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "mergedBy": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "headRefName": "SENTINEL_BRANCH_77a1",
+                    "baseRefName": "main",
+                    "mergeCommit": {
+                      "oid": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
+                    },
+                    "commits": {
+                      "totalCount": 2,
+                      "nodes": [
+                        {
+                          "commit": {
+                            "oid": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e"
+                          }
+                        },
+                        {
+                          "commit": {
+                            "oid": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "SENTINEL_NODE_0066",
+                    "number": 102,
+                    "title": "SENTINEL_TITLE_9a8b66",
+                    "url": "https://github.com/acme-crew/widgets/pull/102",
+                    "mergedAt": "2026-11-05T10:00:00Z",
+                    "updatedAt": "2026-11-05T10:30:00Z",
+                    "author": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "mergedBy": {
+                      "login": "SENTINEL_LOGIN_a1b2c3"
+                    },
+                    "headRefName": "SENTINEL_BRANCH_77a2",
+                    "baseRefName": "main",
+                    "mergeCommit": {
+                      "oid": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f"
+                    },
+                    "commits": {
+                      "totalCount": 1,
+                      "nodes": [
+                        {
+                          "commit": {
+                            "oid": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "rateLimit": {
+              "remaining": 4990,
+              "resetAt": "2026-11-08T13:00:00Z",
+              "cost": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/user/installations",
+      "response": {
+        "status": 200,
+        "json": {
+          "total_count": 1,
+          "installations": [
+            {
+              "id": 7001,
+              "app_slug": "SENTINEL_APP_a11c",
+              "permissions": {
+                "metadata": "read",
+                "pull_requests": "read"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://github.com/login/oauth/access_token",
+      "bodyIncludes": "\"grant_type\":\"refresh_token\"",
+      "response": {
+        "status": 200,
+        "json": {
+          "access_token": "<SENTINEL_TOKEN_app2>",
+          "token_type": "bearer",
+          "scope": "",
+          "expires_in": 28800,
+          "refresh_token": "<SENTINEL_TOKEN_refresh2>",
+          "refresh_token_expires_in": 15811200
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/repos/acme-crew/not-installed",
+      "response": {
+        "status": 404,
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/repos/acme-crew/no-access",
+      "response": {
+        "status": 404,
+        "json": {
+          "message": "Not Found"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "sessions": [
+    {
+      "sessionFile": "rollout-2026-10-20T09-00-00-a1a1a1a1-1111-4111-8111-0000000000a1",
+      "sessionId": "2026/10/20/rollout-2026-10-20T09-00-00-a1a1a1a1-1111-4111-8111-0000000000a1",
+      "inputTokens": 800,
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 1200,
+      "outputTokens": 250,
+      "reasoningOutputTokens": 20,
+      "totalTokens": 2250
+    },
+    {
+      "sessionFile": "rollout-2026-10-20T09-10-00-b2b2b2b2-2222-4222-8222-0000000000b2",
+      "sessionId": "2026/10/20/rollout-2026-10-20T09-10-00-b2b2b2b2-2222-4222-8222-0000000000b2",
+      "inputTokens": 1100,
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 1500,
+      "outputTokens": 300,
+      "reasoningOutputTokens": 25,
+      "totalTokens": 2900
+    }
+  ]
+}

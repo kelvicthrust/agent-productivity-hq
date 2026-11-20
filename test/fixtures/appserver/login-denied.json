@@ -1,0 +1,24 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": { "result": { "userAgent": "codex_app_server/0.0.0 (fixture)" } },
+    "account/read": { "result": { "account": null, "requiresOpenaiAuth": true } },
+    "account/login/start": {
+      "result": {
+        "type": "chatgpt",
+        "loginId": "SENTINEL_LOGIN_ID_d1",
+        "authUrl": "https://auth.example.test/oauth/authorize?state=SENTINEL_STATE_e2"
+      },
+      "then": [
+        {
+          "method": "account/login/completed",
+          "params": {
+            "loginId": "SENTINEL_LOGIN_ID_d1",
+            "success": false,
+            "error": "SENTINEL_NOTE_f3 access denied"
+          }
+        }
+      ]
+    }
+  }
+}

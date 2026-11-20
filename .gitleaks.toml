@@ -1,0 +1,39 @@
+# Default detection remains enabled. These exact invented test values exercise redaction
+# and malformed-input handling; no real credential or entire test directory is ignored.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixed illustrative JWT used only by secret-redaction tests"
+condition = "AND"
+paths = ['''(^|/)test/(experiments/lib/secrets|server/logger)\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV$''']
+
+[[allowlists]]
+description = "Invented prompt proving the rollout parser drops message content"
+condition = "AND"
+paths = ['''(^|/)test/collectors/codex/rollout\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^SENTINEL_PROMPT_zz9$''']
+
+[[allowlists]]
+description = "Deliberately truncated invented Claude JSON input"
+condition = "AND"
+paths = ['''(^|/)test/fixtures/claude/projects-corrupt/-fixture-SENTINEL_CWD_f6a1b2-app/44444444-eeee-4eee-8eee-000000000004\.jsonl$''']
+regexTarget = "secret"
+regexes = ['''^SENTINEL_BROKEN_d4e5f6$''']
+
+[[allowlists]]
+description = "Deliberately truncated invented Codex JSON input"
+condition = "AND"
+paths = ['''(^|/)test/fixtures/codex/home-corrupt/sessions/2026/10/15/rollout-2026-10-15T10-00-00-eeeeeeee-5555-4555-8555-00000000000e\.jsonl$''']
+regexTarget = "secret"
+regexes = ['''^SENTINEL_BROKEN_a1b2c3$''']
+
+[[allowlists]]
+description = "Invented settings helper proving credential fields are not copied"
+condition = "AND"
+paths = ['''(^|/)test/fixtures/statusline/seed/credentials-only\.json$''']
+regexTarget = "secret"
+regexes = ['''^(SENTINEL_TOKEN_0a726d|SENTINEL_CMD_1b837e)$''']

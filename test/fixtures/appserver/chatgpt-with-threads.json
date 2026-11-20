@@ -1,0 +1,107 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": { "result": { "userAgent": "codex_app_server/0.0.0 (fixture)" } },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "chatgpt",
+          "email": "SENTINEL_EMAIL_5e1a09@example.com",
+          "planType": "plus"
+        },
+        "requiresOpenaiAuth": true
+      }
+    },
+    "account/usage/read": {
+      "result": {
+        "summary": {
+          "lifetimeTokens": 123456,
+          "currentStreakDays": 3,
+          "longestStreakDays": 9,
+          "peakDailyTokens": 4242
+        },
+        "dailyUsageBuckets": [
+          { "startDate": "2026-11-01", "tokens": 100 },
+          { "startDate": "2026-11-02", "tokens": 200 },
+          { "startDate": "2026-11-03", "tokens": 300 },
+          { "startDate": "2026-11-04", "tokens": 400 },
+          { "startDate": "2026-11-05", "tokens": 500 },
+          { "startDate": "2026-11-06", "tokens": 600 },
+          { "startDate": "2026-11-07", "tokens": 700 }
+        ]
+      }
+    },
+    "account/rateLimits/read": {
+      "result": {
+        "rateLimits": {
+          "limitId": "codex",
+          "limitName": "SENTINEL_LIMIT_NAME_c3d4",
+          "primary": { "usedPercent": 23, "windowDurationMins": 300, "resetsAt": 1762432800 },
+          "secondary": { "usedPercent": 41, "windowDurationMins": 10080, "resetsAt": 1762857600 },
+          "credits": { "hasCredits": false, "unlimited": false, "balance": null },
+          "planType": "plus"
+        }
+      }
+    },
+    "thread/list": {
+      "sequence": [
+        {
+          "result": {
+            "data": [
+              {
+                "id": "codex-thread-aaa",
+                "name": "Fix the login redirect",
+                "preview": "SENTINEL_PREVIEW_7f01 please fix the redirect",
+                "createdAt": 1762000000,
+                "source": "cli"
+              },
+              {
+                "id": "codex-thread-bbb",
+                "name": null,
+                "preview": "SENTINEL_PREVIEW_7f02 an unnamed thread",
+                "createdAt": 1762000100,
+                "source": "cli"
+              },
+              {
+                "id": "codex-thread-unknown",
+                "name": "A thread this machine has no session for",
+                "preview": "SENTINEL_PREVIEW_7f03",
+                "createdAt": 1762000200,
+                "source": "vscode"
+              }
+            ],
+            "nextCursor": "page-2"
+          }
+        },
+        {
+          "result": {
+            "data": [
+              {
+                "id": "codex-thread-ccc",
+                "name": "Rename the exporter",
+                "preview": "SENTINEL_PREVIEW_7f04 rename it",
+                "createdAt": 1762000300,
+                "source": "exec"
+              }
+            ],
+            "nextCursor": null
+          }
+        },
+        {
+          "result": {
+            "data": [
+              {
+                "id": "codex-thread-ddd",
+                "name": "Old archived work",
+                "preview": "SENTINEL_PREVIEW_7f05 archived",
+                "createdAt": 1750000000,
+                "source": "cli"
+              }
+            ],
+            "nextCursor": null
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "sessions": [
+    {
+      "cacheCreationTokens": 100,
+      "cacheReadTokens": 6400,
+      "costUSD": 0.010381250000000002,
+      "directory": "2026/10/21",
+      "inputTokens": 2500,
+      "lastActivity": "2026-10-21T09:02:01.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 100,
+          "cacheReadTokens": 6400,
+          "inputTokens": 2500,
+          "isFallback": true,
+          "outputTokens": 630,
+          "reasoningOutputTokens": 35,
+          "totalTokens": 9630
+        }
+      },
+      "outputTokens": 630,
+      "reasoningOutputTokens": 35,
+      "sessionFile": "rollout-2026-10-21T09-00-00-a0a0a0a0-1111-4111-8111-0000000000c1",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-00-00-a0a0a0a0-1111-4111-8111-0000000000c1",
+      "totalTokens": 9630
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 3200,
+      "costUSD": 0.003275,
+      "directory": "2026/10/21",
+      "inputTokens": 300,
+      "lastActivity": "2026-10-21T09:05:40.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 3200,
+          "inputTokens": 300,
+          "isFallback": true,
+          "outputTokens": 250,
+          "reasoningOutputTokens": 5,
+          "totalTokens": 3750
+        }
+      },
+      "outputTokens": 250,
+      "reasoningOutputTokens": 5,
+      "sessionFile": "rollout-2026-10-21T09-05-00-a1a1a1a1-2222-4222-8222-0000000000c2",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-05-00-a1a1a1a1-2222-4222-8222-0000000000c2",
+      "totalTokens": 3750
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 200,
+      "costUSD": 0.000575,
+      "directory": "2026/10/21",
+      "inputTokens": 200,
+      "lastActivity": "2026-10-21T09:10:30.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 200,
+          "inputTokens": 200,
+          "isFallback": false,
+          "outputTokens": 30,
+          "reasoningOutputTokens": 3,
+          "totalTokens": 430
+        }
+      },
+      "outputTokens": 30,
+      "reasoningOutputTokens": 3,
+      "sessionFile": "rollout-2026-10-21T09-10-00-a2a2a2a2-3333-4333-8333-0000000000c3",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-10-00-a2a2a2a2-3333-4333-8333-0000000000c3",
+      "totalTokens": 430
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 0,
+      "costUSD": 0.000225,
+      "directory": "2026/10/21",
+      "inputTokens": 100,
+      "lastActivity": "2026-10-21T09:15:30.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 0,
+          "inputTokens": 100,
+          "isFallback": false,
+          "outputTokens": 10,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 110
+        }
+      },
+      "outputTokens": 10,
+      "reasoningOutputTokens": 0,
+      "sessionFile": "rollout-2026-10-21T09-15-00-a3a3a3a3-4444-4444-8444-0000000000c4",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-15-00-a3a3a3a3-4444-4444-8444-0000000000c4",
+      "totalTokens": 110
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 150,
+      "costUSD": 0.0009562500000000001,
+      "directory": "2026/10/21",
+      "inputTokens": 350,
+      "lastActivity": "2026-10-21T09:20:30.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 150,
+          "inputTokens": 350,
+          "isFallback": false,
+          "outputTokens": 50,
+          "reasoningOutputTokens": 0,
+          "totalTokens": 550
+        }
+      },
+      "outputTokens": 50,
+      "reasoningOutputTokens": 0,
+      "sessionFile": "rollout-2026-10-21T09-20-00-a4a4a4a4-5555-4555-8555-0000000000c5",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-20-00-a4a4a4a4-5555-4555-8555-0000000000c5",
+      "totalTokens": 550
+    },
+    {
+      "cacheCreationTokens": 100,
+      "cacheReadTokens": 1100,
+      "costUSD": 0.00320625,
+      "directory": "2026/10/21",
+      "inputTokens": 850,
+      "lastActivity": "2026-10-21T09:30:30.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 100,
+          "cacheReadTokens": 1100,
+          "inputTokens": 850,
+          "isFallback": false,
+          "outputTokens": 185,
+          "reasoningOutputTokens": 30,
+          "totalTokens": 2235
+        }
+      },
+      "outputTokens": 185,
+      "reasoningOutputTokens": 30,
+      "sessionFile": "rollout-2026-10-21T09-30-00-a5a5a5a5-6666-4666-8666-0000000000c6",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-30-00-a5a5a5a5-6666-4666-8666-0000000000c6",
+      "totalTokens": 2235
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 1350,
+      "costUSD": 0.00348125,
+      "directory": "2026/10/21",
+      "inputTokens": 650,
+      "lastActivity": "2026-10-21T09:40:40.000Z",
+      "models": {
+        "gpt-5-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 1350,
+          "inputTokens": 650,
+          "isFallback": false,
+          "outputTokens": 250,
+          "reasoningOutputTokens": 45,
+          "totalTokens": 2250
+        }
+      },
+      "outputTokens": 250,
+      "reasoningOutputTokens": 45,
+      "sessionFile": "rollout-2026-10-21T09-40-00-a6a6a6a6-7777-4777-8777-0000000000c7",
+      "sessionId": "2026/10/21/rollout-2026-10-21T09-40-00-a6a6a6a6-7777-4777-8777-0000000000c7",
+      "totalTokens": 2250
+    }
+  ],
+  "totals": {
+    "cacheCreationTokens": 200,
+    "cacheReadTokens": 12400,
+    "costUSD": 0.0221,
+    "inputTokens": 4950,
+    "outputTokens": 1405,
+    "reasoningOutputTokens": 118,
+    "totalTokens": 18955
+  }
+}

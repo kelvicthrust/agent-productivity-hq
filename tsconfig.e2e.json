@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "ESNext.Temporal", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "files": [],
+  // The fidelity capture and the browser measurement drive a browser with the e2e helpers, so they are checked with them (they need the DOM types).
+  "include": ["test/e2e", "scripts/capture-fidelity.ts", "scripts/measure-browser.ts"],
+  "exclude": ["test/e2e/harness"]
+}

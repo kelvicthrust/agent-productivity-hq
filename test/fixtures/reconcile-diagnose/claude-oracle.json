@@ -1,0 +1,22 @@
+{
+  "sessions": [
+    {
+      "sessionId": "11111111-aaaa-4aaa-8aaa-0000000000d1",
+      "projectPath": "-fixture-SENTINEL_CWD_dg-app",
+      "inputTokens": 10,
+      "cacheCreationTokens": 100,
+      "cacheReadTokens": 1000,
+      "outputTokens": 50,
+      "totalTokens": 1160
+    },
+    {
+      "sessionId": "22222222-bbbb-4bbb-8bbb-0000000000d2",
+      "projectPath": "-fixture-SENTINEL_CWD_dg-app",
+      "inputTokens": 8,
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 2500,
+      "outputTokens": 60,
+      "totalTokens": 2568
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "theme": "dark",
+  "model": "claude-sonnet-5",
+  "effortLevel": "high",
+  "statusLine": {
+    "type": "command",
+    "command": "echo SENTINEL_CMD_77aa04",
+    "padding": 1
+  },
+  "permissions": {
+    "allow": ["SENTINEL_RULE_12bc05"]
+  },
+  "env": {
+    "ANTHROPIC_API_KEY": "SENTINEL_TOKEN_a41c07",
+    "GH_TOKEN": "SENTINEL_TOKEN_b52d18"
+  },
+  "apiKeyHelper": "echo SENTINEL_TOKEN_c63e29",
+  "awsAuthRefresh": "SENTINEL_CMD_d74f3a",
+  "hooks": {
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "SENTINEL_CMD_e8504b" }] }]
+  }
+}

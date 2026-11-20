@@ -1,0 +1,34 @@
+# Dependencies and package stores (pnpm keeps a project-local store here when the home store is not writable)
+node_modules/
+.pnpm-store/
+.pnpm-cache/
+
+# Build output
+dist/
+.harness-dist/
+
+# Local data and preview data (never commit real or synthetic databases)
+.preview-data/
+.crew-data/
+.agent-productivity-data/
+*.db
+*.db-shm
+*.db-wal
+
+# Test output
+playwright-report/
+test-results/
+coverage/
+
+# OS and editor noise
+.DS_Store
+
+# Local fidelity captures; documentation images already tracked remain versioned.
+docs/implementation/evidence/m*/*.png
+
+# Real local diagnostic reports contain private usage metadata.
+/docs/implementation/experiments/E[0-9]*.md
+/reconcile.txt
+/diagnose.txt
+/claude-ccusage.json
+/codex-ccusage.json

@@ -1,0 +1,4 @@
+{
+  "theme": "dark",
+  "statusLine": { "type": "static", "text": "SENTINEL_STATIC_TEXT" }
+}

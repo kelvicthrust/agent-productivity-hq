@@ -1,0 +1,4 @@
+{
+  "statusLine": { "type": "command", "command": "echo SENTINEL_PROJECT_STATUS_LINE" },
+  "model": "SENTINEL_MODEL_3c91d2"
+}

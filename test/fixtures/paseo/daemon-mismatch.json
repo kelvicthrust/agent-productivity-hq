@@ -1,0 +1,39 @@
+{
+  "connect": "ok",
+  "archivedListing": "unsupported",
+  "agents": [
+    {
+      "agent": {
+        "id": "b0000000-0000-4000-8000-000000000001",
+        "provider": "codex",
+        "model": "SENTINEL_MODEL_01",
+        "title": "SENTINEL_TITLE_aa11bb",
+        "cwd": "/fixture-repo/SENTINEL_CWD_aa11bb",
+        "workspaceId": "w-0009",
+        "status": "idle",
+        "labels": { "paseo.parent-agent-id": "b0000000-0000-4000-8000-0000000000ff" },
+        "runtimeInfo": { "provider": "codex", "sessionId": "dead0000-0000-4000-8000-000000000001" },
+        "archivedAt": null
+      },
+      "project": { "projectKey": "SENTINEL_PROJECT_aa11bb", "workspaceName": null }
+    },
+    {
+      "agent": {
+        "id": "b0000000-0000-4000-8000-000000000002",
+        "provider": "claude",
+        "model": "SENTINEL_MODEL_02",
+        "title": "SENTINEL_TITLE_cc22dd",
+        "cwd": "/fixture-repo/SENTINEL_CWD_cc22dd",
+        "workspaceId": "w-0009",
+        "status": "idle",
+        "labels": {},
+        "runtimeInfo": {
+          "provider": "claude",
+          "sessionId": "dead0000-0000-4000-8000-000000000002"
+        },
+        "archivedAt": null
+      },
+      "project": { "projectKey": "SENTINEL_PROJECT_aa11bb", "workspaceName": "" }
+    }
+  ]
+}

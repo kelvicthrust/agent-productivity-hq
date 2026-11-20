@@ -1,0 +1,3 @@
+{"timestamp":"2026-11-18T10:00:00.000Z","type":"session_meta","payload":{"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","timestamp":"2026-11-18T09:59:59.000Z","cwd":"/work/invented/project","originator":"codex_cli_rs","cli_version":"0.1.0","source":"vscode","base_instructions":{"text":"SENTINEL_INSTRUCTIONS"},"git":{"repository_url":"SENTINEL_REPO_URL","branch":"SENTINEL_BRANCH","commit_hash":"SENTINEL_BRANCH"}}}
+{"timestamp":"2026-11-18T10:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","model_context_window":1000}}
+{"timestamp":"2026-11-18T10:00:10.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","last_agent_message":"SENTINEL_LAST_MESSAGE"}}

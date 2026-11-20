@@ -1,0 +1,13 @@
+{"timestamp":"2026-11-19T10:00:00.000Z","type":"session_meta","payload":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","timestamp":"2026-11-19T09:59:59.000Z","cwd":"/work/invented/project","originator":"codex_cli_rs","cli_version":"0.1.0","source":"vscode","base_instructions":{"text":"SENTINEL_INSTRUCTIONS"},"git":{"repository_url":"SENTINEL_REPO_URL","branch":"SENTINEL_BRANCH","commit_hash":"SENTINEL_BRANCH"}}}
+{"timestamp":"2026-11-19T10:00:00.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"SENTINEL_INSTRUCTIONS"}]}}
+{"timestamp":"2026-11-19T10:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","model_context_window":1000}}
+{"timestamp":"2026-11-19T10:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"SENTINEL_PROMPT_TEXT"}]}}
+{"timestamp":"2026-11-19T10:00:02.000Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"SENTINEL_SUMMARY"}],"encrypted_content":"SENTINEL_ENCRYPTED"}}
+{"timestamp":"2026-11-19T10:00:03.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"call_exec","input":"SENTINEL_TOOL_INPUT","status":"completed"}}
+{"timestamp":"2026-11-19T10:00:04.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_exec","output":"SENTINEL_TOOL_OUTPUT"}}
+{"timestamp":"2026-11-19T10:00:04.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","text":"SENTINEL_ASSISTANT_TEXT"}}}
+{"timestamp":"2026-11-19T10:00:05.000Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","call_id":"call_spawn","arguments":"{\"cmd\":\"SENTINEL_ARGUMENTS\"}"}}
+{"timestamp":"2026-11-19T10:00:06.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn","output":"SENTINEL_TOOL_OUTPUT"}}
+{"timestamp":"2026-11-19T10:00:07.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"SENTINEL_ASSISTANT_TEXT"}]}}
+{"timestamp":"2026-11-19T10:00:08.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}}}
+{"timestamp":"2026-11-19T10:00:09.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","last_agent_message":"SENTINEL_LAST_MESSAGE"}}

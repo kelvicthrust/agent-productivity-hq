@@ -1,0 +1,1 @@
+SENTINEL_NOTE_2570c3: not real zstd. Only read with EXPERIMENTS_FORCE_NO_ZSTD=1, which makes the reader report that no decoder is available before it tries to decode.

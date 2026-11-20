@@ -1,0 +1,8 @@
+{"v": 1, "phase": "start", "inv": "c0000001", "role": "user", "t": 1762419000000, "up_ms": 120, "stdin_bytes": 1480, "parse_ok": true, "keys": ["cwd", "model", "session_id", "transcript_path", "workspace"], "rate_limit_keys": [], "five_hour": null, "seven_day": null, "version": null, "session": "3e4f5a6b7c8d", "cwd": "c0ffee0000aa"}
+{"v": 1, "phase": "end", "inv": "c0000001", "t": 1762419000650, "up_ms": 760}
+{"v": 1, "phase": "start", "inv": "c0000002", "role": "user", "t": 1762419015000, "up_ms": 150, "stdin_bytes": 1480, "parse_ok": true, "keys": ["cwd", "model", "session_id", "transcript_path", "workspace"], "rate_limit_keys": [], "five_hour": null, "seven_day": null, "version": null, "session": "3e4f5a6b7c8d", "cwd": "c0ffee0000aa"}
+{"v": 1, "phase": "end", "inv": "c0000002", "t": 1762419015650, "up_ms": 790}
+{"v": 1, "phase": "start", "inv": "c0000003", "role": "user", "t": 1762419030000, "up_ms": 180, "stdin_bytes": 1480, "parse_ok": true, "keys": ["cwd", "model", "session_id", "transcript_path", "workspace"], "rate_limit_keys": [], "five_hour": null, "seven_day": null, "version": null, "session": "3e4f5a6b7c8d", "cwd": "c0ffee0000aa"}
+{"v": 1, "phase": "end", "inv": "c0000003", "t": 1762419030650, "up_ms": 820}
+{"v": 1, "phase": "start", "inv": "d0000001", "role": "project", "t": 1762419060000, "up_ms": 140, "stdin_bytes": 1480, "parse_ok": true, "keys": ["cwd", "model", "session_id", "transcript_path", "workspace"], "rate_limit_keys": [], "five_hour": null, "seven_day": null, "version": null, "session": "3e4f5a6b7c8d", "cwd": "c0ffee0000aa", "note": "SENTINEL_TEXT_ba0d07"}
+{"v": 1, "phase": "end", "inv": "d0000001", "t": 1762419060650, "up_ms": 780}

@@ -1,0 +1,5 @@
+{
+  "session_id": "SENTINEL_SESSION_8f21c4",
+  "version": "2.1.0",
+  "rate_limits": { "seven_day": { "used_percentage": 55.5, "resets_at": 4102444800 } }
+}

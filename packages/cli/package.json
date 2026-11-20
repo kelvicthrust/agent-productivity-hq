@@ -1,0 +1,24 @@
+{
+  "name": "@kelvicthrust/agent-productivity-hq",
+  "version": "0.3.0-rc.1",
+  "private": true,
+  "description": "Open the local Agent Productivity HQ dashboard.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kelvicthrust/agent-productivity-hq.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "agent-productivity-hq": "bin/agent-productivity-hq.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": "^22.16.0 || >=24.0.0"
+  }
+}

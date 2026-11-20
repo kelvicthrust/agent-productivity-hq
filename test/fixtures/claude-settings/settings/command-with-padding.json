@@ -1,0 +1,10 @@
+{
+  "theme": "light",
+  "statusLine": {
+    "type": "command",
+    "command": "printf '\\033[1mSENTINEL_LINE_ONE\\033[0m\\n'; printf 'SENTINEL_LINE_TWO\\n'",
+    "padding": 2,
+    "hideVimModeIndicator": true
+  },
+  "model": "SENTINEL_MODEL_3c91d2"
+}

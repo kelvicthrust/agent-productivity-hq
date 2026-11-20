@@ -1,0 +1,306 @@
+/*
+  Global styles: Tailwind v4 + Astryx on one token contract.
+
+  Layer order is the one Astryx documents for Tailwind (https://astryx.atmeta.com/docs/styling-overview).
+  Without it Astryx component styles would outrank Tailwind utilities.
+
+  The product tokens (generated from design-system/DESIGN.md) are loaded into the astryx-theme layer, and the
+  generated crewTheme maps Astryx's own tokens onto them, so one change to --color-action reaches Astryx
+  components and Tailwind utilities alike. Light theme only for the MVP.
+*/
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/core/tailwind-theme.css';
+@import './generated/tokens.css' layer(astryx-theme);
+@import './generated/tailwind.css';
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+/* Scan only our own code for class names (not docs/ or the design prototype). */
+@source '../';
+
+/*
+  The display font (design-system/DESIGN.md, Typography): Nunito, one variable-weight latin woff2 served by the dashboard itself
+  (no font CDN; the licence is beside the file). Display roles only; the stack falls back to ui-rounded and the system sans.
+*/
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: swap;
+  src: url('./fonts/nunito-latin-wght.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+  HQ's drawn text (DESIGN.md, HQ): Shantell Sans, the scene's handwriting, as one variable-weight latin woff2 (weight axis only, 300 to 800)
+  served by the dashboard itself, with its licence beside the file. Not a design token: only the HQ scene uses it, never a UI role.
+  If the file fails to load the scene falls back to the system handwriting stack named in HqScene.tsx.
+*/
+@font-face {
+  font-family: 'Shantell Sans';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('./fonts/shantell-sans-latin-wght.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-color: var(--color-border-strong) var(--color-canvas);
+  }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-text);
+    font: var(--type-body);
+    font-variant-numeric: tabular-nums;
+    caret-color: var(--color-action);
+    accent-color: var(--color-action);
+  }
+  ::selection {
+    background: var(--color-selection-surface);
+    color: var(--color-text);
+  }
+  h1 {
+    font: var(--type-title-page);
+    text-wrap: balance;
+  }
+  h2 {
+    font: var(--type-title-section);
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  a {
+    color: var(--color-action);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  /* One visible focus ring for everything we draw: 2px with a 2px gap. */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+@layer components {
+  /*
+    Buttons are 8px rounded rectangles (design-system/DESIGN.md, Shape: "sm 8px: buttons, inputs, notices"; the D7 prototype's
+    .btn). Astryx's Button draws a full pill by default, whatever --radius-element says. This sits in the `components` layer,
+    so a utility on one button (the filter bar's segmented controls use `rounded-full`) still wins.
+  */
+  .astryx-button {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Astryx owns announcement, dismissal, and the viewport clearance above the phone tab bar. */
+  [data-toast-id] {
+    align-self: center;
+    width: fit-content;
+    max-width: min(100%, 28rem);
+  }
+  .astryx-toast {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-lg);
+    border-radius: var(--radius-pill);
+    background: var(--color-text);
+    color: var(--color-surface);
+    box-shadow: var(--shadow-overlay);
+    font: var(--type-body);
+  }
+  .astryx-toast div:has(> .astryx-button) {
+    block-size: auto;
+    margin-inline-end: 0;
+  }
+  .astryx-toast div:has(> div > .astryx-button) {
+    align-items: center;
+  }
+  .astryx-toast .astryx-button {
+    color: var(--color-toast-link);
+  }
+  .astryx-toast .astryx-button:focus-visible {
+    outline-color: var(--color-toast-link);
+  }
+
+  /*
+    Segmented controls are pills (DESIGN.md: "pill navigation, segments and chips"; the D7 prototype's .seg and .seg-btn): a pill track
+    with pill segments, and the selected one a grape-tint pill with grape text, a 1px action ring and a faint shadow (D9). Astryx draws the track from
+    --radius-element (8px here) and each segment concentrically inside it, so the track's radius is the one thing to set. Below 720px
+    the prototype gives a track the medium radius, because a wrapped track of pills looks wrong. The track is the radiogroup that holds
+    Astryx's segments; it has no class of its own to key on.
+  */
+  [role='radiogroup']:has(> .astryx-segmented-control-item) {
+    --_segmented-control-radius: var(--radius-pill);
+  }
+  .astryx-segmented-control-item[aria-checked='true'] {
+    box-shadow:
+      0 0 0 1px var(--color-action),
+      0 1px 2px rgb(31 27 22 / 8%);
+  }
+  /* Forced colours keep Astryx's Highlight / HighlightText pair for the selected segment. */
+  @media not (forced-colors: active) {
+    .astryx-segmented-control-item[aria-checked='true'] {
+      background: var(--color-selection-surface);
+      color: var(--color-action);
+    }
+  }
+  @media (max-width: 719px) {
+    [role='radiogroup']:has(> .astryx-segmented-control-item) {
+      --_segmented-control-radius: var(--radius-md);
+    }
+  }
+
+  /*
+    Phone touch targets (design-to-code › Touch targets under 44px): the segmented controls (the chart's Chart/Table switch, the
+    Delivery link filter) are drawn 28px high, as designed, and a pseudo-element grows the hit area to 44px below 720px, the way
+    the row toggles do. The drawn size does not change. Astryx owns these items, so the rule keys on its class, like the one above.
+  */
+  @media (max-width: 719px) {
+    .astryx-segmented-control-item {
+      position: relative;
+    }
+    .astryx-segmented-control-item::before {
+      content: '';
+      position: absolute;
+      inset: -8px 0;
+    }
+  }
+}
+
+/*
+  HQ's scene (features/hq/motion.ts applies these, each behind `motion-safe:`, so with reduced motion nothing moves and the scene is a
+  still drawing). All stepped, like a drawing redrawn a few times a second; transforms and opacity only, never layout. The boil steps a
+  group between the three wobble filters that the scene mounts and names in --hq-wobble-a/b/c (one set of ids per scene).
+*/
+@keyframes hq-boil {
+  0% {
+    filter: var(--hq-wobble-a);
+  }
+  33.333% {
+    filter: var(--hq-wobble-b);
+  }
+  66.666% {
+    filter: var(--hq-wobble-c);
+  }
+  100% {
+    filter: var(--hq-wobble-a);
+  }
+}
+@keyframes hq-flick3 {
+  0% {
+    opacity: 1;
+  }
+  33.333%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hq-flick2 {
+  0% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hq-dot {
+  0% {
+    opacity: 1;
+  }
+  33.333%,
+  100% {
+    opacity: 0.3;
+  }
+}
+@keyframes hq-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+  75% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes hq-zed {
+  0% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(4px, -12px);
+    opacity: 0;
+  }
+}
+@keyframes hq-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-5deg);
+  }
+}
+@keyframes hq-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  33.333% {
+    transform: translateX(-1.5px) rotate(-4deg);
+  }
+  66.666% {
+    transform: translateX(1.5px) rotate(3deg);
+  }
+}
+@keyframes hq-swivel {
+  0% {
+    transform: scaleX(1);
+  }
+  16.666% {
+    transform: scaleX(0.55);
+  }
+  33.333% {
+    transform: scaleX(-0.2);
+  }
+  50% {
+    transform: scaleX(-1);
+  }
+  66.666% {
+    transform: scaleX(-0.55);
+  }
+  83.333% {
+    transform: scaleX(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

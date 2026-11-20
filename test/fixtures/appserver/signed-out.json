@@ -1,0 +1,19 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": { "result": { "userAgent": "codex_app_server/0.0.0 (fixture)" } },
+    "account/read": { "result": { "account": null, "requiresOpenaiAuth": true } },
+    "thread/list": {
+      "result": {
+        "data": [
+          {
+            "id": "codex-thread-aaa",
+            "name": "Fix the login redirect",
+            "preview": "SENTINEL_PREVIEW_7f01 please fix the redirect"
+          }
+        ],
+        "nextCursor": null
+      }
+    }
+  }
+}

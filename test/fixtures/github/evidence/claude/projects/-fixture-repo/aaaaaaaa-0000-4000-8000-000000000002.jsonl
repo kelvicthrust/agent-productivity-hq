@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-10-01T09:00:00Z","cwd":"/fixture-repo","gitBranch":"SENTINEL_BRANCH_0ld5e5","message":{"role":"user","content":"SENTINEL_TEXT_5e1a04 an old session with no references at all"}}
+{"type":"assistant","timestamp":"2026-10-01T09:05:00Z","message":{"role":"assistant","content":[{"type":"text","text":"SENTINEL_TEXT_5e1a05 done"}]}}

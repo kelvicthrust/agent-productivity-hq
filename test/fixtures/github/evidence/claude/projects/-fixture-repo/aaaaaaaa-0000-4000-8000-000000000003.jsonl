@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-11-07T09:00:00Z","cwd":"/fixture-repo","gitBranch":"SENTINEL_BRANCH_a3b1c9","message":{"role":"user","content":"SENTINEL_TEXT_5e1a06 work done two hours before the ambiguous merge"}}
+{"type":"assistant","timestamp":"2026-11-07T10:00:00Z","message":{"role":"assistant","content":[{"type":"text","text":"SENTINEL_TEXT_5e1a07 finished"}]}}

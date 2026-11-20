@@ -1,0 +1,11 @@
+{
+  "theme": "dark",
+  "model": "SENTINEL_MODEL_3c91d2",
+  "permissions": { "allow": ["SENTINEL_RULE_71ab02"], "deny": [] },
+  "env": { "SENTINEL_ENV_KEY": "SENTINEL_TOKEN_55e0f1" },
+  "apiKeyHelper": "echo SENTINEL_TOKEN_9d4c20",
+  "hooks": {
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "SENTINEL_CMD_a82f6b" }] }]
+  },
+  "cleanupPeriodDays": 30
+}

@@ -1,0 +1,7 @@
+{
+  "version": "SENTINEL_NOT_A_VERSION",
+  "rate_limits": {
+    "five_hour": { "used_percentage": "23", "resets_at": 4102441200 },
+    "seven_day": { "used_percentage": -4, "resets_at": 4102444800 }
+  }
+}

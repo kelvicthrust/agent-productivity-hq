@@ -1,0 +1,22 @@
+{
+  "//": "Shared compiler options. This file includes no sources: use tsconfig.client.json (browser code and its tests), tsconfig.node.json (scripts, server, config and node-side tests) and tsconfig.e2e.json (Playwright specs, which run code inside the page). `pnpm typecheck` runs all three.",
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "files": []
+}

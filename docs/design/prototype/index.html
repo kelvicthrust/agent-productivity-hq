@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kelvin Agent Crew (prototype)</title>
+  <meta name="description" content="Clickable design prototype for the Kelvin Agent Crew dashboard. Synthetic fixture data only.">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Shared chart patterns (referenced by url(#id) from every chart and legend). -->
+  <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="pat-claude" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect class="s-claude" width="5" height="5"></rect>
+        <rect class="hatch-line" width="1.4" height="5"></rect>
+      </pattern>
+      <pattern id="pat-unavail" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect class="hatch-bg" width="6" height="6"></rect>
+        <rect class="hatch-ink" width="1.2" height="6"></rect>
+      </pattern>
+    </defs>
+  </svg>
+
+  <div class="app" id="app">
+    <header class="appbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
+          <rect class="s-delivery" x="2" y="11" width="6.5" height="13" rx="3"></rect>
+          <rect class="s-codex" x="9.75" y="3" width="6.5" height="21" rx="3"></rect>
+          <rect class="s-claude" x="17.5" y="14" width="6.5" height="10" rx="3"></rect>
+          <circle class="b-eye" cx="11.6" cy="8" r="1.1"></circle><circle class="b-eye" cx="14.4" cy="8" r="1.1"></circle>
+        </svg>
+        <span class="brand-name">Kelvin Agent Crew</span>
+        <span class="brand-host">This machine</span>
+      </div>
+      <div class="appbar-actions" id="appbar-actions"></div>
+    </header>
+    <nav class="sidenav" id="sidenav" aria-label="Sections"></nav>
+    <div class="workspace">
+      <div class="banner-slot" id="banner-slot"></div>
+      <section class="filterbar" id="filterbar" aria-label="Filters"></section>
+      <main id="main" class="page" tabindex="-1">
+        <noscript><p>This prototype needs JavaScript to render its screens. The design brief is in DESIGN.md.</p></noscript>
+      </main>
+    </div>
+  </div>
+
+  <div id="drawer-root"></div>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+  <div id="proto-root"></div>
+
+  <script src="ui.js"></script>
+  <script src="data.js"></script>
+  <script src="containment-check.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

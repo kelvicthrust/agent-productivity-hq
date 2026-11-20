@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/server", "src/shared"]
+}

@@ -1,0 +1,42 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": { "result": { "userAgent": "codex_app_server/0.0.0 (fixture)" } },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "chatgpt",
+          "email": "SENTINEL_EMAIL_5e1a09@example.com",
+          "planType": "plus"
+        },
+        "requiresOpenaiAuth": true
+      }
+    },
+    "account/usage/read": {
+      "result": {
+        "summary": { "lifetimeTokens": 5000 },
+        "dailyUsageBuckets": [
+          { "startDate": "2026-11-02", "tokens": 20 },
+          { "startDate": "2026-11-02T00:00:00Z", "tokens": 25 },
+          { "startDate": 1793664000, "tokens": 30 },
+          { "startDate": "not a date", "tokens": 40 },
+          { "startDate": "2026-11-05", "tokens": -1 },
+          { "startDate": "2026-11-06", "tokens": 1.5 },
+          { "startDate": "2026-11-07" },
+          "a bucket that is not an object"
+        ]
+      }
+    },
+    "account/rateLimits/read": {
+      "result": {
+        "rateLimits": {
+          "primary": { "usedPercent": 150, "windowDurationMins": 300, "resetsAt": 1762432800000 },
+          "secondary": { "usedPercent": -4, "windowDurationMins": 10080, "resetsAt": 1762857600 },
+          "tertiary": { "usedPercent": 7, "windowDurationMins": 0, "resetsAt": null },
+          "bad id with spaces": { "usedPercent": 9 },
+          "planType": "plus"
+        }
+      }
+    }
+  }
+}

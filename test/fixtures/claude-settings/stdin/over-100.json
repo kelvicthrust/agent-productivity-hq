@@ -1,0 +1,7 @@
+{
+  "version": "2.1.0",
+  "rate_limits": {
+    "five_hour": { "used_percentage": 100.4, "resets_at": 4102441200 },
+    "seven_day": { "used_percentage": 0.2, "resets_at": 4102444800 }
+  }
+}

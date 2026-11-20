@@ -1,0 +1,18 @@
+{
+  "noise": "SENTINEL_NOTE_a51e01",
+  "methods": {
+    "initialize": { "result": { "userAgent": "codex_app_server/0.0.0 (fixture)" } },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "chatgpt",
+          "email": "SENTINEL_EMAIL_5e1a09@example.com",
+          "planType": "plus"
+        },
+        "requiresOpenaiAuth": true
+      }
+    },
+    "account/usage/read": "exit",
+    "account/rateLimits/read": "exit"
+  }
+}

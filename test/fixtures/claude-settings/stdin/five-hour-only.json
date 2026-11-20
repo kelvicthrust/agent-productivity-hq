@@ -1,0 +1,5 @@
+{
+  "session_id": "SENTINEL_SESSION_8f21c4",
+  "version": "2.1.1",
+  "rate_limits": { "five_hour": { "used_percentage": 30, "resets_at": 4102441200 } }
+}

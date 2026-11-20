@@ -1,0 +1,26 @@
+# Accepted inputs from earlier stages are authoritative: never reformatted here.
+PRODUCT.md
+DESIGN.md
+TECH.md
+design-system/
+docs/design/
+docs/product/
+docs/tech/
+
+# Generated or third-party
+src/client/theme/generated/
+pnpm-lock.yaml
+node_modules/
+.pnpm-store/
+.pnpm-cache/
+dist/
+.harness-dist/
+playwright-report/
+test-results/
+coverage/
+.pdlc/
+.claude/
+.impeccable/critique/
+
+# Written by scripts/capture-fidelity.ts, not by hand
+docs/implementation/evidence/

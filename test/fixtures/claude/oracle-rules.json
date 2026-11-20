@@ -1,0 +1,114 @@
+{
+  "sessions": [
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 420,
+      "firstActivity": "2026-10-22T10:00:30.000Z",
+      "inputTokens": 32,
+      "lastActivity": "2026-10-22T10:05:10.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 420,
+          "cost": 0.001752,
+          "inputTokens": 32,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 102
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5"],
+      "outputTokens": 102,
+      "projectPath": "-fixture-SENTINEL_CWD_d1d2d3-app",
+      "sessionId": "22222222-bbbb-4bbb-8bbb-0000000000d2",
+      "totalCost": 0.001752,
+      "totalTokens": 554
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 520,
+      "firstActivity": "2026-10-22T10:00:21.000Z",
+      "inputTokens": 82,
+      "lastActivity": "2026-10-22T10:02:00.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 420,
+          "cost": 0.0016170000000000002,
+          "inputTokens": 72,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 85
+        },
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 100,
+          "cost": 0.0,
+          "inputTokens": 10,
+          "missingPricing": true,
+          "modelName": "claude-advisor-1",
+          "outputTokens": 5
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5", "claude-advisor-1"],
+      "outputTokens": 90,
+      "projectPath": "-fixture-SENTINEL_CWD_d1d2d3-app",
+      "sessionId": "11111111-aaaa-4aaa-8aaa-0000000000d1",
+      "totalCost": 0.0016170000000000002,
+      "totalTokens": 692
+    },
+    {
+      "cacheCreationTokens": 50,
+      "cacheReadTokens": 1000,
+      "firstActivity": "2026-10-22T10:00:10.000Z",
+      "inputTokens": 100,
+      "lastActivity": "2026-10-22T10:00:10.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 50,
+          "cacheReadTokens": 1000,
+          "cost": 0.0013875,
+          "inputTokens": 100,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 40
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5"],
+      "outputTokens": 40,
+      "projectPath": "-fixture-SENTINEL_CWD_d1d2d3-app",
+      "sessionId": "00000000-aaaa-4aaa-8aaa-0000000000d0",
+      "totalCost": 0.0013875,
+      "totalTokens": 1190
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 160,
+      "firstActivity": "2026-10-22T10:10:10.000Z",
+      "inputTokens": 16,
+      "lastActivity": "2026-10-22T10:10:20.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 160,
+          "cost": 0.000336,
+          "inputTokens": 16,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 16
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5"],
+      "outputTokens": 16,
+      "projectPath": "-fixture-SENTINEL_CWD_d1d2d3-app",
+      "sessionId": "33333333-cccc-4ccc-8ccc-0000000000d3",
+      "totalCost": 0.000336,
+      "totalTokens": 192
+    }
+  ],
+  "totals": {
+    "cacheCreationTokens": 50,
+    "cacheReadTokens": 2100,
+    "inputTokens": 230,
+    "outputTokens": 248,
+    "totalCost": 0.005092500000000001,
+    "totalTokens": 2628,
+    "unpricedModels": ["claude-advisor-1"]
+  }
+}

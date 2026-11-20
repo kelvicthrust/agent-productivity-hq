@@ -1,0 +1,4 @@
+{
+  // Claude Code treats a comment as an error, so this is not a settings file.
+  "theme": "SENTINEL_THEME_c0ffee"
+}

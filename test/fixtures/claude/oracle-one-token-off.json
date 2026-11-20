@@ -1,0 +1,81 @@
+{
+  "sessions": [
+    {
+      "cacheCreationTokens": 915,
+      "cacheReadTokens": 900,
+      "firstActivity": "2026-10-12T14:30:06.000Z",
+      "inputTokens": 7,
+      "lastActivity": "2026-10-12T14:31:08.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 915,
+          "cacheReadTokens": 900,
+          "cost": 0.040661249999999996,
+          "inputTokens": 7,
+          "modelName": "claude-opus-4-1",
+          "outputTokens": 293
+        }
+      ],
+      "modelsUsed": ["claude-opus-4-1"],
+      "outputTokens": 293,
+      "projectPath": "-fixture-SENTINEL_CWD_a1b2c3-app",
+      "sessionId": "22222222-bbbb-4bbb-8bbb-000000000002",
+      "totalCost": 0.040661249999999996,
+      "totalTokens": 2115
+    },
+    {
+      "cacheCreationTokens": 520,
+      "cacheReadTokens": 14650,
+      "firstActivity": "2026-10-12T09:00:05.000Z",
+      "inputTokens": 25,
+      "lastActivity": "2026-10-12T09:00:20.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 520,
+          "cacheReadTokens": 14650,
+          "cost": 0.01755,
+          "inputTokens": 25,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 742
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5"],
+      "outputTokens": 742,
+      "projectPath": "-fixture-SENTINEL_CWD_a1b2c3-app",
+      "sessionId": "11111111-aaaa-4aaa-8aaa-000000000001",
+      "totalCost": 0.01755,
+      "totalTokens": 15937
+    },
+    {
+      "cacheCreationTokens": 210,
+      "cacheReadTokens": 20,
+      "firstActivity": "2026-10-13T08:15:03.000Z",
+      "inputTokens": 24,
+      "lastActivity": "2026-10-13T08:16:41.000Z",
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 210,
+          "cacheReadTokens": 20,
+          "cost": 0.0029205,
+          "inputTokens": 24,
+          "modelName": "claude-sonnet-4-5",
+          "outputTokens": 137
+        }
+      ],
+      "modelsUsed": ["claude-sonnet-4-5"],
+      "outputTokens": 137,
+      "projectPath": "-fixture-SENTINEL_CWD_d4e5f6-lib",
+      "sessionId": "33333333-cccc-4ccc-8ccc-000000000003",
+      "totalCost": 0.0029205,
+      "totalTokens": 391
+    }
+  ],
+  "totals": {
+    "cacheCreationTokens": 1645,
+    "cacheReadTokens": 15570,
+    "inputTokens": 56,
+    "outputTokens": 1172,
+    "totalCost": 0.06113174999999999,
+    "totalTokens": 18443
+  }
+}

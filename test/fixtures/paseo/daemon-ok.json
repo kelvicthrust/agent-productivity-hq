@@ -1,0 +1,101 @@
+{
+  "connect": "ok",
+  "archivedListing": "supported",
+  "agents": [
+    {
+      "agent": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "provider": "codex",
+        "model": "SENTINEL_MODEL_01",
+        "title": "SENTINEL_TITLE_5e1a09",
+        "cwd": "/fixture-repo/SENTINEL_CWD_5e1a09",
+        "workspaceId": "w-0001",
+        "status": "idle",
+        "labels": {},
+        "runtimeInfo": { "provider": "codex", "sessionId": "c0de0000-0000-4000-8000-000000000001" },
+        "archivedAt": null
+      },
+      "project": {
+        "projectKey": "SENTINEL_PROJECT_5e1a09",
+        "workspaceName": "SENTINEL_WORKSPACE_5e1a09"
+      }
+    },
+    {
+      "agent": {
+        "id": "a0000000-0000-4000-8000-000000000002",
+        "provider": "codex",
+        "model": "SENTINEL_MODEL_01",
+        "title": "SENTINEL_TITLE_77c2d1",
+        "cwd": "/fixture-repo/SENTINEL_CWD_77c2d1",
+        "workspaceId": "w-0001",
+        "status": "idle",
+        "labels": { "paseo.parent-agent-id": "a0000000-0000-4000-8000-000000000001" },
+        "runtimeInfo": { "provider": "codex", "sessionId": "c0de0000-0000-4000-8000-000000000002" },
+        "archivedAt": null
+      },
+      "project": {
+        "projectKey": "SENTINEL_PROJECT_5e1a09",
+        "workspaceName": "SENTINEL_WORKSPACE_5e1a09"
+      }
+    },
+    {
+      "agent": {
+        "id": "a0000000-0000-4000-8000-000000000003",
+        "provider": "claude",
+        "model": "SENTINEL_MODEL_02",
+        "title": "SENTINEL_TITLE_1b9e44",
+        "cwd": "/fixture-repo/SENTINEL_CWD_1b9e44",
+        "workspaceId": "w-0002",
+        "status": "running",
+        "labels": {},
+        "runtimeInfo": {
+          "provider": "claude",
+          "sessionId": "ca5e0000-0000-4000-8000-000000000003"
+        },
+        "archivedAt": null
+      },
+      "project": {
+        "projectKey": "SENTINEL_PROJECT_1b9e44",
+        "workspaceName": "SENTINEL_WORKSPACE_1b9e44"
+      }
+    },
+    {
+      "agent": {
+        "id": "a0000000-0000-4000-8000-000000000004",
+        "provider": "claude",
+        "model": "SENTINEL_MODEL_02",
+        "title": null,
+        "cwd": "/fixture-repo/SENTINEL_CWD_90ab12",
+        "workspaceId": "w-0002",
+        "status": "idle",
+        "labels": {},
+        "runtimeInfo": { "provider": "claude", "sessionId": null },
+        "archivedAt": null
+      },
+      "project": {
+        "projectKey": "SENTINEL_PROJECT_1b9e44",
+        "workspaceName": "SENTINEL_WORKSPACE_1b9e44"
+      }
+    }
+  ],
+  "archived": [
+    {
+      "agent": {
+        "id": "a0000000-0000-4000-8000-000000000005",
+        "provider": "codex",
+        "model": "SENTINEL_MODEL_01",
+        "title": "SENTINEL_TITLE_d00d99",
+        "cwd": "/fixture-repo/SENTINEL_CWD_d00d99",
+        "workspaceId": "w-0001",
+        "status": "closed",
+        "labels": {},
+        "runtimeInfo": { "provider": "codex", "sessionId": "c0de0000-0000-4000-8000-000000000005" },
+        "archivedAt": "2026-11-01T09:00:00Z"
+      },
+      "project": {
+        "projectKey": "SENTINEL_PROJECT_5e1a09",
+        "workspaceName": "SENTINEL_WORKSPACE_5e1a09"
+      }
+    }
+  ]
+}

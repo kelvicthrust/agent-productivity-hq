@@ -1,0 +1,41 @@
+{
+  "name": "@kelvicthrust/paseo-agent-productivity-hq",
+  "version": "0.3.0-rc.1",
+  "private": true,
+  "description": "Open Agent HQ in Paseo to view agent usage and merged GitHub pull requests.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kelvicthrust/agent-productivity-hq.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "files": [
+    "paseo-plugin.json",
+    "index.client.tsx",
+    "index.server.ts",
+    "client/",
+    "server/",
+    "shared/",
+    "assets/",
+    "OVERVIEW.md"
+  ],
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts && cd ../.. && vitest run --config plugins/paseo-agent-productivity/vitest.config.ts"
+  },
+  "devDependencies": {
+    "@getpaseo/plugin": "0.16.1",
+    "@types/node": "26.6.6",
+    "@types/react": "19.2.18",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "typescript": "5.9.3",
+    "zod": "4.6.7"
+  }
+}

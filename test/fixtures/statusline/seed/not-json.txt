@@ -1,0 +1,3 @@
+{
+  "theme": "SENTINEL_THEME_bad006",
+  "statusLine": {

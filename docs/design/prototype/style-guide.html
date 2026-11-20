@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Style guide · Kelvin Agent Crew design system (D4 draft)</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+  <style>
+    /* The display font (D9): the same self-hosted Nunito file the product ships, loaded by relative path so the guide shows the real voice. */
+    @font-face {
+      font-family: 'Nunito'; font-style: normal; font-weight: 600 800; font-display: swap;
+      src: url('../../../src/client/theme/fonts/nunito-latin-wght.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    /* Guide-only layout. Product values come from tokens.css / app.css. */
+    .sg { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+    .sg-toc { position: sticky; top: 0; height: 100vh; overflow: auto; padding: var(--space-xl) var(--space-md); }
+    .sg-toc h2 { font: var(--type-title-section); margin: 0 var(--space-md) var(--space-md); }
+    .sg-toc a { display: block; padding: 6px var(--space-md); border-radius: var(--radius-pill); color: var(--color-text-muted); text-decoration: none; font: var(--type-label); }
+    .sg-toc a:hover { background: var(--color-surface-sunken); color: var(--color-text); }
+    .sg-main { padding: var(--space-2xl) var(--space-2xl) var(--space-3xl); max-width: 1180px; display: flex; flex-direction: column; gap: var(--space-2xl); }
+    .sg-section { display: flex; flex-direction: column; gap: var(--space-lg); scroll-margin-top: var(--space-lg); }
+    .sg-section > h2 { font: var(--type-title-page); }
+    .sg-section > p, .sg-lead { color: var(--color-text-muted); max-width: 80ch; }
+    .sg-h3 { font: var(--type-title-section); margin-top: var(--space-sm); }
+    .sg-meta { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+    .sg-panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-md); box-shadow: var(--shadow-card); }
+    .sg-row { display: flex; flex-wrap: wrap; gap: var(--space-md); align-items: center; }
+    .sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-md); }
+    .sg-label { font: var(--type-caption); color: var(--color-text-muted); }
+    .sw { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; background: var(--color-surface); }
+    .sw-chip { height: 56px; border-bottom: 1px solid var(--color-border); display: flex; align-items: flex-end; padding: 6px 8px; font: var(--type-caption); }
+    .sw-body { padding: var(--space-sm) var(--space-md) var(--space-md); display: flex; flex-direction: column; gap: 2px; }
+    .sw-body b { font: var(--type-label); font-weight: 700; }
+    .sw-body code { color: var(--color-text-muted); }
+    .sw-ratio { font: var(--type-caption); color: var(--color-text-muted); }
+    .type-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 260px; gap: var(--space-lg); align-items: baseline; padding: var(--space-md) 0; border-bottom: 1px solid var(--color-border); }
+    .type-row:last-child { border-bottom: 0; }
+    .space-bar { height: 12px; background: var(--color-selection-surface); border: 1px solid var(--color-action); border-radius: var(--radius-pill); }
+    .space-row { display: grid; grid-template-columns: 80px 60px 1fr; gap: var(--space-md); align-items: center; font: var(--type-data); }
+    .shape { width: 120px; height: 72px; background: var(--color-surface); border: 1px solid var(--color-control-border); display: flex; align-items: center; justify-content: center; text-align: center; font: var(--type-caption); }
+    .demo-focus { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+    .btn-primary.demo-hover { background: var(--color-action-hover); }
+    .btn-secondary.demo-hover { background: var(--color-canvas); }
+    .btn.demo-press { transform: scale(0.97); }
+    .do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+    .dd { border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg); border: 1px solid var(--color-border); background: var(--color-surface); }
+    .dd h4 { font: var(--type-label); font-weight: 700; display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .dd.do h4 { color: var(--color-success); }
+    .dd.dont h4 { color: var(--color-danger); }
+    .dd ul { list-style: disc; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+    .sg-table { width: 100%; border-collapse: collapse; font: var(--type-data); }
+    .sg-table th, .sg-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+    .sg-table th { font: var(--type-caption); font-weight: 700; color: var(--color-text-muted); }
+    .kbd { font: var(--type-mono); padding: 1px 6px; border: 1px solid var(--color-control-border); border-radius: var(--radius-sm); background: var(--color-surface); }
+    .illus { font: var(--type-caption); color: var(--color-warning); background: var(--color-warning-surface); padding: 2px 10px; border-radius: var(--radius-pill); align-self: flex-start; }
+    .motion-stage { position: relative; min-height: 120px; display: flex; gap: var(--space-xl); align-items: flex-start; flex-wrap: wrap; }
+    .motion-stage .popover { position: relative; top: 0; width: 240px; }
+    .sw-dot { display: inline-block; width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--color-border); vertical-align: -1px; }
+    /* Narrow-width frames: components that adapt to their own container (coverage strip, tokens ledger, provider ledger) show
+       their real behaviour inside a fixed-width frame, whatever the window width. */
+    .sg-frames { align-items: flex-start; }
+    .sg-frame { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-sm); max-width: 100%; }
+    .sg-frame > .sg-cap { font: var(--type-caption); color: var(--color-text-muted); }
+    /* The Usage tree's phone layout is driven by window width (≤ 639px). This block mirrors those rules from app.css so the
+       specimen can show them at any window width. If app.css changes, change this too. */
+    .sg-phone .hide-sm { display: none; }
+    .sg-phone .sess-meta { display: block; }
+    .sg-phone .tree td:first-child { min-width: 0; }
+    .sg-phone .tree-l2 .tree-cell { padding-left: 0; }
+    .sg-phone .tree-l3 .tree-cell { padding-left: 14px; }
+    .sg-phone .tree thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .sg-phone .tree, .sg-phone .tree tbody, .sg-phone .tree tr { display: block; width: 100%; }
+    .sg-phone .tree td { display: block; width: auto; border: 0; padding: 2px 0; min-width: 0; }
+    .sg-phone .tree td.hide-sm { display: none; }
+    .sg-phone .tree tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: var(--space-md); border-bottom: 1px solid var(--color-border); padding: var(--space-sm) 0; }
+    .sg-phone .tree .sess-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 4px; }
+    .sg-phone .tree .sess-row > td:first-child { grid-column: 1 / -1; }
+    .sg-phone .tree .sess-row > .tok, .sg-phone .tree .sess-row > .plc { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px var(--space-sm); }
+    .sg-phone .tree .sess-row > .tok { text-align: left; }
+    .sg-phone .tree .tok::before, .sg-phone .tree .plc::before { content: attr(data-label); font: var(--type-caption); color: var(--color-text-muted); }
+    .sg-phone .tree-l3.sess-row > .tok { padding-left: 14px; }
+    .sg-phone .tree .sess-name { overflow-wrap: anywhere; }
+    @media (max-width: 899px) {
+      .sg { grid-template-columns: 1fr; }
+      .sg-toc { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 2px; padding: var(--space-md); }
+      .sg-toc h2 { flex-basis: 100%; margin-bottom: 4px; }
+      .sg-main { padding: var(--space-xl) var(--space-lg) var(--space-3xl); }
+      .type-row { grid-template-columns: 1fr; gap: 4px; }
+      .do-dont { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="pat-claude" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect class="s-claude" width="5" height="5"></rect><rect class="hatch-line" width="1.4" height="5"></rect>
+      </pattern>
+      <pattern id="pat-unavail" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect class="hatch-bg" width="6" height="6"></rect><rect class="hatch-ink" width="1.2" height="6"></rect>
+      </pattern>
+    </defs>
+  </svg>
+
+  <div class="sg">
+    <nav class="sg-toc" aria-label="Style guide sections">
+      <h2>Style guide · D4</h2>
+      <a href="#about">About this guide</a>
+      <a href="#identity">Identity</a>
+      <a href="#color">Color</a>
+      <a href="#type">Typography</a>
+      <a href="#layout">Layout &amp; spacing</a>
+      <a href="#shape">Shape &amp; depth</a>
+      <a href="#buddies">Agent buddies</a>
+      <a href="#session-identity">Session identity</a>
+      <a href="#containment">Navigation &amp; containment</a>
+      <a href="#components">Components</a>
+      <a href="#data">Charts &amp; evidence</a>
+      <a href="#motion">Motion</a>
+      <a href="#content">Voice &amp; content</a>
+      <a href="#a11y">Interaction &amp; accessibility</a>
+      <a href="#mapping">Implementation mapping</a>
+      <a href="#dos">Do's and don'ts</a>
+      <a href="index.html">← Back to prototype</a>
+    </nav>
+
+    <main class="sg-main" id="main">
+      <section class="sg-section" id="about">
+        <h1 style="font: var(--type-metric)">Kelvin Agent Crew: design system</h1>
+        <p class="sg-lead">The viewing and usage surface for the visual identity. It isn't a separate theme. Every swatch, specimen and component below renders from the same <code>tokens.css</code>, <code>app.css</code> and <code>ui.js</code> the prototype uses. Colour values and contrast ratios are read from those variables in your browser.</p>
+        <div class="sg-meta">
+          <span class="chip">Status: draft for owner review</span>
+          <span class="chip">Revision D4 (repair pass on D3; D3 built on D2 of 2026-11-05)</span>
+          <span class="chip">D8 adds Paseo’s two status words, under Components › Status</span>
+          <span class="chip">Canonical values: design-system/DESIGN.md</span>
+          <span class="chip">Preview mirror: tokens.css</span>
+          <span class="chip">Brief: DESIGN.md · Research: docs/archive/design/research.md</span>
+        </div>
+        <div class="notice">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.3v3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor"/></svg>
+          <span>The owner approved the D2 playful-minimal direction in Review (r6), and D3 applied the owner's follow-up decisions (opens on <b>This week</b>, named <b>Kelvin Agent Crew</b>, system rounded font, light theme only). <b>D4 is a usability and responsive repair</b> in answer to an independent critique: it changes layout, navigation and wording, <b>not colour, type or shape values</b>. New or changed here: the phone tab bar, the provider ledger, the coverage strip, session identity, and local-scroll cues. <b>Nothing in D4 has been verified in a rendered browser</b> (the design session had none). Components are <b>plain HTML/CSS specimens</b>, not Astryx; library behaviour and Tailwind mapping still need verifying in Tech Spec (see <a href="#mapping">Implementation mapping</a>). Contrast figures are computed here, not an accessibility audit.</span>
+        </div>
+      </section>
+
+      <section class="sg-section" id="identity">
+        <h2>Identity</h2>
+        <p>A cozy logbook for your agents: warm, a little cheeky, honest about gaps. Kelvin reviews <b>what merged, where his agents spent their tokens, and which sessions link to that work</b>. The familiar dashboard skeleton stays (filters, KPIs, aligned charts, tables). Personality comes from a warm cream canvas, rounder shapes, soft tactile depth, a grape action colour, and a tiny crew of agent "buddies" that stand in for sessions. Delight is saved for rare moments: first launch, a quiet day, recovery. It is still not a scoreboard: no productivity score, no streaks, no green/red deltas.</p>
+        <div class="sg-panel">
+          <div class="sg-row">
+            <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true" style="width:40px;height:40px">
+              <rect class="s-delivery" x="2" y="11" width="6.5" height="13" rx="3"></rect>
+              <rect class="s-codex" x="9.75" y="3" width="6.5" height="21" rx="3"></rect>
+              <rect class="s-claude" x="17.5" y="14" width="6.5" height="10" rx="3"></rect>
+              <circle class="b-eye" cx="11.6" cy="8" r="1.1"></circle><circle class="b-eye" cx="14.4" cy="8" r="1.1"></circle>
+            </svg>
+            <b style="font: var(--type-title-page)">Kelvin Agent Crew</b><span class="caption">product name chosen by the owner (Review r6)</span>
+          </div>
+          <p class="caption">The mark is three rounded bars in the delivery, Codex and Claude Code colours. The tallest bar has buddy eyes, a nod to the agent crew. The name was chosen after the mark; the mark itself is unchanged and hasn't been reviewed as a final logo.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="color">
+        <h2>Color</h2>
+        <p>Warm neutrals carry the structure. Grape is the single action colour. Berry, teal and terracotta are data series and appear on marks only, never body text. Sunshine is an illustration accent only. Every provider and attribution signal pairs colour with shape, pattern or words.</p>
+        <div id="swatches"></div>
+        <h3 class="sg-h3">Permitted pairings</h3>
+        <div class="sg-panel">
+          <table class="sg-table" id="pairings"><thead><tr><th>Foreground</th><th>Background</th><th>Use</th><th>Ratio</th></tr></thead><tbody></tbody></table>
+          <p class="footnote">Ratios use the WCAG 2.x relative-luminance formula on the token values loaded in this page. Text needs ≥ 4.5:1; UI component edges and chart marks need ≥ 3:1.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="type">
+        <h2>Typography</h2>
+        <p>One shipped font file and two system stacks. A <b>rounded display stack</b> (self-hosted <b>Nunito</b> → <code>ui-rounded</code> → SF Pro Rounded → system sans) gives headings and big numbers a softer voice, and is used for display roles only. Body, labels and data use the system sans with tabular numerals. Sentence case, and units always follow numbers.</p>
+        <div class="notice notice-warn"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l6 10.5H2L8 2.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".85" fill="currentColor"/></svg><span><b>Decided by the owner (D9, 2026-11-18; supersedes Review r6's &ldquo;no font files&rdquo;): Nunito is self-hosted.</b> One variable-weight latin woff2 ships with the dashboard, so nothing is fetched from a font CDN. If it fails to load, <code>ui-rounded</code> resolves in Safari on Apple platforms and other browsers show the system sans. Characters outside the latin subset fall back too, so design nothing that depends on exact glyph widths.</span></div>
+        <div class="sg-panel" id="type-specimens"></div>
+      </section>
+
+      <section class="sg-section" id="layout">
+        <h2>Layout &amp; spacing</h2>
+        <p>Medium density on a 4px base, unchanged from D1. Desktop uses a 12-column grid with 16px gaps and a 24px page gutter, up to 1440px wide. The filter bar is now a floating rounded panel on the canvas, and the nav uses pill items with no hard dividers.</p>
+        <div class="sg-panel" id="spacing"></div>
+        <h3 class="sg-h3">Responsive rules</h3>
+        <div class="sg-panel">
+          <table class="sg-table"><thead><tr><th>Width</th><th>Shell</th><th>Content</th></tr></thead><tbody>
+            <tr><td>≥ 1280px</td><td>Side nav (220px), floating filter panel that stays in view</td><td>KPIs in one row; chart 8 + account 4; repos 7 + recent 5; year grid full width on Trends; provider ledgers two-up; coverage strip is a one-line capsule when its container is ≥ 900px</td></tr>
+            <tr><td>1024–1279px</td><td>Side nav</td><td>KPIs three per row; cards stack full width; provider ledgers still two-up</td></tr>
+            <tr><td>720–1023px</td><td>Nav is a pill row under the app bar (all five items fit; it still scrolls as a safety net)</td><td>Half-width cards (<b>provider ledgers, model breakdown, record lists</b>) now stack full width; the tokens KPI stacks its two providers because its card is under 200px; coverage strip is compact groups</td></tr>
+            <tr><td>&lt; 720px</td><td><b>Fixed bottom tab bar</b> with all five destinations ("Sources &amp; repos" shows as "Sources"); app bar keeps the logo, an issue count and a Refresh icon; filters collapse into a pill summary plus <b>Filters</b> button → bottom sheet</td><td><b>Recorded local tokens spans the full row</b>; segmented controls wrap inside their container; coverage strip is compact groups; the failed-refresh banner puts its actions on their own row; charts redraw at container width, minimum 240px (text stays 11px); the year grid scrolls sideways locally and says so</td></tr>
+            <tr><td>&lt; 640px</td><td>—</td><td>Tables become stacked label/value cards; each Usage-tree session becomes a two-line card: identity (name, relationship, ID, then provider · model · time) across the full width, with Tokens and Linked PRs on one line below it; every linked PR carries its evidence badge</td></tr>
+          </tbody></table>
+        </div>
+      </section>
+
+      <section class="sg-section" id="shape">
+        <h2>Shape &amp; depth</h2>
+        <p>Rounder than D1. Depth comes from soft, offset, warm shadows; there are no hard block shadows and no glass. Buttons get a 2px darker bottom edge and press in by 3% when clicked, so they feel tactile without turning into costume.</p>
+        <div class="sg-panel">
+          <div class="sg-row">
+            <div class="shape" style="border-radius: var(--radius-sm)">sm · 8px<br>controls, inputs</div>
+            <div class="shape" style="border-radius: var(--radius-md); box-shadow: var(--shadow-card); border-color: var(--color-border)">md · 14px<br>cards + card shadow</div>
+            <div class="shape" style="border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); border-color: var(--color-border)">lg · 20px<br>drawer, sheet, overlay</div>
+            <div class="shape" style="border-radius: var(--radius-pill); width: 180px; height: 34px">pill · nav, segments, badges</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sg-section" id="buddies">
+        <h2>Agent buddies</h2>
+        <p>Small authored characters that stand in for agent sessions. The idea (each agent gets a character) is adapted from the owner's Pixel Agents reference. The drawing is our own minimal geometry, not pixel art and not copied assets. <b>Shape still encodes provider</b>: Codex is a rounded square with an antenna, Claude Code is a circle, and an unknown relationship is a dashed outline. Buddies are decorative (<code>aria-hidden</code>) and always sit beside text that says the same thing.</p>
+        <div class="sg-panel">
+          <div class="sg-row" id="buddy-specimens"></div>
+          <div class="sg-row" id="crew-specimens"></div>
+          <p class="sg-label">Where they appear: provider tags, Usage tree rows (root sessions large, children small), crew rows in the Root sessions and Child agents KPIs (one buddy per session, up to 9, then "+N"), setup discovery, and the quiet / empty / first-run illustrations. Never inside charts, and never as a score.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="session-identity">
+        <h2>Session identity <span class="chip">D4</span></h2>
+        <p>A session row should be recognisable at a glance. It leads with the <b>recorded agent name</b> when the source has one (in this fixture only Paseo records carry a name). With no recorded name it leads with the <b>recorded relationship</b> ("Root session", "Native subagent", "Unknown relationship") and says <b>"No name recorded"</b>. The technical ID stays visible but secondary, with a screen-reader prefix. Provider, relationship and PR association labels are all kept.</p>
+        <div class="sg-panel">
+          <div class="sg-row sg-frames" id="identity-specimens"></div>
+          <table class="sg-table"><thead><tr><th>Line</th><th>Content</th><th>Rule</th></tr></thead><tbody>
+            <tr><td>1 · Lead</td><td>Recorded agent name, else the relationship label</td><td>Never generate a name, initials or a nickname. If the relationship is unknown, the lead says "Unknown relationship"</td></tr>
+            <tr><td>2 · Sub</td><td>Relationship · "Paseo" · workspace (named) or "No name recorded" (unnamed), plus child count or filter notes</td><td>Keeps relationship and Paseo identity visible; unknown parentage is never turned into a root</td></tr>
+            <tr><td>3 · ID</td><td>Provider session/thread ID in the mono style</td><td>Secondary colour, still selectable and readable by assistive technology</td></tr>
+            <tr><td>4 · Phone only</td><td>Provider · model · Started time</td><td>Appears when those columns are hidden (≤ 639px), so no information is dropped, and each is shown once</td></tr>
+            <tr><td>Session time <span class="chip">D7</span></td><td>"Started" plus the date and time, in the column header on desktop, in the phone identity line, in record lists and in the Delivery evidence item</td><td>One word, one meaning, everywhere a session time appears. It is the session's recorded start; Tech Spec must confirm each provider records a start time, and if not the label must change with the real field, never be left saying "Started"</td></tr>
+            <tr><td>Data cells <span class="chip">D7</span></td><td>Provider, Model, Started and Merged never wrap on desktop</td><td>The Session or Pull request column takes the spare width. A model id is never split at its hyphens. If the window is too narrow, the table scrolls locally</td></tr>
+            <tr><td>Token column <span class="chip">D7</span></td><td>Repository and session values share one right edge in tabular numerals</td><td>A repository's provider totals always stack, one provider per line, so every repository row is laid out the same way</td></tr>
+            <tr><td>Linked PRs <span class="chip">D5</span></td><td>One item per link: <code>#number</code> plus the Delivery badge (Evidence link, Owner-confirmed, Suggested). A session with no link in a tracked repo shows the Unlinked badge</td><td>Same words and badge as Delivery, so one relationship reads the same in both views. Never a bare dash. Where PRs were not collected (repo not tracked, or no repo recorded) the cell says so in words, because "Unlinked" would claim a check that did not happen</td></tr>
+          </tbody></table>
+          <p class="sg-label">When real providers expose a session title or summary, that is the better lead and should replace the relationship fallback. Whether they do is a Tech Spec question; the design must not assume it.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="components">
+        <h2>Components</h2>
+        <p>Representative controls and patterns in their states. Forced states (hover, focus, press) are labelled; the real ones respond in the prototype.</p>
+
+        <h3 class="sg-h3">Buttons and action order</h3>
+        <div class="sg-panel">
+          <div class="sg-row">
+            <button class="btn btn-primary" type="button">Primary</button>
+            <button class="btn btn-primary demo-hover" type="button" tabindex="-1">Hover</button>
+            <button class="btn btn-primary demo-press" type="button" tabindex="-1">Pressed</button>
+            <button class="btn btn-primary demo-focus" type="button" tabindex="-1">Focus</button>
+            <button class="btn btn-primary" type="button" disabled>Disabled</button>
+            <button class="btn btn-primary" type="button" aria-busy="true" disabled><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle class="spin" cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="20 15" stroke-linecap="round"/></svg>Checking access…</button>
+          </div>
+          <div class="sg-row">
+            <button class="btn btn-secondary" type="button">Secondary</button>
+            <button class="btn btn-secondary demo-hover" type="button" tabindex="-1">Hover</button>
+            <button class="btn btn-ghost" type="button">Ghost (row actions)</button>
+            <button class="btn btn-danger" type="button">Stop tracking</button>
+            <button class="btn btn-secondary btn-sm" type="button">Small · 28px</button>
+          </div>
+          <p class="sg-label">Action order: secondary on the left, primary on the right, matching the tab order. On a phone, pairs share one row and are not reversed.</p>
+          <div class="actions start"><button class="btn btn-secondary" type="button">Back</button><button class="btn btn-primary" type="button">Continue</button></div>
+          <div class="confirm"><p><b>Stop tracking kelvin/notes-cli?</b> Collection stops and it leaves the overview. Imported history stays on this machine for 12 months, so tracking it again restores it.</p><div class="actions"><button class="btn btn-secondary btn-sm" type="button">Cancel</button><button class="btn btn-danger btn-sm" type="button">Stop tracking</button></div></div>
+        </div>
+
+        <h3 class="sg-h3">Filters</h3>
+        <div class="sg-panel">
+          <div class="sg-row">
+            <div class="fb-group"><span class="fb-label">Period</span><div class="seg" role="group" aria-label="Period (specimen)"><button class="seg-btn" type="button" aria-pressed="false">Today</button><button class="seg-btn" type="button" aria-pressed="true">This week</button><button class="seg-btn" type="button" aria-pressed="false">This month</button><button class="seg-btn" type="button" aria-pressed="false">Custom</button></div></div>
+            <div class="fb-group"><span class="fb-label">Repos <b>· usage &amp; delivery</b></span><button class="select-btn" type="button">All repos <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+            <div class="fb-group"><span class="fb-label">Provider <b>· usage only</b></span><div class="seg" role="group" aria-label="Provider (specimen)"><button class="seg-btn" type="button" aria-pressed="true">All</button><button class="seg-btn" type="button" aria-pressed="false">Codex</button><button class="seg-btn" type="button" aria-pressed="false">Claude Code</button></div></div>
+          </div>
+          <p class="sg-label">Every filter label names its scope. Every card repeats the filters that apply to it. Account-reported usage is tagged <span class="chip">Not filtered by repo</span>.</p>
+        </div>
+
+        <h3 class="sg-h3">Text input and validation</h3>
+        <div class="sg-panel">
+          <div class="field" style="max-width:560px"><label for="sg-in1">Add a GitHub repository</label><div class="field-row"><input class="input input-grow" id="sg-in1" placeholder="owner/name or https://github.com/owner/name"><button class="btn btn-primary" type="button">Add repository</button></div><p class="field-hint">Private repos work when your GitHub connection can read them.</p></div>
+          <div class="field" style="max-width:560px"><label for="sg-in2">Add a GitHub repository (error)</label><div class="field-row"><input class="input input-grow" id="sg-in2" value="kelvin/private-notes" aria-invalid="true" aria-describedby="sg-err"><button class="btn btn-primary" type="button">Add repository</button></div><p class="field-error" id="sg-err"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>GitHub didn't grant access to kelvin/private-notes. Check the name, or that your GitHub connection can read this repository, then try again.</span></p></div>
+        </div>
+
+        <h3 class="sg-h3">Status, provider and classification labels</h3>
+        <div class="sg-panel">
+          <div class="sg-row" id="status-specimens"></div>
+          <div class="sg-row" id="prov-specimens"></div>
+          <div class="sg-row" id="link-specimens"></div>
+          <p class="sg-label">Link-basis badges use fill style, not hue: solid means recorded evidence, outline + check means you confirmed it, dashed means inferred, sunken + dash means none.</p>
+        </div>
+
+        <h3 class="sg-h3">Paseo status words and helper sentences <span class="chip">D8</span></h3>
+        <div class="sg-panel">
+          <p>Paseo is a daemon the dashboard connects to, not a folder it reads. It therefore has two words of its own and never borrows a folder's: <b>Access denied</b> and <b>Not found</b> belong to Codex and Claude Code only.</p>
+          <table class="sg-table"><thead><tr><th>Word</th><th>Meaning (server status)</th><th>Helper sentence</th><th>Action</th></tr></thead><tbody>
+            <tr><td id="paseo-pw-tag"></td><td>The daemon answered and asks for a password, which this dashboard doesn’t support (<code>needspassword</code>)</td><td>Setup: “Paseo is asking for a password, which this dashboard doesn’t support. You can continue without it.” Sources: the same, without the last sentence; when a snapshot exists, add “Names and parents come from its last snapshot.”</td><td><b>Retry</b>: something answered but can’t be used</td></tr>
+            <tr><td id="paseo-nr-tag"></td><td>Nothing answers on this machine (<code>notrunning</code>)</td><td>Setup: “Paseo isn’t running on this machine. Start it, then check again. You can continue without it.” Sources: “Paseo isn’t running on this machine. Start it, then check again.”; when a snapshot exists the second sentence is “Showing its last snapshot.”</td><td><b>Check again</b>: nothing answered</td></tr>
+          </tbody></table>
+          <p class="sg-label">Same word everywhere (tag in sentence case, coverage strip in lower case): “Needs a password” / “needs a password”, “Not running” / “not running”. A snapshot is only mentioned when one exists. Looking again returns the same answer unless the owner changed something outside the dashboard, and neither state blocks Continue. The two tags in the table are the product’s own status tag, drawn with the existing lock and muted marks and the existing danger and muted tints; no colour, type or shape value changed.</p>
+        </div>
+
+        <h3 class="sg-h3">KPI cards</h3>
+        <div class="kpis" id="kpi-specimens"></div>
+        <p class="sg-label">Merged PRs leads, on a berry-tinted surface (no coloured side rule). Session KPIs show a crew row. Comparisons are neutral text. Missing coverage replaces the value with words, never a zero.</p>
+
+        <h3 class="sg-h3">Provider ledger in the tokens KPI, by card width <span class="chip">D4</span></h3>
+        <div class="sg-panel">
+          <div class="sg-row sg-frames" id="ledger-specimens"></div>
+          <p class="sg-label">The card decides from its own inner width: two providers side by side need about 190px, so a card with less than 200px of inner width stacks them one per row, label left and value right. On a phone the whole card spans the row (the top-left frame). Provider totals are never combined, in any layout.</p>
+        </div>
+
+        <h3 class="sg-h3">Provider token ledger (Usage page) <span class="chip">D4</span></h3>
+        <div class="sg-panel">
+          <div class="sg-row sg-frames" id="cat-specimens"></div>
+          <p class="sg-label">Labels may wrap; numbers never do. Included subsets sit under their parent with an elbow connector and a note ("included in input"), so they read as part of the total above and are never added again. At 1023px and below the two ledgers stack full width.</p>
+        </div>
+
+        <h3 class="sg-h3">Coverage strip, by container width <span class="chip">D4</span></h3>
+        <div class="sg-panel">
+          <div class="sg-row sg-frames" id="coverage-specimens"></div>
+          <p class="sg-label">Below 900px of container width the strip is compact source groups (a label column and one line per source); it only becomes the one-line capsule at 900px and wider, because a wrapped pill turns into an oversized oval. The strip carries status only. One prose explanation of a failure, with its freshness, coverage limit and recovery action, lives in the banner below.</p>
+        </div>
+
+        <h3 class="sg-h3">Notices, failed-refresh banner and toast</h3>
+        <div class="sg-panel" id="feedback-specimens"></div>
+
+        <h3 class="sg-h3">Quiet, empty and first-run moments</h3>
+        <div class="sg-panel" id="quiet-specimens"></div>
+
+        <h3 class="sg-h3">Account-reported usage</h3>
+        <div class="sg-panel" id="acct-specimens" style="max-width:420px"></div>
+
+        <h3 class="sg-h3">Evidence item (PR detail)</h3>
+        <div class="sg-panel" id="ev-specimens"></div>
+      </section>
+
+      <section class="sg-section" id="containment">
+        <h2>Navigation &amp; containment <span class="chip">D4</span></h2>
+        <p>A critique of D2 at 390px found labels spilling out of cards, clipped navigation and sideways page scrolling. D4's rules prevent those by construction, and a small review tool in the prototype lets anyone check the result.</p>
+        <div class="sg-panel">
+          <table class="sg-table"><thead><tr><th>Width</th><th>Navigation</th><th>Notes</th></tr></thead><tbody>
+            <tr><td>≥ 1024px</td><td>Side nav, "Sources &amp; repos" set apart at the bottom</td><td>Unchanged from D3</td></tr>
+            <tr><td>720–1023px</td><td>Pill row under the app bar</td><td>All five items fit without scrolling</td></tr>
+            <tr><td>&lt; 720px</td><td><b>Fixed bottom tab bar</b>: icon over a 12px label, five equal tabs, 52px tall; current tab on the selection tint; issue count as a small badge on Sources</td><td>"Sources &amp; repos" shows as "Sources" but keeps its full accessible name. The bar reserves the device safe-area inset, which only has an effect when the page is shown edge to edge (for example as a home-screen app). Toasts and the review panel are lifted above it. The page and the sticky filter summary no longer share the top with a nav row</td></tr>
+          </tbody></table>
+          <div class="do-dont">
+            <div class="dd do"><h4>Containment rules</h4><ul>
+              <li>Grid and flex children get <code>min-width: 0</code> so long content can't force the page wider.</li>
+              <li><code>white-space: nowrap</code> only for short labels and numbers that must not split, and never inside a card narrower than they are.</li>
+              <li>Components that must fit different widths adapt to their <b>own</b> width (container queries) with the safe layout as the default.</li>
+              <li>Sideways scrolling is allowed only inside a local scroller, and it shows an edge shadow plus a words-hint when it matters (year grid, wide tables).</li>
+              <li>Charts have a 240px minimum, because a 320px window leaves a 256px card body.</li>
+            </ul></div>
+            <div class="dd dont"><h4>Avoid</h4><ul>
+              <li>Hiding a label with <code>display: none</code> when it is the only accessible name; use a visually-hidden style.</li>
+              <li>A pill radius on anything that wraps to several lines.</li>
+              <li><code>colspan</code> in tables whose columns are hidden on a phone; give every row the same cells.</li>
+              <li>Repeating one failure explanation in the strip, a notice, a card and a banner.</li>
+              <li>Claiming a layout is contained without measuring it at 390px and 320px.</li>
+            </ul></div>
+          </div>
+          <h3 class="sg-h3" style="margin-top:0">Local scroll cue (live specimen)</h3>
+          <div class="sg-frame" style="width: 358px"><span class="sg-cap">A 358px frame holding a table wider than itself; scroll it sideways. The soft edge shows which side still has content.</span>
+            <div id="scroll-specimen"></div></div>
+          <p class="sg-label"><b>Check it yourself:</b> open the prototype, resize the window to 390px and then 320px wide, open <b>Prototype states</b> and press <b>Check layout containment</b> on Overview, Trends, Delivery, Usage and Sources, in the Typical and Refresh failed scenarios. It reports sideways page overflow, anything past the window edge and any content spilling out of its box. It has not yet been run by its author.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="data">
+        <h2>Charts &amp; evidence patterns</h2>
+        <p>The aligned chart has two panels on one shared time axis, with <b>separate y-axes and units</b>. Merged PRs are never plotted on a token scale. Bars have rounded tops and gridlines are dashed. The coverage encoding is unchanged from D1.</p>
+        <span class="illus">Illustrative specimen data</span>
+        <div class="sg-panel">
+          <div class="legend" id="chart-legend"></div>
+          <div class="chart-host" id="chart-spec"></div>
+          <table class="sg-table"><thead><tr><th>State</th><th>Delivery panel</th><th>Usage panel</th><th>Coverage rail</th><th>Readout / table text</th></tr></thead><tbody>
+            <tr><td>Covered with activity</td><td>Berry bar, rounded top</td><td>Codex solid teal + Claude hatched terracotta, stacked</td><td>Solid</td><td>"38.1M tokens"</td></tr>
+            <tr><td>Covered, zero</td><td>1.5px baseline tick</td><td>1.5px baseline tick</td><td>Solid</td><td>"0 (no recorded activity)"</td></tr>
+            <tr><td>Partial coverage</td><td>—</td><td>Bars for covered provider(s)</td><td>Hatched</td><td>"… · partial coverage" and "*"</td></tr>
+            <tr><td>Unavailable history</td><td>— (GitHub history may still exist)</td><td>Warm hatch over the column; long runs labelled</td><td>Empty outline</td><td>"history unavailable"</td></tr>
+            <tr><td>Future (inside the selected period)</td><td>Nothing</td><td>Nothing</td><td>Nothing</td><td>"Upcoming, no data yet"</td></tr>
+          </tbody></table>
+        </div>
+        <h3 class="sg-h3">A year of merges</h3>
+        <div class="sg-panel">
+          <div class="year-wrap" id="year-spec"></div>
+          <p class="sg-label">One cell per day for the last 12 months, Monday-start weeks. The berry ramp has 4 steps; the sunken cell is a <b>covered zero</b> (delivery history covers the whole lookback for tracked repos). Days in the selected period are outlined. Clicking a day opens it in Trends. Each cell has a text title, and the figure has a text summary (total, days with a merge, busiest day). There are deliberately no streaks or scores. It shows merges only, because local usage history doesn't cover the year.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="motion">
+        <h2>Motion</h2>
+        <p>From Emil Kowalski's animate skill (snapshot <code>c8a7962</code>): no motion on anything triggered by keyboard or done a hundred times a day; <code>transform</code> and <code>opacity</code> only; strong ease-out curves; under 300ms for UI; and entrances that play once, never on re-render. Delight motion is spent only on rare moments.</p>
+        <div class="sg-panel">
+          <table class="sg-table"><thead><tr><th>Moment</th><th>Purpose</th><th>Recipe</th></tr></thead><tbody>
+            <tr><td>Button / icon press</td><td>Feedback</td><td><code>scale(0.97)</code> · 160ms · <code>--ease-out</code> cubic-bezier(0.23, 1, 0.32, 1)</td></tr>
+            <tr><td>Popover open (custom range, repos)</td><td>Spatial: grows from its trigger</td><td>opacity + <code>scale(0.95→1)</code> · 200ms · origin top-left · <code>@starting-style</code></td></tr>
+            <tr><td>Records drawer / phone filter sheet</td><td>Spatial</td><td>translate + opacity · 320ms · <code>--ease-drawer</code> cubic-bezier(0.32, 0.72, 0, 1)</td></tr>
+            <tr><td>Toast</td><td>State indication</td><td>translateY(100%→0) + opacity · 400ms · <code>ease</code> (Sonner-style recipe)</td></tr>
+            <tr><td>Buddy pop on discovery (first run only)</td><td>Delight, rare tier</td><td>opacity + <code>scale(0.9→1)</code> · 300ms · ease-out</td></tr>
+            <tr><td>Chart bucket move with arrow keys, filters, tab switches</td><td>—</td><td><b>No animation</b>: keyboard-driven or high-frequency</td></tr>
+            <tr><td>Chart bars on load</td><td>—</td><td><b>No animation</b>: data being read doesn't move for style</td></tr>
+          </tbody></table>
+          <div class="motion-stage" id="motion-stage"></div>
+          <div class="actions start"><button class="btn btn-secondary btn-sm" type="button" id="replay-pop">Replay popover</button><button class="btn btn-secondary btn-sm" type="button" id="replay-toast">Replay toast</button><button class="btn btn-secondary btn-sm" type="button" id="replay-buddy">Replay buddy pop</button></div>
+          <p class="sg-label">Reduced motion keeps the opacity fades and drops the movement: no translate, no scale, no press. The spinner and skeletons switch to a gentle breathe.</p>
+        </div>
+      </section>
+
+      <section class="sg-section" id="content">
+        <h2>Voice &amp; content</h2>
+        <p>Friendly and plain, like a teammate's note, but every claim is literal. Warmth goes into greetings, quiet days and empty states. Numbers, labels and errors stay precise.</p>
+        <div class="do-dont">
+          <div class="dd do"><h4>Say</h4><ul>
+            <li>"Morning, Kelvin": a greeting, with no judgement attached</li>
+            <li>"Here's what merged and where your agents spent their tokens"</li>
+            <li>"A quiet one. No recorded agent activity and no merges… a true zero, not missing data."</li>
+            <li>"Let's find your agents" (setup)</li>
+            <li>"History unavailable before [date]", "Linked sessions", "Suggested", "Owner-confirmed"</li>
+          </ul></div>
+          <div class="dd dont"><h4>Avoid</h4><ul>
+            <li>"Great job!", "You're on fire", streaks, levels, badges for output</li>
+            <li>"Agent-produced PR", "hours saved", "more productive", "productivity score"</li>
+            <li>A cross-provider "Total tokens", or any cost / "$"</li>
+            <li>Jokes in errors or anything about lost data</li>
+            <li>Emoji as icons</li>
+          </ul></div>
+        </div>
+      </section>
+
+      <section class="sg-section" id="a11y">
+        <h2>Interaction &amp; accessibility</h2>
+        <div class="sg-panel">
+          <table class="sg-table"><thead><tr><th>Rule (intended)</th><th>How the prototype expresses it</th></tr></thead><tbody>
+            <tr><td>Visible focus everywhere</td><td>2px grape ring with 2px offset (<button class="btn btn-secondary btn-sm demo-focus" type="button" tabindex="-1">Focused</button>)</td></tr>
+            <tr><td>Charts operable by keyboard</td><td><span class="kbd">Tab</span> to the chart, <span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">Home</span> <span class="kbd">End</span>, <span class="kbd">Enter</span> for records; announced readout</td></tr>
+            <tr><td>Table equivalent for every chart</td><td>Chart / Table switch; table rows open the same records</td></tr>
+            <tr><td>Year grid</td><td>Text summary and per-cell titles. Cells are pointer targets; keyboard users reach any day through Custom range plus the chart/table (limitation recorded in DESIGN.md)</td></tr>
+            <tr><td>Meaning never depends on colour alone</td><td>Buddy shapes (square / round / dashed), hatches, badge fill styles and text labels</td></tr>
+            <tr><td>Dialogs</td><td>Drawer and filter sheet trap <span class="kbd">Tab</span>, close on <span class="kbd">Esc</span>, return focus</td></tr>
+            <tr><td>Reversible changes</td><td>Link confirm/dismiss/remove, stop tracking and disconnect all offer Undo</td></tr>
+            <tr><td>Browser surfaces themed</td><td>Text selection (lavender), caret and form accents (grape), scrollbar colours</td></tr>
+            <tr><td>Icon-only controls keep a name <span class="chip">D4</span></td><td>On a phone the app bar's Refresh and issue-count labels are visually hidden, not <code>display: none</code>, so they are still read. (In D3 the Refresh button lost its name at this width.)</td></tr>
+            <tr><td>Phone tab bar <span class="chip">D4</span></td><td>Current tab uses <code>aria-current="page"</code>; "Sources" keeps the full name "Sources &amp; repos". <b>Known trade-off:</b> the nav is first in the DOM, so on a phone-width window keyboard Tab reaches the bar before the page content, although it is drawn at the bottom</td></tr>
+            <tr><td>Sideways scrolling is discoverable <span class="chip">D4</span></td><td>Edge shadows on the year grid and wide tables, plus a words-hint under the year grid on a phone</td></tr>
+            <tr><td>Session IDs <span class="chip">D4</span></td><td>Visible, secondary, prefixed "Session ID:" for screen readers; the lead is the recorded name or relationship</td></tr>
+            <tr><td>Stacked phone tables <span class="chip">D4 caveat</span></td><td>The Delivery and repository tables become blocks at ≤ 639px by overriding <code>display</code>, which can drop table semantics in some assistive technology. Not verified; the Usage tree keeps real table display</td></tr>
+          </tbody></table>
+          <div class="notice notice-warn"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l6 10.5H2L8 2.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".85" fill="currentColor"/></svg><span><b>Checks performed:</b> none in a browser for this revision. The design session can render public web pages but not this local preview, and has no script runner. Keyboard, screen-reader, zoom/reflow and rendered-contrast checks are still to do. WCAG 2.2 AA is the target, not a claim.</span></div>
+        </div>
+      </section>
+
+      <section class="sg-section" id="mapping">
+        <h2>Implementation mapping (to verify)</h2>
+        <p>The frontend profile names Tailwind CSS + Astryx for a React build. Nothing here was built with Astryx; this table is a starting point for Tech Spec.</p>
+        <div class="sg-panel">
+          <table class="sg-table"><thead><tr><th>Prototype pattern</th><th>Likely foundation</th><th>Notes / to verify</th></tr></thead><tbody>
+            <tr><td>Buttons (primary, secondary, ghost, danger)</td><td>Astryx button variants, themed</td><td>Tactile bottom edge and press scale must survive theming; check the disabled and busy APIs</td></tr>
+            <tr><td>Segmented control (pill)</td><td>Astryx toggle/segmented group if available</td><td><code>aria-pressed</code> or radio-group semantics</td></tr>
+            <tr><td>Popovers, records drawer, filter sheet</td><td>Astryx popover / dialog / drawer</td><td>Entrance once, origin at trigger, focus trap and return</td></tr>
+            <tr><td>Tables, PR detail, usage tree</td><td>Astryx table if suitable; otherwise custom</td><td>Expandable rows and the stacked phone layout</td></tr>
+            <tr><td>Aligned chart, year grid</td><td>Custom SVG presentation components</td><td>Chart library is a Tech Spec decision; keep separate axes, patterns, readout and keyboard model</td></tr>
+            <tr><td>Agent buddies, crew art, brand mark</td><td>Custom SVG components (product assets)</td><td>Authored here; export as an icon set or keep as components</td></tr>
+            <tr><td>Phone tab bar <span class="chip">D4</span></td><td>Astryx tabs / navigation if suitable; otherwise custom, as a <code>nav</code> of links</td><td>Safe-area inset, <code>aria-current</code>, the short "Sources" label and the badge; keep DOM order in mind (see accessibility)</td></tr>
+            <tr><td>Container-adaptive components <span class="chip">D4</span></td><td>CSS container queries (Tailwind v4 has them built in; v3 needs the container-queries plugin)</td><td>Coverage strip and tokens ledger rely on them, with the safe layout as the default if unsupported. Tech Spec confirms the browser support it needs</td></tr>
+            <tr><td>Local scroll cue <span class="chip">D4</span></td><td>Plain CSS (<code>background-attachment: local</code> gradients)</td><td>Needs no script; verify it on iOS Safari</td></tr>
+            <tr><td>Tokens</td><td>Tailwind theme from design-system/DESIGN.md</td><td>One token contract for the Astryx theme and app UI; demonstrate a token change reaching both. D4 adds three layout/depth tokens (<code>--bottomnav-h</code>, <code>--shadow-nav</code>, <code>--scroll-edge</code>) that live in the CSS mirror and the identity's prose, not its YAML</td></tr>
+            <tr><td>Rounded display face</td><td>Self-hosted Nunito, then the system <code>ui-rounded</code> stack (owner decision D9; supersedes Review r6's no font files)</td><td>Settled. Tech Spec keeps the stack as tokens; the fallback differs by browser</td></tr>
+          </tbody></table>
+        </div>
+      </section>
+
+      <section class="sg-section" id="dos">
+        <h2>Do's and don'ts</h2>
+        <div class="do-dont">
+          <div class="dd do"><h4>Do</h4><ul>
+            <li>Spend personality on rare moments and precise details, not on every card.</li>
+            <li>Keep buddies beside text, with shape matching provider.</li>
+            <li>State coverage in words beside any number that might be incomplete.</li>
+            <li>Keep Codex and Claude Code totals side by side.</li>
+            <li>Lead a session row with its recorded name or relationship; keep the ID secondary but present.</li>
+            <li>Put the primary action on the right.</li>
+          </ul></div>
+          <div class="dd dont"><h4>Don't</h4><ul>
+            <li>Turn activity into a game score, streak or leaderboard.</li>
+            <li>Put buddies inside charts or animate data.</li>
+            <li>Add kicker labels above headings, coloured side rules, gradient text or hard block shadows.</li>
+            <li>Invent a name for a session that has none, or lead with a technical ID when a name exists.</li>
+            <li>Sum account and local usage, or filter account usage by repo.</li>
+            <li>Add a machine picker, folder picker, API-key field or password form.</li>
+          </ul></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="ui.js"></script>
+  <script src="style-guide.js"></script>
+</body>
+</html>
