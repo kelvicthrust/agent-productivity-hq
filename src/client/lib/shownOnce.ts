@@ -20,3 +20,11 @@ export function markShown(key: string): void {
     // Not kept: the prompt may come again on the next visit.
   }
 }
+
+export function clearShown(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Storage is unavailable. Continue with setup.
+  }
+}

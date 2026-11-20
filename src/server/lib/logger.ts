@@ -101,6 +101,15 @@ export function createLogger(options: {
   };
 }
 
+/** Clears the active log and its rotations while keeping the sink usable. */
+export function clearLogFiles(dir: string): void {
+  const path = join(dir, LOG_FILE);
+  for (let i = 0; i < MAX_LOG_FILES; i++) {
+    rmSync(i === 0 ? path : `${path}.${i}`, { force: true });
+  }
+  ensureFile(path);
+}
+
 /** Appends to `<dir>/agent-productivity.log` (mode 0600) and rotates by size, dropping the oldest file. */
 export function fileSink(
   dir: string,

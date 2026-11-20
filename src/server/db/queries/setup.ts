@@ -1,12 +1,14 @@
 import { inTransaction, type Db } from '../open.ts';
 import { getMeta, setMeta } from './meta.ts';
 
-// First-launch setup state (TECH › J1 Set up coverage; local-api › POST /api/setup/complete). Two app_meta keys, nothing new in the
-// schema: `setup_completed_at` (epoch ms, as the seeded world also writes it) and `report_timezone`, which setup stores and boot
+// First-launch setup state (TECH › J1 Set up coverage; local-api › POST /api/setup/complete). The main app_meta keys are `setup_completed_at` (epoch ms, as the seeded world also writes it) and `report_timezone`, which setup stores and boot
 // re-reads. This file is the only place SQL for it lives; the setup service decides what to do with the answer.
 
 const COMPLETED_AT = 'setup_completed_at';
 const TIMEZONE = 'report_timezone';
+export const SETUP_RESET_PENDING = 'setup_reset_pending';
+
+export const isResetSetupPending = (db: Db): boolean => getMeta(db, SETUP_RESET_PENDING) === '1';
 
 export interface SetupState {
   /** True once Finish has been pressed (or the world was seeded as finished). Skipping every step still counts. */
@@ -39,7 +41,10 @@ export interface CompleteSetupInput {
 export function completeSetup(db: Db, input: CompleteSetupInput): { firstTime: boolean } {
   return inTransaction(db, () => {
     const firstTime = getMeta(db, COMPLETED_AT) === null;
-    if (firstTime) setMeta(db, COMPLETED_AT, String(input.at));
+    if (firstTime) {
+      setMeta(db, COMPLETED_AT, String(input.at));
+      db.prepare('DELETE FROM app_meta WHERE key = ?').run(SETUP_RESET_PENDING);
+    }
     setMeta(db, TIMEZONE, input.timezone);
     return { firstTime };
   });

@@ -115,6 +115,8 @@ export interface GithubAuth {
  * with a plain sentence, and stores nothing.
  */
 export interface GithubAccounts {
+  /** Checks access to this installation’s credential and returns its reset cleanup. */
+  prepareReset?(): () => void;
   /** The GitHub entry of GET /api/sources `accounts`: status, login, via, appClientIdSaved and the sentence to show. */
   status(): Promise<AccountStatus>;
   /** `{mode: 'existing'}` when gh is signed in; otherwise starts the device flow (`mode: 'device'`, userCode, verificationUri). */

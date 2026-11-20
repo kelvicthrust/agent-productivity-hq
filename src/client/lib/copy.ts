@@ -275,6 +275,20 @@ export const SOURCES_COPY = {
     scope: 'Stored on this computer only',
     body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Prompts, responses, tool output and credentials aren’t stored. GitHub and account-report reads are the only network requests. Checking Claude plan limits contacts Anthropic using your existing Claude Code sign-in and saves the limit percentages, reset times and check status.',
   },
+  reset: {
+    title: 'Reset Agent Productivity HQ',
+    scope: 'Clear this app’s data and return to first-time setup.',
+    open: 'Reset app',
+    confirmTitle: 'Reset Agent Productivity HQ?',
+    removes:
+      'This deletes HQ’s imported history, tracked repositories, session links, and saved account connections. It also removes HQ’s Claude Code hooks if enabled.',
+    keeps:
+      'Your provider sign-ins and original history stay in place. Setup will look for local sources again.',
+    cancel: 'Cancel',
+    confirm: 'Reset app and start over',
+    pending: 'Resetting…',
+    failed: 'HQ couldn’t finish resetting. Try again.',
+  },
   local: {
     title: 'On this machine',
     /** A password-protected Paseo daemon: not designed yet, so the words are plain (Implementation, M8). */

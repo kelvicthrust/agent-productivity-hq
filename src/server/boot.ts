@@ -4,6 +4,7 @@ import type { Server } from 'node:http';
 import { resolve } from 'node:path';
 import { createAdaptorServer } from '@hono/node-server';
 import type { Hono } from 'hono';
+import { ApiError } from '../shared/contracts/errors.ts';
 import { isTimeZone, todayIn } from '../shared/domain/periods.ts';
 import {
   claudeConfigDirs,
@@ -41,7 +42,7 @@ import {
 import { claudePlanProfile } from './integrations/claudePlan/credentials.ts';
 import { readLiveSessionLabels } from './db/queries/hq.ts';
 import { joinPaseoSessions } from './db/queries/paseo.ts';
-import { readSetupState } from './db/queries/setup.ts';
+import { isResetSetupPending, readSetupState } from './db/queries/setup.ts';
 import { markRunningRunsInterrupted } from './db/queries/runs.ts';
 import { createApp, type AppDeps, type SetupMachine } from './http/app.ts';
 import type { HttpEnv } from './http/errors.ts';
@@ -52,13 +53,14 @@ import { acquireInstanceLock, type InstanceLease } from './lib/instance.ts';
 import { type ServerConfig, baseUrl } from './lib/config.ts';
 import { ensureDir } from './lib/fsModes.ts';
 import { abortableSleep, type Sleep } from './lib/sleep.ts';
-import { createLogger, fileSink, type Logger } from './lib/logger.ts';
+import { clearLogFiles, createLogger, fileSink, type Logger } from './lib/logger.ts';
 import { createChatgptAccounts, type ChatgptAccounts } from './services/accounts.ts';
 import { createGithubAccounts } from './services/accounts-github.ts';
 import { createClaudeAccounts, type ClaudePlanLimitsPorts } from './services/claude-account.ts';
 import { createHookStore, type HookStore } from './services/hq/hookStore.ts';
 import { createHqService, type HqService } from './services/hq/service.ts';
 import { recomputeLinks } from './services/links.ts';
+import { createResetService } from './services/reset.ts';
 import { runRetention } from './services/retention.ts';
 import { delayUntilLocalTime, startScheduler, type Scheduler } from './services/scheduler.ts';
 
@@ -322,7 +324,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   let recovery: RecoveryInfo | null = null;
   let closing = false;
   let closeAccountFlows: (() => void) | null = null;
-  let hq: HqService | null = null;
+  let hq: (HqService & { stop(): Promise<void> }) | null = null;
   let claudeHooks: ClaudeHooks | null = null;
   const hookStore: HookStore = createHookStore({ now });
   const hookToken = newHookToken();
@@ -428,7 +430,8 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       const dbForTasks = db;
       /** A process that reads this machine reads nothing until first-launch Setup has been finished (its Finish starts the first run). */
       const waitsForSetup = (): boolean =>
-        deps.local !== undefined && !readSetupState(dbForTasks).complete;
+        (deps.local !== undefined && !readSetupState(dbForTasks).complete) ||
+        isResetSetupPending(dbForTasks);
       const github = deps.github
         ? createGithubAccounts({
             db,
@@ -630,22 +633,47 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         ],
       });
       runner = activeRunner;
+      const reset = createResetService({
+        db,
+        runner: activeRunner,
+        timezone,
+        github: github ?? undefined,
+        chatgpt: chatgpt ?? undefined,
+        claudeHooks: claudeHooks ?? undefined,
+        clearLegacyCapture: () => {
+          if (capture) {
+            try {
+              capture.change({ action: 'verify_remove' });
+            } catch {
+              throw new ApiError(
+                'claude_settings_conflict',
+                'Finish removing the legacy Claude Code status line in Accounts, then try resetting again.',
+              );
+            }
+          }
+        },
+        clearRuntime: async () => {
+          await hq?.stop();
+          hookStore.clear();
+          if (!deps.logger) clearLogFiles(config.logDir);
+        },
+      });
       /** A repo became readable: read it now rather than at the next 15-minute run. One that is going now is followed by one more. */
       const requestGithubSync = (): void => {
-        if (closing || waitsForSetup()) return;
+        if (closing || reset.running() || waitsForSetup()) return;
         const request = { trigger: 'manual', sources: ['github'] } as const;
         if (activeRunner.start(request).started) return;
         void activeRunner.idle().then(() => {
-          if (!closing) activeRunner.start(request);
+          if (!closing && !reset.running() && !waitsForSetup()) activeRunner.start(request);
         });
       };
       /** A ChatGPT sign-in finished here: read the account now. One that is going now is followed by one more. */
       requestChatgptRead = (): void => {
-        if (closing) return;
+        if (closing || reset.running()) return;
         const request = { trigger: 'manual', sources: ['chatgpt_account'] } as const;
         if (activeRunner.start(request).started) return;
         void activeRunner.idle().then(() => {
-          if (!closing) activeRunner.start(request);
+          if (!closing && !reset.running()) activeRunner.start(request);
         });
       };
       scheduler =
@@ -659,6 +687,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
                   name: 'retention',
                   nextDelay: (nowMs) => delayUntilLocalTime(nowMs, timezone, 3, 0),
                   run: () => {
+                    if (reset.running()) return;
                     const r = runRetention(dbForTasks, { nowMs: now(), timezone });
                     logger.info('retention ran', {
                       source: 'retention',
@@ -676,7 +705,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
                         nextDelay: () => REFRESH_INTERVAL_MS,
                         run: () => {
                           // Setup's Finish starts the first run on a machine: until it is pressed the timer reads nothing.
-                          if (waitsForSetup()) return;
+                          if (reset.running() || waitsForSetup()) return;
                           // A manual run still going is fine: the timer leaves it be and tries again at the next tick.
                           activeRunner.start({ trigger: 'scheduler' });
                         },
@@ -702,6 +731,8 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         timezone,
         version,
         runner: activeRunner,
+        reset,
+        refreshNeedsSetup: () => isResetSetupPending(dbForTasks),
         staticDir: deps.staticDir === undefined ? config.staticDir : deps.staticDir,
         previewLabel: deps.previewLabel,
         github: github ?? undefined,

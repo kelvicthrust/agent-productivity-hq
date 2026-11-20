@@ -28,7 +28,9 @@ import type {
 import { formatWaitUntil } from '../collectors/github/sync.ts';
 import type { Db } from '../db/open.ts';
 import type { Sleep } from '../lib/sleep.ts';
+import { GITHUB_APP_DISCONNECTED } from '../db/queries/accounts.ts';
 import { getMeta, setMeta } from '../db/queries/meta.ts';
+import { isResetSetupPending } from '../db/queries/setup.ts';
 
 // The account service behind /api/accounts/github/* (TECH › GitHub delivery, owner choice P2). It owns what the owner can do
 // about GitHub's sign-in: see which route is in use, save the App's client ID, start and watch a device flow, disconnect.
@@ -115,6 +117,7 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
   const flag = (key: string): boolean => getMeta(db, key) === '1';
   const clientId = (): string | null => getMeta(db, META_CLIENT_ID) || null;
   const ghEnabled = (): boolean => !flag(META_GH_OFF);
+  const appEnabled = (): boolean => !flag(GITHUB_APP_DISCONNECTED);
 
   /** The last answer of `gh`, for the one answer that has to be given without asking it (saveClientId). */
   let ghSeen = false;
@@ -137,6 +140,7 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
     now,
     gh: readGh,
     ghEnabled,
+    appEnabled,
     savedClientId: clientId,
   });
 
@@ -209,7 +213,7 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
         ...(mismatch ? { reason: 'login_mismatch' } : {}),
       };
     }
-    const stored = readStoredToken(keyring);
+    const stored = appEnabled() ? readStoredToken(keyring) : { kind: 'none' as const };
     if (stored.kind === 'refused') {
       return {
         ...card,
@@ -234,6 +238,15 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
         statusText: NO_CREDENTIAL_MESSAGE.reconnect,
         via: 'app',
         reason: 'reconnect',
+      };
+    }
+    if (ghSignedIn && !ghEnabled() && isResetSetupPending(db)) {
+      return {
+        ...card,
+        status: 'notconnected',
+        statusText: 'Not connected',
+        via: null,
+        reason: 'gh_disconnected',
       };
     }
     return saved
@@ -359,10 +372,13 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
             : FLOW_MESSAGE.unreachable,
       );
     }
+    const installId = getMeta(db, 'install_id');
+    if (installId !== null) token.owner_install_id = installId;
     if (!writeStoredToken(keyring, token)) return finish(flow, 'failed', FLOW_MESSAGE.keychain);
     setMeta(db, META_LOGIN, who.login);
     setMeta(db, META_APP_LOGIN, who.login);
     setMeta(db, META_RECONNECT, '0');
+    if (!appEnabled()) setMeta(db, GITHUB_APP_DISCONNECTED, '0');
     finish(flow, 'connected', null);
   }
 
@@ -385,6 +401,32 @@ export function createGithubAccounts(deps: GithubAccountsDeps): GithubAccountsSe
     auth,
     status,
     close: cancelRunning,
+
+    prepareReset() {
+      const installId = getMeta(db, 'install_id');
+      const linked = appEnabled() && Boolean(getMeta(db, META_APP_LOGIN));
+      const keychainError = () =>
+        new ApiError(
+          'internal',
+          'Couldn’t remove the saved GitHub sign-in from your Keychain. Allow access in the macOS prompt, then try again.',
+        );
+      const hasMatchingToken = () => {
+        if (!linked) return false;
+        const stored = readStoredToken(keyring);
+        if (stored.kind === 'refused') throw keychainError();
+        if (stored.kind !== 'token') return false;
+        return stored.token.owner_install_id === installId;
+      };
+      const hasToken = hasMatchingToken();
+      return () => {
+        cancelRunning();
+        flows.clear();
+        cached = null;
+        ghSeen = false;
+        // The credential slot is shared across data directories. Check again before deleting it.
+        if (hasToken && hasMatchingToken() && !deleteStoredToken(keyring)) throw keychainError();
+      };
+    },
 
     async connect(): Promise<ConnectResponse> {
       // Connect puts gh back in use after a Disconnect, then asks the sign-ins we already have (P-42: no prompt for one).

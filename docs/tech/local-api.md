@@ -79,6 +79,7 @@ Finish calls `POST /api/setup/complete`, remains on Repositories while pending, 
   | `not_found` | 404 | Unknown PR, session, repo or run |
   | `already_tracked` | 409 | Repo already active |
   | `refresh_running` | 409 | A refresh is running. `details.runId` names it. |
+  | `reset_in_progress` | 409 | Wait for the app reset to finish before retrying. |
   | `repo_inaccessible` | 422 | GitHub returned 404/403 for the repo |
   | `github_not_connected` | 422 | Repo add or sync needs a GitHub connection |
   | `github_app_required` | 422 | gh isn't signed in and no GitHub App client ID is saved yet. `details.guideUrl` points to the setup guide. |
@@ -126,6 +127,7 @@ Finish calls `POST /api/setup/complete`, remains on Repositories while pending, 
 | `GET /api/accounts/claude/usage-capture/preview`, `PUT /api/accounts/claude/usage-capture` | Read restoration instructions and verify legacy hook removal | Sources › Remove old status line |
 | `GET /api/repos/discover` | One page of repository metadata for the specified connected account | Setup and Sources › Find a repository |
 | `POST /api/setup/discover`, `POST /api/setup/complete` | First-launch flow | Setup |
+| `POST /api/setup/reset` | Clear local state and return to onboarding | Sources & repos |
 
 ## OpenAPI 3.1
 
@@ -161,7 +163,7 @@ components:
           type: object
           required: [code, message, retryable]
           properties:
-            code: { type: string, enum: [invalid_input, invalid_range, forbidden_origin, not_found, already_tracked, refresh_running, repo_inaccessible, github_not_connected, github_app_required, github_account_changed, claude_settings_unreadable, claude_statusline_unsupported, claude_settings_conflict, claude_hooks_blocked, claude_hooks_unavailable, claude_hooks_stale, claude_hooks_failed, upstream_unavailable, internal] }
+            code: { type: string, enum: [invalid_input, invalid_range, forbidden_origin, not_found, already_tracked, refresh_running, reset_in_progress, repo_inaccessible, github_not_connected, github_app_required, github_account_changed, claude_settings_unreadable, claude_statusline_unsupported, claude_settings_conflict, claude_hooks_blocked, claude_hooks_unavailable, claude_hooks_stale, claude_hooks_failed, upstream_unavailable, internal] }
             message: { type: string }
             retryable: { type: boolean }
             details: { type: object, additionalProperties: true }
@@ -933,6 +935,19 @@ paths:
       description: "Marks setup complete (with the report timezone, in one transaction) and starts the first full refresh (202 with run). Allowed with zero repos and zero sources. A repeat changes nothing and starts no second run (M10 delta)."
       parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
       responses: { "202": { description: Started, content: { application/json: { schema: { $ref: "#/components/schemas/RefreshRun" } } } } }
+  /api/setup/reset:
+    post:
+      description: "Resets a configured installation and returns 204 after clearing its current data. The app waits for active requests and the current refresh to finish. After a successful reset, bootstrap reports setupComplete false. Provider sign-ins can be used again through Connect, and Setup discovers local sources again."
+      parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [confirmed], additionalProperties: false, properties: { confirmed: { type: boolean, const: true } } } } }
+      responses:
+        "204": { description: Reset finished or setup was already incomplete }
+        "400": { description: Confirmation required, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+        "409": { description: Reset in progress or legacy Claude settings still need attention, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+        "422": { description: Claude Code hooks could not be removed safely, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+        "500": { description: Reset failed or a local SQLite reader prevented journal cleanup, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
 ```
 
 `ProviderKpi` and `ModelShare` complete the schema set:

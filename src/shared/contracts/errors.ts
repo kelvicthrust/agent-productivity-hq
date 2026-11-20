@@ -7,6 +7,7 @@ export const ERROR_CODES = [
   'not_found',
   'already_tracked',
   'refresh_running',
+  'reset_in_progress',
   'repo_inaccessible',
   'github_not_connected',
   'github_app_required',
@@ -43,6 +44,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   not_found: 404,
   already_tracked: 409,
   refresh_running: 409,
+  reset_in_progress: 409,
   repo_inaccessible: 422,
   github_not_connected: 422,
   github_app_required: 422,
@@ -61,6 +63,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set([
   'upstream_unavailable',
   'refresh_running',
+  'reset_in_progress',
   'internal',
 ]);
 

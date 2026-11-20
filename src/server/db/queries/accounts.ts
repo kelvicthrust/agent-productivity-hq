@@ -438,7 +438,8 @@ export function localTokensBetween(
 
 // ---- The ChatGPT connection ---------------------------------------------------------------------------------------------------
 
-const DISCONNECTED = 'chatgpt_disconnected';
+export const GITHUB_APP_DISCONNECTED = 'github_app_disconnected';
+export const CHATGPT_DISCONNECTED = 'chatgpt_disconnected';
 const CONNECTED_AT = 'chatgpt_connected_at';
 
 export interface ChatgptConnection {
@@ -451,7 +452,7 @@ export interface ChatgptConnection {
 export function readChatgptConnection(db: Db): ChatgptConnection {
   const connectedAt = Number(getMeta(db, CONNECTED_AT));
   return {
-    disconnected: getMeta(db, DISCONNECTED) === '1',
+    disconnected: getMeta(db, CHATGPT_DISCONNECTED) === '1',
     connectedAt: Number.isSafeInteger(connectedAt) && connectedAt > 0 ? connectedAt : null,
   };
 }
@@ -459,7 +460,7 @@ export function readChatgptConnection(db: Db): ChatgptConnection {
 /** Connect finished here: the dashboard reads again and the card says Connected. */
 export function markChatgptConnected(db: Db, at: number): void {
   inTransaction(db, () => {
-    setMeta(db, DISCONNECTED, '0');
+    setMeta(db, CHATGPT_DISCONNECTED, '0');
     setMeta(db, CONNECTED_AT, String(at));
   });
 }
@@ -467,7 +468,7 @@ export function markChatgptConnected(db: Db, at: number): void {
 /** Disconnect: the dashboard stops reading. It signs nobody out and deletes nothing it has imported. */
 export function markChatgptDisconnected(db: Db): void {
   inTransaction(db, () => {
-    setMeta(db, DISCONNECTED, '1');
+    setMeta(db, CHATGPT_DISCONNECTED, '1');
     setMeta(db, CONNECTED_AT, '0');
   });
 }

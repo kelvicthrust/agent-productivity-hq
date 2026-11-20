@@ -132,9 +132,10 @@ export function GithubRow({ card }: { card: AccountStatus | undefined }) {
   // The App setup is for a sign-in that is not `gh`: out of the way while one is in use or a code is on screen.
   const showConnect = !usingIt && !signingIn && !showPanel;
   const hasClientId = card.appClientIdSaved === true;
+  const canConnect = hasClientId || card.reason === 'gh_disconnected';
   const connectLabel = connect.isPending
     ? COPY.connecting
-    : !hasClientId && appSetupOpen
+    : !canConnect && appSetupOpen
       ? COPY.github.closeSetup
       : card.status === 'reconnect'
         ? COPY.reconnect
@@ -176,9 +177,9 @@ export function GithubRow({ card }: { card: AccountStatus | undefined }) {
               variant="primary"
               aria-busy={connect.isPending || undefined}
               aria-disabled={connect.isPending || undefined}
-              aria-expanded={hasClientId ? undefined : appSetupOpen}
+              aria-expanded={canConnect ? undefined : appSetupOpen}
               className={BUTTON}
-              onClick={hasClientId ? connectNow : () => setAppSetupOpen(!appSetupOpen)}
+              onClick={canConnect ? connectNow : () => setAppSetupOpen(!appSetupOpen)}
             />
           </>
         )}

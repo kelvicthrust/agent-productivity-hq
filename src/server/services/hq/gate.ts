@@ -7,6 +7,8 @@ export interface DemandGate {
   touch(): void;
   /** True while the feeds are started or being stopped. */
   active(): boolean;
+  /** Stops the feeds and ends the countdown until the next touch. */
+  stop(): Promise<void>;
   /** Stops the feeds and ends the countdown; later touches do nothing. Safe to call more than once. */
   close(): Promise<void>;
 }
@@ -53,7 +55,14 @@ export function createDemandGate(options: DemandGateOptions): DemandGate {
       });
   }
 
+  async function stop() {
+    restart = false;
+    stopNow();
+    await stopping;
+  }
+
   return {
+    stop,
     touch() {
       if (closed) return;
       if (state === 'stopping') {
@@ -69,9 +78,7 @@ export function createDemandGate(options: DemandGateOptions): DemandGate {
     active: () => state !== 'stopped',
     async close() {
       closed = true;
-      restart = false;
-      stopNow();
-      await stopping;
+      await stop();
     },
   };
 }

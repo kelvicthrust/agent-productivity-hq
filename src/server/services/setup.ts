@@ -16,7 +16,7 @@ import { DEFAULT_PASEO_URL, type PaseoAdapterOptions } from '../collectors/paseo
 import { openPaseoClient } from '../collectors/paseo/open.ts';
 import type { Runner } from '../collectors/runner.ts';
 import type { Db } from '../db/open.ts';
-import { completeSetup } from '../db/queries/setup.ts';
+import { completeSetup, isResetSetupPending } from '../db/queries/setup.ts';
 import {
   getLatestRun,
   getRunningRun,
@@ -25,6 +25,7 @@ import {
 } from '../db/queries/sources.ts';
 import type { Logger } from '../lib/logger.ts';
 import type { ChatgptAccounts } from './accounts.ts';
+import { finishResetStorage } from './reset.ts';
 import { buildSources, getRefreshRun, toRefreshRun } from './sources.ts';
 
 // First-launch Setup on the server (TECH › J1 Set up coverage; local-api › POST /api/setup/discover and /complete).
@@ -214,6 +215,7 @@ export function createSetupService(deps: SetupDeps): SetupService {
     },
 
     complete() {
+      if (isResetSetupPending(db)) finishResetStorage(db);
       const { firstTime } = completeSetup(db, { at: deps.now(), timezone: deps.timezone });
       if (firstTime) return firstRun();
       // A repeat starts no second run: the one going, else the latest. Only a setup that has never had a run starts one.
