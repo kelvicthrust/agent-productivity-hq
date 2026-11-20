@@ -8,7 +8,7 @@ _Overview with synthetic data._
 
 ## Choose how to run it
 
-The npm launcher runs on the Apple Silicon Mac whose agent activity you want to see. It opens the dashboard in your browser and prints its URL. The [v1.0.0 release](https://github.com/kelvicthrust/agent-productivity-hq/releases/tag/v1.0.0) also includes downloadable archives and checksums.
+The npm launcher runs on the Apple Silicon Mac whose agent activity you want to see. It opens the dashboard in your browser and prints its URL. The [latest GitHub release](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest) also includes downloadable archives and checksums.
 
 | Launch method | Prerequisite and first-time setup                                                                                                                    | Open the dashboard                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
