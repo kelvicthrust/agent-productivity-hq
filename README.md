@@ -8,15 +8,15 @@ _Overview with synthetic data._
 
 ## Choose how to run it
 
-The private release candidate ships with checksums and [local installation instructions](docs/delivery/setup.md#run-the-private-release-candidate-with-npx). New users can also [run from source](#run-from-source).
+[Version 1.0.0](https://github.com/kelvicthrust/agent-productivity-hq/releases/tag/v1.0.0) ships with checksums and [local archive instructions](docs/delivery/setup.md#run-a-release-archive-with-npx). New users can also [run from source](#run-from-source).
 
-| Launch method | Prerequisite and first-time setup                                                                                                            | Open the dashboard                                                                                          |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Terminal      | A compatible Node runtime with npm and the [private CLI archive](docs/delivery/setup.md#run-the-private-release-candidate-with-npx)          | `npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-0.3.0-rc.1.tgz" agent-productivity-hq` |
-| Paseo         | An Apple Silicon Paseo host with Tailscale and the [Agent HQ plugin installed](docs/delivery/setup.md#install-the-private-release-candidate) | Click **Agent HQ** in the Paseo sidebar.                                                                    |
-| Agent skill   | The same Node runtime and the [skill installed](docs/delivery/setup.md#install-the-agent-skill) for Claude Code or Codex                     | Enter `/agent-productivity-hq` in Claude Code or `$agent-productivity-hq` in Codex.                         |
+| Launch method | Prerequisite and first-time setup                                                                                                       | Open the dashboard                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Terminal      | A compatible Node runtime with npm and the [v1.0.0 CLI archive](docs/delivery/setup.md#run-a-release-archive-with-npx)                  | `npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.0.tgz" agent-productivity-hq` |
+| Paseo         | An Apple Silicon Paseo host with Tailscale and the [Agent HQ plugin installed](docs/delivery/setup.md#install-from-the-release-archive) | Click **Agent HQ** in the Paseo sidebar.                                                               |
+| Agent skill   | The same Node runtime and the [skill installed](docs/delivery/setup.md#install-the-agent-skill) for Claude Code or Codex                | Enter `/agent-productivity-hq` in Claude Code or `$agent-productivity-hq` in Codex.                    |
 
-After the public release, install the CLI with `npx --yes @kelvicthrust/agent-productivity-hq` or the skill with `npx skills add kelvicthrust/agent-productivity-hq`. Paseo users can install the published npm plugin using the [Paseo instructions](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop).
+After the public release, install the CLI with `npx --yes @kelvicthrust/agent-productivity-hq` or the skill with `npx skills add kelvicthrust/agent-productivity-hq` (Node.js 22.20.0 or newer for the Skills CLI). Paseo users can install the published npm plugin using the [Paseo instructions](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop).
 
 **Node compatibility.** The packaged dashboard runs on Node 22.16.0 or later in the 22.x line and on stable Node 24.0.0 or newer. Node 23.x lacks the SQLite transaction API the dashboard uses. Paseo checks the host for a compatible Node installation and offers a private runtime download if needed. Building from source requires Node 26 or newer.
 
@@ -32,7 +32,8 @@ _HQ with synthetic sessions._ [Read the HQ guide](docs/product/hq.md) for status
 
 ### Requirements
 
-- Node 26 or newer (manifest range `>=26.0.0`) and pnpm 11.25.0.
+- **Node.js 26 or newer** (manifest range `>=26.0.0`) and **pnpm 11.25.0** for this checkout.
+  The packaged launcher supports Node.js 22.16.0 or newer in the 22.x line, or Node.js 24 or newer.
 - Registry access for dependency installation from a fresh checkout.
 - macOS Keychain if you use the GitHub App sign-in. The GitHub CLI is the other sign-in option.
 

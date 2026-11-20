@@ -328,10 +328,10 @@ export function readmeProblems(input: ReadmeInput): string[] {
 
   const launchRows = new Map(tableRows(section(readme, launchHeading)).map((row) => [row[0], row]));
   const archivePath = `/absolute/path/to/${input.cliArchive}`;
-  const betaCommand = `npx --package="${archivePath}" ${input.cliCommand}`;
+  const archiveCommand = `npx --package="${archivePath}" ${input.cliCommand}`;
   for (const [method, anchor, actions] of [
-    ['Terminal', 'run-the-private-release-candidate-with-npx', [betaCommand]],
-    ['Paseo', 'install-the-private-release-candidate', ['Agent HQ']],
+    ['Terminal', 'run-a-release-archive-with-npx', [archiveCommand]],
+    ['Paseo', 'install-from-the-release-archive', ['Agent HQ']],
     [
       'Agent skill',
       'install-the-agent-skill',
@@ -346,8 +346,8 @@ export function readmeProblems(input: ReadmeInput): string[] {
         `The README launch table must document how to open the dashboard with ${method}`,
       );
   }
-  const terminalSetup = section(setup, '## Run the private release candidate with npx');
-  if (!terminalSetup.includes(betaCommand))
+  const terminalSetup = section(setup, '## Run a release archive with npx');
+  if (!terminalSetup.includes(archiveCommand))
     problems.push('The setup guide must show the npx command for the packed CLI');
 
   // Commands in either document are defined in the manifest. Together they must cover every script.

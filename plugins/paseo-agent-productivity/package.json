@@ -1,6 +1,6 @@
 {
   "name": "@kelvicthrust/paseo-agent-productivity-hq",
-  "version": "0.3.0-rc.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Open Agent HQ in Paseo to view agent usage and merged GitHub pull requests.",
   "license": "MIT",

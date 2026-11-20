@@ -13,6 +13,7 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
+import { parse } from 'yaml';
 import {
   nunitoNoticeFile,
   packageNotices,
@@ -35,7 +36,6 @@ const keychainBinding = '@napi-rs/keyring-darwin-arm64';
 interface Manifest {
   name: string;
   version: string;
-  private?: boolean;
   description?: string;
   license?: string;
   repository?: { type: string; url: string };
@@ -124,6 +124,37 @@ function stageDependencies(destination: string, kind: 'cli' | 'paseo'): Record<s
   return direct;
 }
 
+function writePaseoShrinkwrap(stage: string) {
+  // npm records the already staged bundle tree without fetching or installing packages.
+  execFileSync(
+    'npm',
+    ['install', '--package-lock-only', '--ignore-scripts', '--offline', '--no-audit', '--no-fund'],
+    { cwd: stage, stdio: 'inherit' },
+  );
+  const lock = JSON.parse(readFileSync(join(stage, 'package-lock.json'), 'utf8')) as {
+    packages: Record<
+      string,
+      { version: string; inBundle?: boolean; resolved?: string; integrity?: string }
+    >;
+  };
+  const { packages: pinned } = parse(readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8')) as {
+    packages: Record<string, { resolution?: { tarball?: string; integrity?: string } }>;
+  };
+  for (const [path, entry] of Object.entries(lock.packages)) {
+    if (path === '') continue;
+    const name = path.slice('node_modules/'.length);
+    const resolution = pinned[`${name}@${entry.version}`]?.resolution;
+    if (!entry.inBundle || !resolution?.integrity) {
+      throw new Error(`Cannot lock bundled Paseo dependency ${name}@${entry.version}`);
+    }
+    const basename = name.split('/').at(-1);
+    entry.resolved =
+      resolution.tarball ?? `https://registry.npmjs.org/${name}/-/${basename}-${entry.version}.tgz`;
+    entry.integrity = resolution.integrity;
+  }
+  writeFileSync(join(stage, 'npm-shrinkwrap.json'), JSON.stringify(lock, null, 2) + '\n');
+}
+
 export function packDashboard(kind: 'cli' | 'paseo'): string {
   const source = join(root, kind === 'paseo' ? 'plugins/paseo-agent-productivity' : 'packages/cli');
   const output = join(root, 'dist', kind);
@@ -131,6 +162,13 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
     throw new Error(
       'Build the dashboard package on macOS ARM64 to include the matching Keychain binding.',
     );
+  }
+
+  if (
+    kind === 'paseo' &&
+    !execFileSync('npm', ['--version'], { encoding: 'utf8' }).startsWith('11.')
+  ) {
+    throw new Error('Put npm 11 on PATH to pack the Paseo publication lock.');
   }
 
   const scratch = mkdtempSync(join(tmpdir(), 'agent-productivity-pack-'));
@@ -153,18 +191,8 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
       cpSync(join(root, asset), join(app, asset), { recursive: true });
     }
 
-    const {
-      name,
-      version,
-      private: isPrivate,
-      description,
-      license,
-      repository,
-      publishConfig,
-      files,
-      bin,
-      engines,
-    } = readManifest(source);
+    const { name, version, description, license, repository, publishConfig, files, bin, engines } =
+      readManifest(source);
     if (!files) throw new Error('The dashboard package requires a files allowlist.');
     const dependencies = stageDependencies(stage, kind);
     writeFileSync(
@@ -172,13 +200,12 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
       JSON.stringify({ name: 'agent-productivity', version, type: 'module' }),
     );
     for (const file of files) cpSync(join(source, file), join(stage, file), { recursive: true });
-    copyFileSync(join(root, 'LICENSE'), join(stage, 'LICENSE'));
+    for (const file of ['README.md', 'LICENSE']) copyFileSync(join(root, file), join(stage, file));
     writeFileSync(
       join(stage, 'package.json'),
       JSON.stringify({
         name,
         version,
-        private: isPrivate,
         description,
         license,
         repository,
@@ -186,12 +213,19 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
         type: 'module',
         os: ['darwin'],
         cpu: ['arm64'],
-        files: [...files, 'runtime', 'LICENSE', thirdPartyNoticesFile],
+        files: [
+          ...files,
+          'runtime',
+          'LICENSE',
+          thirdPartyNoticesFile,
+          ...(kind === 'paseo' ? ['npm-shrinkwrap.json'] : []),
+        ],
         dependencies,
         bundleDependencies: true,
         ...(kind === 'cli' ? { bin, engines } : {}),
       }),
     );
+    if (kind === 'paseo') writePaseoShrinkwrap(stage);
     mkdirSync(output, { recursive: true });
     const filename = execFileSync(
       'npm',

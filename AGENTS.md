@@ -2,7 +2,7 @@
 
 Private, local dashboard for merged GitHub PRs and Codex/Claude Code usage. Read the
 [README](README.md) for first launch, the [local setup guide](docs/delivery/setup.md) for
-configuration and recovery, and the [Delivery handoff](docs/archive/delivery/handoff.md) for the candidate
+configuration and recovery, the [publishing runbook](docs/delivery/publishing.md) for release steps, and the [Delivery handoff](docs/archive/delivery/handoff.md) for the candidate
 and assessment limits. This file is a task map; detailed decisions stay in their owning documents.
 
 ## Find the contract

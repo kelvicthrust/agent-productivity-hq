@@ -10,6 +10,7 @@ import { RecordsDrawerProvider } from '../lib/recordsDrawer';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import { AppBar } from './AppBar';
 import { PhoneTabBar } from './PhoneTabBar';
+import { ProjectCredit } from './ProjectCredit';
 import { RouteLoading } from './RouteState';
 import { SETUP_PATH, filterGroupsFor } from './routes';
 import { SideNav } from './SideNav';
@@ -63,6 +64,7 @@ export function ShellLayout() {
                 {(!phone || pathname !== '/') && <RefreshBanner />}
                 {state !== 'idle' && <RouteLoading />}
                 <Outlet />
+                <ProjectCredit />
               </div>
             </main>
             <PhoneTabBar />

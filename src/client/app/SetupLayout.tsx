@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router';
 import { AppBar } from './AppBar';
+import { ProjectCredit } from './ProjectCredit';
 
 /** Setup: app bar and content only, with no navigation or filters. */
 export function SetupLayout() {
@@ -23,6 +24,7 @@ export function SetupLayout() {
         {/* D7's .setup: 760px wide with 24px of padding (712px of content), 24px above on a desktop and 16px on a phone. */}
         <div className="mx-auto max-w-[44.5rem]">
           <Outlet context={barSlot} />
+          <ProjectCredit />
         </div>
       </main>
     </div>

@@ -4,15 +4,15 @@ Use this guide to configure a local installation, run the clean-checkout smoke c
 from a startup problem. The [delivery build record](../archive/delivery/build-record.md) records the earlier candidate
 and assessment results.
 
-## Run the private release candidate with npx
+## Run a release archive with npx
 
 Use an Apple Silicon Mac with Node 22.x (22.16.0+) or any stable 24.0.0+ and npm. Get
-`kelvicthrust-agent-productivity-hq-0.3.0-rc.1.tgz` and `SHA256SUMS` from the private GitHub prerelease.
-Run `shasum -a 256 kelvicthrust-agent-productivity-hq-0.3.0-rc.1.tgz` and compare the result with
+`kelvicthrust-agent-productivity-hq-1.0.0.tgz` and `SHA256SUMS` from the same GitHub release.
+Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.0.0.tgz` and compare the result with
 the delivered checksum. Keep the archive compressed at a path you can reuse.
 
 ```sh
-npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-0.3.0-rc.1.tgz" agent-productivity-hq
+npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.0.tgz" agent-productivity-hq
 ```
 
 The launcher starts or reuses the dashboard for your data directory and opens the default browser.
@@ -33,7 +33,7 @@ See [startup recovery](#when-something-is-wrong) for data-directory and port con
 
 ## Install the agent skill
 
-Use the same Node runtime as the terminal launcher. Put the compressed CLI archive and
+For the private v0.3.0-rc.1 skill kit, use the same Node runtime as the terminal launcher. Put the matching RC CLI archive and
 `agent-productivity-hq-skills-0.3.0-rc.1.tar.gz` beside the delivered `SHA256SUMS`.
 Check that both downloaded archives report `OK` before extracting and installing the skill from that folder.
 
@@ -55,7 +55,7 @@ Setup or Sources & repos screen.
 
 ## Requirements
 
-The release candidate supports Apple Silicon macOS on a trusted single-user host. Other local processes and OS users can access the ordinary loopback listener. Keep that listener out of port-sharing and reverse-proxy configurations.
+The packaged launchers support Apple Silicon macOS on a trusted single-user host. Other local processes and OS users can access the ordinary loopback listener. Keep that listener out of port-sharing and reverse-proxy configurations.
 
 For a standalone checkout, use Node 26 (manifest range `>=26.0.0`) and pnpm 11.25.0. The GitHub App connection uses macOS Keychain.
 The first dependency installation needs registry access. The lockfile and
@@ -93,14 +93,14 @@ to Tailscale using the same account as the daemon Mac. The dashboard runs on the
 and stays available after you close the tab. If the phone cannot open its browser, copy the
 private address shown in the launcher and open it in your browser.
 
-### Install the private release candidate
+### Install from the release archive
 
 1. Use an Apple Silicon Mac for the daemon and Paseo Desktop 0.16.1 or later for the workspace
    browser. Connect both devices to Tailscale with the same personal account. The host needs
    the Tailscale CLI, HTTPS certificates enabled, and permission to run Serve. If approval is
    required, complete it in Tailscale on the host and click **Retry**.
-2. On the daemon host, download `kelvicthrust-paseo-agent-productivity-hq-0.3.0-rc.1.tgz` and
-   `SHA256SUMS` from the private prerelease. Compare the archive's SHA-256 with the corresponding
+2. On the daemon host, download `kelvicthrust-paseo-agent-productivity-hq-1.0.0.tgz` and
+   `SHA256SUMS` from the same GitHub release. Compare the archive's SHA-256 with the corresponding
    entry and unpack it into a versioned directory owned by your macOS user. Keep the extracted
    `package` directory at a stable path while installed.
 3. On the target host in **Settings → Plugins**, enable plugins, enter the absolute path to
@@ -167,7 +167,7 @@ when selecting the private fallback. Pin the official ARM64 archive and its SHA-
 Host compatibility is separate: the packaged server uses SQLite transaction state introduced in
 22.16.0 and 24.0.0. Use a current patch release of a supported Node line.
 
-Release builders run `pnpm pack:paseo` on Apple Silicon to produce the versioned tarball in
+Release builders run `pnpm pack:paseo` on Apple Silicon with npm 11 on `PATH` to produce the versioned tarball in
 `dist/paseo`. Use a compatible host Node to run `pnpm test:paseo-package` against that artifact before private distribution.
 Run `pnpm pack:cli` to build the terminal package and skill kit in `dist/cli`, then run `pnpm test:cli-package` with the supported host Node to exercise the packed launcher from an unrelated directory.
 

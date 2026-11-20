@@ -12,6 +12,8 @@ The clarification added no new browser measurements.
 
 ## Product follow-up
 
+The dashboard and Setup show a project credit below their content. Its GitHub link opens in a separate tab.
+
 The [current design brief](../../DESIGN.md#product-follow-up) specifies the following production
 composition. The earlier prototype comparisons below remain evidence for their captured revisions.
 
