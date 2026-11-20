@@ -55,6 +55,7 @@ const facts = (override: Partial<ReadmeInput> = {}): ReadmeInput => ({
   scripts: pkg.scripts,
   engines: pkg.engines.node,
   packageManager: pkg.packageManager,
+  cliPackage: cli.name,
   cliArchive: `${cli.name.slice(1).replace('/', '-')}-${cli.version}.tgz`,
   cliCommand: Object.keys(cli.bin)[0]!,
   host: LOOPBACK_HOST,
@@ -123,9 +124,14 @@ describe('the README and setup guide match package.json and the code', () => {
       );
     });
 
-    it('a terminal command out of sync with the CLI archive', () => {
-      expect(problems({ cliArchive: 'other.tgz' })).toEqual([
+    it('a terminal command out of sync with the npm package', () => {
+      expect(problems({ cliPackage: '@example/other-cli' })).toEqual([
         'The README launch table must document how to open the dashboard with Terminal',
+      ]);
+    });
+
+    it('a fallback command out of sync with the CLI archive', () => {
+      expect(problems({ cliArchive: 'other.tgz' })).toEqual([
         'The setup guide must show the npx command for the packed CLI',
       ]);
     });

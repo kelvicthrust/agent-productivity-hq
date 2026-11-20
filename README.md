@@ -8,17 +8,27 @@ _Overview with synthetic data._
 
 ## Choose how to run it
 
-[Version 1.0.0](https://github.com/kelvicthrust/agent-productivity-hq/releases/tag/v1.0.0) ships with checksums and [local archive instructions](docs/delivery/setup.md#run-a-release-archive-with-npx). New users can also [run from source](#run-from-source).
+The npm launcher runs on the Apple Silicon Mac whose agent activity you want to see. It opens the dashboard in your browser and prints its URL. The [v1.0.0 release](https://github.com/kelvicthrust/agent-productivity-hq/releases/tag/v1.0.0) also includes downloadable archives and checksums.
 
-| Launch method | Prerequisite and first-time setup                                                                                                       | Open the dashboard                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Terminal      | A compatible Node runtime with npm and the [v1.0.0 CLI archive](docs/delivery/setup.md#run-a-release-archive-with-npx)                  | `npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.0.tgz" agent-productivity-hq` |
-| Paseo         | An Apple Silicon Paseo host with Tailscale and the [Agent HQ plugin installed](docs/delivery/setup.md#install-from-the-release-archive) | Click **Agent HQ** in the Paseo sidebar.                                                               |
-| Agent skill   | The same Node runtime and the [skill installed](docs/delivery/setup.md#install-the-agent-skill) for Claude Code or Codex                | Enter `/agent-productivity-hq` in Claude Code or `$agent-productivity-hq` in Codex.                    |
-
-After the public release, install the CLI with `npx --yes @kelvicthrust/agent-productivity-hq` or the skill with `npx skills add kelvicthrust/agent-productivity-hq` (Node.js 22.20.0 or newer for the Skills CLI). Paseo users can install the published npm plugin using the [Paseo instructions](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop).
+| Launch method | Prerequisite and first-time setup                                                                                                                    | Open the dashboard                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Terminal      | A compatible Node runtime with npm. For an offline launch, follow the [archive instructions](docs/delivery/setup.md#run-a-release-archive-with-npx). | `npx --yes @kelvicthrust/agent-productivity-hq`                                     |
+| Paseo         | An Apple Silicon Paseo host with Tailscale and the [Agent HQ plugin installed](docs/delivery/setup.md#install-from-the-release-archive)              | Click **Agent HQ** in the Paseo sidebar.                                            |
+| Agent skill   | [Install the skill](#install-the-agent-skill) for Claude Code or Codex.                                                                              | Enter `/agent-productivity-hq` in Claude Code or `$agent-productivity-hq` in Codex. |
 
 **Node compatibility.** The packaged dashboard runs on Node 22.16.0 or later in the 22.x line and on stable Node 24.0.0 or newer. Node 23.x lacks the SQLite transaction API the dashboard uses. Paseo checks the host for a compatible Node installation and offers a private runtime download if needed. Building from source requires Node 26 or newer.
+
+### Install the agent skill
+
+Use Node 22.20.0 or later in the 22.x line, or stable Node 24 or newer. From the project where you use Claude Code or Codex, run:
+
+```sh
+npx skills add kelvicthrust/agent-productivity-hq --skill agent-productivity-hq --agent claude-code codex
+```
+
+Pass only the agent you use to `--agent` to install for one agent. Add `--global` to make the skill available across projects. Open a new session and invoke the skill using the command in the table.
+
+If the agent reports `ENOTFOUND registry.npmjs.org`, ask it to retry with network access. You can also run the Terminal command directly on the Mac that collects your usage.
 
 ## HQ: your agents at work
 
