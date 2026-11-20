@@ -20,7 +20,7 @@ Configure both publishers when the first new release is ready. Each configuratio
 2. Tag that commit with the matching stable version, such as `v1.0.1`, and push the tag to `origin`. GitHub Actions checks the version and that the commit is in `main`.
 3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, then creates a GitHub release using the same tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
 
-If publishing fails after one package reaches npm, rerun failed jobs to reuse the original artifacts. The workflow reuses a published version only when its integrity matches the original archive. If the artifacts expire or the bytes differ, use a new version. For a GitHub release that already exists, verify its tag and assets before completing it manually. The remaining skills.sh and Paseo catalog steps are described below.
+If publishing fails after one package reaches npm, rerun failed jobs to reuse the original artifacts. The workflow reuses a published version only when its integrity matches the original archive. If the artifacts expire or the bytes differ, use a new version. For a GitHub release that already exists, verify its tag and assets before completing it manually.
 
 ## Manual release
 
@@ -44,8 +44,7 @@ Use this procedure when you need to exercise installed packages on your own Mac 
    icon and synthetic screenshot. Both carry the dashboard runtime, bundled dependencies and license notices.
 3. Open or create the GitHub draft titled **Agent Productivity HQ v1.0.0**. Set `v1.0.0` to the reviewed
    commit SHA and attach the three verified files. Summarize host prerequisites and known limits
-   in the notes. Keep the private RC kit in its existing draft. The public skill comes from
-   the GitHub repository. [GitHub release instructions](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+   in the notes. [GitHub release instructions](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
 4. Once the distribution hold is cleared, make `kelvicthrust/agent-productivity-hq` public
    under **Settings → General → Danger Zone → Change repository visibility**. Verify that
@@ -118,24 +117,6 @@ Publish the GitHub draft as the stable release. In a signed-out session, confirm
 `v1.0.0` release is visible and all three assets download. Verify the tag resolves to the
 recorded commit and run `shasum -a 256 -c SHA256SUMS` on the downloaded assets.
 
-## Verify the public skill
-
-Keep [SKILL.md](../../skills/agent-productivity-hq/SKILL.md) on the public repository's default
-branch. From a clean test project on Node.js 22.20.0 or newer, enumerate the repository's skills and install
-`agent-productivity-hq` for Claude Code and Codex:
-
-```sh
-npx skills add kelvicthrust/agent-productivity-hq --list
-npx skills add kelvicthrust/agent-productivity-hq \
-  --skill agent-productivity-hq --agent claude-code codex
-```
-
-Open a new session in each agent. Invoke `/agent-productivity-hq` in Claude Code and
-`$agent-productivity-hq` in Codex. Confirm each invokes the npm launcher and reports the working
-local dashboard URL. Search for `agent-productivity-hq` on Skills after indexing. Discovery in
-the directory is driven by CLI install telemetry and can lag an independently verified install.
-[Skills FAQ](https://www.skills.sh/docs/faq)
-
 ## Submit and verify the Paseo listing
 
 1. Open the [Paseo submission form](https://github.com/getpaseo/plugins/issues/new?template=submit-plugin.yml).
@@ -157,6 +138,6 @@ the directory is driven by CLI install telemetry and can lag an independently ve
    version, and verify the installed version and dashboard launch.
    [Paseo plugin commands](https://github.com/getpaseo/paseo/blob/main/public-docs/plugins/reference.md#cli-reference)
 
-Record the public release URL, checksum results, npm tags, skill install results, and Paseo
+Record the public release URL, checksum results, npm tags, and Paseo
 review and listing links. Update the public README with install and uninstall instructions once
 the maintainer confirms the published paths work.

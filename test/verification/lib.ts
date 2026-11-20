@@ -330,23 +330,18 @@ export function readmeProblems(input: ReadmeInput): string[] {
   const launchRows = new Map(tableRows(section(readme, launchHeading)).map((row) => [row[0], row]));
   const archivePath = `/absolute/path/to/${input.cliArchive}`;
   const archiveCommand = `npx --package="${archivePath}" ${input.cliCommand}`;
-  for (const [method, setupLink, actions] of [
+  for (const [method, setupLink, action] of [
     [
       'Terminal',
       'docs/delivery/setup.md#run-a-release-archive-with-npx',
-      [`npx --yes ${input.cliPackage}`],
+      `npx --yes ${input.cliPackage}`,
     ],
-    ['Paseo', 'docs/delivery/setup.md#install-from-the-release-archive', ['Agent HQ']],
-    [
-      'Agent skill',
-      '#install-the-agent-skill',
-      ['/agent-productivity-hq', '$agent-productivity-hq'],
-    ],
+    ['Paseo', 'docs/delivery/setup.md#install-from-the-release-archive', 'Agent HQ'],
   ] as const) {
     const row = launchRows.get(method);
     if (!row?.[1] || !linkTargets(row[1]).includes(setupLink))
       problems.push(`The README launch table must link ${method} to its setup instructions`);
-    if (!actions.every((action) => row?.[2]?.includes(action)))
+    if (!row?.[2]?.includes(action))
       problems.push(
         `The README launch table must document how to open the dashboard with ${method}`,
       );

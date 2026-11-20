@@ -136,12 +136,6 @@ describe('the README and setup guide match package.json and the code', () => {
       ]);
     });
 
-    it('a skill instruction out of sync with its setup heading', () => {
-      expect(problems({ readme: readme.replace('#install-the-agent-skill', '') })).toContain(
-        'The README launch table must link Agent skill to its setup instructions',
-      );
-    });
-
     it('a script renamed in package.json', () => {
       const { start, ...rest } = pkg.scripts;
       expect(start).toBeDefined();
