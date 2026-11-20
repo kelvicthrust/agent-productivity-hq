@@ -1,42 +1,105 @@
 # Agent Productivity HQ
 
-See what your coding agents are doing now in HQ, then review what merged on GitHub and how many tokens Codex and Claude Code recorded this week.
+Agent Productivity HQ is a private dashboard for your AI coding work. See which agents are busy, find the conversations that need your attention, and review what made it into your GitHub projects. Track how much Codex and Claude Code you use over time and see which sessions were involved in a change when HQ can make the connection.
 
 ![Agent Productivity HQ Overview showing weekly merged pull requests, Codex and Claude Code usage, and weekly plan limits](docs/images/overview.jpg)
 
 _Overview with synthetic data._
 
-## Choose how to run it
+## What it supports
 
-The npm launcher runs on the Apple Silicon Mac whose agent activity you want to see. It opens the dashboard in your browser and prints its URL. The [latest GitHub release](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest) also includes downloadable archives and checksums.
+- **Codex and Claude Code** show current activity and recorded usage from the Mac running HQ. See which models and sessions used the most tokens, the units AI tools use to measure text they process or generate.
+- **GitHub** shows merged changes from the projects you choose to track. Open a change to see the agent sessions HQ can link to it and the evidence behind each link.
+- **ChatGPT and Claude subscriptions** can show how much of your plan limit you’ve used and when it resets, where your provider reports it.
+- **Paseo** can open HQ from its sidebar and help HQ identify agents and their helpers.
 
-| Launch method | Prerequisite and first-time setup                                                                                                                    | Open the dashboard                              |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Terminal      | A compatible Node runtime with npm. For an offline launch, follow the [archive instructions](docs/delivery/setup.md#run-a-release-archive-with-npx). | `npx --yes @kelvicthrust/agent-productivity-hq` |
-| Paseo         | An Apple Silicon Paseo host with Tailscale and the [Agent HQ plugin installed](docs/delivery/setup.md#install-from-the-release-archive)              | Click **Agent HQ** in the Paseo sidebar.        |
+HQ keeps its collected usage data on your Mac. You choose which accounts and projects to connect.
 
-**Node compatibility.** The packaged dashboard runs on Node 22.16.0 or later in the 22.x line and on stable Node 24.0.0 or newer. Node 23.x lacks the SQLite transaction API the dashboard uses. Paseo checks the host for a compatible Node installation and offers a private runtime download if needed. Building from source requires Node 26 or newer.
+## Getting started
+
+Use the Apple Silicon Mac that runs your agents. You can ask an agent to install and open HQ, run one command in Terminal, or open it from Paseo. [Quick start](#quick-start)
+
+### First launch (Setup)
+
+1. Open HQ in your browser and review the activity sources it found on your Mac.
+2. To see merged changes, connect GitHub and choose the projects you want to track. You can add this connection and optional subscription reports later.
+3. Choose **Finish setup** to open Overview. Use **Sources & repos** whenever you want to change what HQ tracks.
+
+You can finish Setup and explore local activity before connecting an account.
+
+## Quick start
+
+### Ask an agent to install HQ
+
+Paste this prompt into Codex, Claude Code, or another agent that can run commands on your Mac. The guide tells it how to check the Mac, open HQ, and give you the browser address or the Terminal command if it needs you to run it. [Agent setup guide](docs/delivery/agent-setup.md)
+
+```text
+Install and open Agent Productivity HQ on the Mac that holds my agent activity. Follow https://raw.githubusercontent.com/kelvicthrust/agent-productivity-hq/main/docs/delivery/agent-setup.md and give me the dashboard URL.
+```
+
+### Open it yourself
+
+| Launch method | Before you start                                                                                                                                        | Open the dashboard                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Terminal      | Use an Apple Silicon Mac with [Node.js and npm](#node-compatibility). [Use a downloaded archive](docs/delivery/setup.md#run-a-release-archive-with-npx) | `npx --yes @kelvicthrust/agent-productivity-hq` |
+| Paseo         | Set up Tailscale and the [Agent HQ plugin](docs/delivery/setup.md#install-from-the-release-archive) on your Mac.                                        | Click **Agent HQ** in the Paseo sidebar.        |
+
+The Terminal command opens HQ in your browser. If needed, copy the address it prints into your browser. [Downloadable releases](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest)
 
 ## HQ: your agents at work
 
-Open **HQ** in the dashboard to see which sessions are working and which may need your input. Each illustrated room groups a session with its helpers. The roster lists waiting sessions first, so you can find a permission request or question and respond in the original session.
+Open **HQ** in the dashboard to see what your agents are doing now. Each illustrated room represents a conversation or task. When HQ can identify the main agent and its helpers, they share a room so you can see who is doing what. The **Sessions** list below the illustration puts waiting sessions first.
 
 ![Agent Productivity HQ with illustrated rooms for active coding sessions and their agents](docs/images/hq.png)
 
-_HQ with synthetic sessions._ [Read the HQ guide](docs/product/hq.md) for status meanings, live sources, and optional Claude Code wait reporting.
+_HQ with sample sessions._
+
+- **Editing**, **Reading**, and **Running a command** show what an agent is doing. **Idle for…** shows how long it has been inactive.
+- **Needs you** means the source reported a wait. HQ can show the reason, such as a question or permission request, when the source provides it. Return to the original conversation to respond.
+- **May be waiting for you** means recent activity suggests a pause. Check the original conversation to see whether the agent needs anything.
+
+HQ refreshes about every two seconds while the view is open. **A quiet one** means the available sources have no running agents to show. For more precise waiting statuses from Claude Code sessions outside Paseo, you can enable optional reporting in **Sources & repos**. [HQ guide](docs/product/hq.md)
+
+## Using the dashboard
+
+- **Overview** shows what merged this week and how much you used your agents. Change the dates or projects, then open a chart point or switch to **Table** to see the details.
+- **Delivery** lists merged GitHub pull requests. Open one to see the conversations linked to it and review any suggested matches.
+- **Usage** shows how many tokens each tool, project, and conversation used. **Trends** shows changes over time and which models used those tokens.
+- **Sources & repos** shows which sources are available and lets you manage accounts, projects, and collection settings.
+
+## Data and compatibility
+
+### What the numbers cover
+
+- **Merged PRs** count once per merge. A linked session’s tokens belong to that session.
+- **Recorded local tokens** come from readable Codex and Claude Code history on the installation
+  host. The dashboard distinguishes unavailable history from a measured zero and retains imported metrics
+  for up to 366 days. It stores metrics and identifying metadata without storing conversation text.
+- **Account-reported usage** shows the share of each provider’s weekly plan limit used and when
+  it resets. Claude’s five-hour window appears below its weekly reading. Repository and date
+  filters leave these provider windows unchanged.
+- **Paseo**, when available, adds recorded agent names and relationships. It contributes no tokens.
+  See the [source contracts and limitations](docs/tech/data-and-sources.md#paseo-enrichment).
+
+**Session links.** A session that names a pull request or commit supplies evidence. A session active in the same repository in the 48 hours before a merge may appear as a suggestion. You can confirm or correct the match and use **Undo** to reverse it.
+
+**Optional account reports.** Connect the [ChatGPT account report](docs/tech/data-and-sources.md#chatgpt-account-report) or select [Show Claude plan limits](docs/tech/data-and-sources.md#claude-account-report) to check using the active Claude Code sign-in. After the first successful Claude check, **Refresh** and **Refresh all** also update those limits.
+
+### Node compatibility
+
+The packaged dashboard runs on Apple Silicon with Node.js 22.16.0 or later in the 22.x line, or stable Node.js 24.0.0 or newer. Paseo checks the host for a compatible version and offers a private runtime download if needed.
 
 ## Run from source
 
 ### Requirements
 
 - **Node.js 26 or newer** (manifest range `>=26.0.0`) and **pnpm 11.25.0** for this checkout.
-  The packaged launcher supports Node.js 22.16.0 or newer in the 22.x line, or Node.js 24 or newer.
 - Registry access for dependency installation from a fresh checkout.
 - macOS Keychain if you use the GitHub App sign-in. The GitHub CLI is the other sign-in option.
 
 ### Install and run
 
-From the repository root, run:
+From the repository root, run the following commands.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -55,48 +118,6 @@ The [local setup guide](docs/delivery/setup.md) covers
 [upgrades and rollback](docs/delivery/setup.md#upgrade-and-rollback). If you used Kelvin Agent Crew,
 follow the [cutover guide](docs/delivery/setup.md#move-from-kelvin-agent-crew) to keep the old data
 and configure a fresh installation.
-
-### First launch (Setup)
-
-1. Check which local sources the dashboard found on the machine where it runs.
-2. Continue through the optional account connections and repositories. To see merged PRs, connect
-   GitHub and add at least one repository. The dashboard reuses a signed-in `gh` when available. Otherwise,
-   Sources & repos guides you through a [GitHub App connection](docs/tech/data-and-sources.md#github-delivery).
-3. Select **Finish setup**. Overview opens and the first import starts. Use **Sources & repos**
-   to see what was collected or change your choices later.
-
-Setup works with zero sources, accounts or repositories and requires neither an API key nor an
-environment file. The discovery step checks locations before the first import reads transcript history.
-
-## Using the dashboard
-
-1. Start at **Overview**. It opens on **This week** with your authored PRs selected. Use the period
-   and repository filters to change the review. Select a chart bucket or switch to **Table** to
-   inspect its records.
-2. Open a PR in **Delivery** to see linked sessions and the basis for each link. A session that
-   names a PR or commit supplies evidence. A same-repo session active in the 48 hours before the
-   merge may be a suggestion. Your confirmations and corrections persist. Use **Undo** on the
-   notification to reverse a change.
-3. Use **Usage** to inspect tokens by provider, repository, and session, including recorded child
-   agents. Use **Trends** for longer periods and model breakdowns.
-4. Open **Sources & repos** to check coverage or search the repositories your GitHub sign-in can
-   access. Choose **Track** on each repo to include. For subscription data, use the optional
-   [ChatGPT account report](docs/tech/data-and-sources.md#chatgpt-account-report) or choose
-   [Show Claude plan limits](docs/tech/data-and-sources.md#claude-account-report) to check using
-   your existing Claude Code sign-in. After the first successful check, **Refresh** and
-   **Refresh all** also update those limits.
-
-### What the numbers cover
-
-- **Merged PRs** count once per merge. A linked session’s tokens belong to that session.
-- **Recorded local tokens** come from readable Codex and Claude Code history on the installation
-  host. The dashboard distinguishes unavailable history from a measured zero and retains imported metrics
-  for up to 366 days. It stores metrics and identifying metadata without storing conversation text.
-- **Account-reported usage** shows the share of each provider’s weekly plan limit used and when
-  it resets. Claude’s five-hour window appears below its weekly reading. Repository and date
-  filters leave these provider windows unchanged.
-- **Paseo**, when available, adds recorded agent names and relationships. It contributes no tokens.
-  See the [source contracts and limitations](docs/tech/data-and-sources.md#paseo-enrichment).
 
 ### The synthetic preview
 
