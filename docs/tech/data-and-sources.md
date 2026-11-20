@@ -546,6 +546,10 @@ original installation before [moving to Agent Productivity HQ](../delivery/setup
 The [decision report](../archive/implementation/decision-report.md#standalone-claude-plan-checks)
 records the trade-off in choosing an undocumented endpoint.
 
+## Resetting Agent Productivity HQ
+
+The confirmation in Sources & repos clears the active installation's local database, diagnostic log history, live HQ state and saved GitHub App credential when it belongs to this installation. The macOS credential slot is shared. Older credentials without an installation ID stay in the Keychain, and the reset installation stops using them. The reset removes only Claude Code hook commands that point to this installation’s script. If an older installation still uses HQ's legacy status line, restore the status line in Accounts before resetting. The reset leaves original provider data and provider sign-ins with their owners. Onboarding discovers local sources again, and GitHub CLI and ChatGPT reconnect only after the owner chooses Connect. Claude plan limits require a fresh check.
+
 ## Evidence extraction (in memory only)
 
 While each transcript or rollout line is parsed, its text fields (assistant text, tool calls and tool results) are scanned **in memory** for:

@@ -6,12 +6,13 @@ import { REFRESH_COPY, SOURCES_COPY } from '../../lib/copy';
 import { AccountsSection } from './accounts';
 import { DataKept } from './DataKept';
 import { HqHooks } from './HqHooks';
+import { ResetApp } from './ResetApp';
 import { SourceCoverage } from './SourceCoverage';
 import { LocalSources } from './LocalSources';
 import { TrackedRepos } from './repos/TrackedRepos';
 
 // Sources & repos: "On this machine" and Refresh all, then Claude Code's hooks switch for HQ, then the Accounts card (GitHub, ChatGPT and Claude) and Tracked
-// repositories, and "Data kept on this machine" last, as in D7.
+// repositories, followed by data retention and reset.
 
 export function SourcesRoute() {
   const { refresh, isBusy: busy } = useRefresh();
@@ -41,6 +42,7 @@ export function SourcesRoute() {
       <AccountsSection />
       <TrackedRepos />
       <DataKept />
+      <ResetApp />
     </div>
   );
 }

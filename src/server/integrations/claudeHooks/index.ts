@@ -21,7 +21,7 @@ import { ClaudeHooksError, type HooksFailure, type LeftBehind } from './errors.t
 import { editSettingsText } from './edit.ts';
 import { createOwnFiles, isHqScript, parseRegistry, type Artifact, type Made } from './ownFiles.ts';
 import { BACKUP_SUFFIX, HOOK_SCRIPT, REGISTRY_FILE, hookPaths, type HookPaths } from './paths.ts';
-import { inspect, parseSettings, type EntryState } from './settings.ts';
+import { inspect, parseSettings, type EntryState, type ScriptScope } from './settings.ts';
 import {
   backupConflicts,
   backupIsUnusable,
@@ -76,6 +76,8 @@ export interface ClaudeHooksOptions {
 export interface SetOptions {
   /** The `preview` fingerprint of the plan, for the action being confirmed, the owner was shown. When given, the change is made only if it is still the current one. */
   preview?: string | undefined;
+  /** Only remove commands that name this data directory’s hook script. */
+  currentInstallationOnly?: boolean;
 }
 
 export interface ClaudeHooks {
@@ -249,10 +251,10 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
       }
     });
 
-  function inspectFile(path: string): Inspected {
+  function inspectFile(path: string, scope?: ScriptScope): Inspected {
     try {
       const read = readSettingsFile(path, forbidden(), options.uid ?? process.getuid?.());
-      const entries = inspect(parseSettings(read.text), command ?? '');
+      const entries = inspect(parseSettings(read.text), command ?? '', scope);
       return {
         path,
         target: read.target,
@@ -287,8 +289,8 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
    * link or hard link to it or to another target or to an HQ file, or lies in HQ's folder) cannot be changed: it is blocked
    * (`not_writable`), here, so that the page says so before anything is pressed.
    */
-  function inspectAll(): Inspected[] {
-    const files = targets().map(inspectFile);
+  function inspectAll(scope?: ScriptScope): Inspected[] {
+    const files = targets().map((path) => inspectFile(path, scope));
     const resolved = forbidden();
     for (const file of files) {
       if (file.blocked !== null) continue;
@@ -381,23 +383,23 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     };
   };
 
-  const readDisk = (): Disk => ({ files: inspectAll(), ...ownState() });
+  const readDisk = (scope?: ScriptScope): Disk => ({ files: inspectAll(scope), ...ownState() });
 
   /** The text for one settings file, or null for "nothing to change" (edit.ts). Turning on needs a command. */
-  function textFor(text: string | null, enabled: boolean): string | null {
+  function textFor(text: string | null, enabled: boolean, scope?: ScriptScope): string | null {
     if (enabled && command === null) throw new ClaudeHooksError('unsupported_path');
-    return editSettingsText(text, command ?? '', enabled);
+    return editSettingsText(text, command ?? '', enabled, scope);
   }
 
   /** What `enabled` would do to this file: computed once per distinct content. */
-  function verdictOf(file: Inspected, enabled: boolean): Verdict {
+  function verdictOf(file: Inspected, enabled: boolean, scope?: ScriptScope): Verdict {
     if (file.blocked !== null) return fileReason(file.blocked);
-    const key = `${enabled}\0${file.target}\0${file.digest}\0${command ?? ''}`;
+    const key = `${enabled}\0${file.target}\0${file.digest}\0${command ?? ''}\0${scope ? 'scoped' : ''}`;
     const known = verdicts.get(key);
     if (known !== undefined) return known;
     let verdict: Verdict;
     try {
-      verdict = textFor(file.text, enabled) === null ? 'none' : 'change';
+      verdict = textFor(file.text, enabled, scope) === null ? 'none' : 'change';
     } catch (error) {
       verdict =
         error instanceof ClaudeHooksError ? fileReason(error.failure) : 'unsupported_layout';
@@ -408,8 +410,8 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
   }
 
   /** The verdict of the action on the file, and, for a change the file's one-time copy would block, why (it is not replaced). */
-  const verdictWithBackup = (file: Inspected, enabled: boolean): Verdict => {
-    const verdict = verdictOf(file, enabled);
+  const verdictWithBackup = (file: Inspected, enabled: boolean, scope?: ScriptScope): Verdict => {
+    const verdict = verdictOf(file, enabled, scope);
     return verdict === 'change' && file.backupUnusable ? 'backup_unusable' : verdict;
   };
 
@@ -490,11 +492,11 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
    * that is current, a registry the hook script already accepts, a settings file that already holds exactly HQ's entries are left
    * alone, not even rewritten with the same bytes).
    */
-  function planFor(action: ClaudeHooksAction, disk: Disk): ClaudeHooksPlan {
+  function planFor(action: ClaudeHooksAction, disk: Disk, scope?: ScriptScope): ClaudeHooksPlan {
     const enabled = action !== 'off';
     const files: ClaudeHooksFile[] = [];
     for (const file of disk.files) {
-      const verdict = verdictWithBackup(file, enabled);
+      const verdict = verdictWithBackup(file, enabled, scope);
       if (verdict !== 'none') files.push(view(file, verdict));
     }
     const ownFiles: ClaudeHooksOwnFile[] = [];
@@ -724,9 +726,28 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
   const ownKey = (state: OwnState): string =>
     JSON.stringify([state.script, state.node, state.registry, leftoverKey(state)]);
 
-  async function change(enabled: boolean, preview: string | undefined): Promise<void> {
+  async function change(enabled: boolean, setOptions: SetOptions): Promise<void> {
+    const { preview } = setOptions;
+    const scoped = !enabled && setOptions.currentInstallationOnly;
+    const scriptKey = scoped ? fileKey(paths.script) : null;
+    const scope: ScriptScope | undefined = scoped
+      ? (candidate) =>
+          candidate === paths.script || (scriptKey !== null && scriptKey === fileKey(candidate))
+      : undefined;
     if (enabled && command === null) throw new ClaudeHooksError('unsupported_path');
-    const disk = readDisk();
+    const readForChange = (): Disk => {
+      const disk = readDisk(scope);
+      if (scope === undefined) return disk;
+      const hasArtifacts = disk.script !== 'missing' || disk.leftover.length > 0;
+      // An unrelated invalid settings file should not prevent reset when no owned hook can run.
+      return {
+        ...disk,
+        files: disk.files.filter(
+          (file) => file.entries !== 'absent' && (file.entries !== null || hasArtifacts),
+        ),
+      };
+    };
+    const disk = readForChange();
     if (enabled && disk.files.length === 0) throw new ClaudeHooksError('no_folder');
     const action = actionOf(enabled, disk.files);
     // The plan the owner confirmed must be the plan for THIS action that is in front of HQ now; checked again on the very bytes the
@@ -739,17 +760,17 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     for (const file of disk.files) {
       const needsChange = enabled || file.entries !== 'absent';
       if (!needsChange) continue;
-      const verdict = verdictWithBackup(file, enabled);
+      const verdict = verdictWithBackup(file, enabled, scope);
       if (verdict === 'backup_unusable')
         throw new ClaudeHooksError(verdict, [displayPath(`${file.path}${BACKUP_SUFFIX}`, home)]);
       if (verdict !== 'none' && verdict !== 'change') throw new ClaudeHooksError(verdict);
     }
     // The plan is derived again immediately before anything is written, and the action goes on only if it is the very plan confirmed
     // (a file of HQ's own, or a setting, that changed meanwhile makes it another plan).
-    const again = readDisk();
+    const again = readForChange();
     if (current(again.files.map(rowOf), again) !== confirmed)
       throw new ClaudeHooksError('stale_preview');
-    const plan = planFor(action, again);
+    const plan = planFor(action, again, scope);
     const artifacts = enabled ? prepareArtifacts(plan.ownFiles) : null;
     // What HQ's own files are once this action has written its part of them: anything else seen later was changed by somebody else.
     const expected = ownKey(artifacts === null ? again : ownState());
@@ -762,14 +783,16 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
               target: file.target,
               digest: file.digest,
               state:
-                file.text === null ? 'absent' : inspect(parseSettings(file.text), command ?? ''),
+                file.text === null
+                  ? 'absent'
+                  : inspect(parseSettings(file.text), command ?? '', scope),
               backupUnusable:
                 file.text !== null && backupIsUnusable(`${file.path}${BACKUP_SUFFIX}`),
             }));
             if (current(rows, again) !== preview) throw new ClaudeHooksError('stale_preview');
           }
           if (ownKey(ownState()) !== expected) throw new ClaudeHooksError('stale_preview');
-          return seen.map((file) => textFor(file.text, enabled));
+          return seen.map((file) => textFor(file.text, enabled, scope));
         },
         {
           forbidden: forbidden(),
@@ -815,7 +838,7 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
         if (closed) throw new ClaudeHooksError('no_folder');
         cached = null;
         try {
-          await change(enabled, setOptions.preview);
+          await change(enabled, setOptions);
         } catch (error) {
           // Whatever went wrong, the caller gets a fixed code: an error's own text (a path) never leaves this module.
           const failure =
@@ -828,6 +851,8 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
         logger.info(enabled ? 'hq hooks enabled' : 'hq hooks disabled', { source: 'hq_hooks' });
         // What is reported is what is on disk now, not what the change meant to do.
         try {
+          if (!enabled && setOptions.currentInstallationOnly && leftoverFiles().items.length > 0)
+            throw new ClaudeHooksError('not_writable');
           return compute(true);
         } catch {
           throw new ClaudeHooksError('not_writable');

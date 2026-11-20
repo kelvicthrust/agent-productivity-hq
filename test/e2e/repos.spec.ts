@@ -104,7 +104,7 @@ test.describe('GitHub is the first row of the Accounts card', () => {
   }
 });
 
-// "Data kept on this machine" (D7; requirements P-29 to P-31): the last card of Sources & repos. It states how long usage history is
+// "Data kept on this machine" (D7; requirements P-29 to P-31) appears before the reset section. It states how long usage history is
 // kept, what is never stored and which reads leave the machine, so it is held to the retention rule it describes.
 test.describe('Data kept on this machine', () => {
   test.beforeEach(async ({ world }) => {
@@ -112,7 +112,7 @@ test.describe('Data kept on this machine', () => {
   });
 
   for (const width of [1280, 390, 320]) {
-    test(`${width}px: the last card of the page says what is kept and what is not`, async ({
+    test(`${width}px: the data retention card describes what is kept and precedes reset`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -127,12 +127,15 @@ test.describe('Data kept on this machine', () => {
       await expect(card).toContainText(
         'GitHub and account-report reads are the only network requests.',
       );
-      // It comes after Tracked repositories, as in the design, and nothing follows it.
+      // The reset section follows the two sections it affects.
       const titles = await page
         .locator('main section[aria-labelledby] h2')
         .evaluateAll((all) => all.map((h) => h.textContent?.trim()));
-      expect(titles.at(-1)).toBe('Data kept on this machine');
-      expect(titles.indexOf('Tracked repositories')).toBe(titles.length - 2);
+      expect(titles.slice(-3)).toEqual([
+        'Tracked repositories',
+        'Data kept on this machine',
+        'Reset Agent Productivity HQ',
+      ]);
     });
   }
 

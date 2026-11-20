@@ -340,6 +340,8 @@ export interface ChatgptAccounts {
   disconnect(): AccountStatus;
   /** Ends a waiting sign-in and its child. For shutdown. */
   close(): void;
+  /** Cancels the sign-in and forgets all poll results during reset. */
+  clearFlows?(): void;
 }
 
 export interface ChatgptAccountsDeps {
@@ -503,5 +505,10 @@ export function createChatgptAccounts(deps: ChatgptAccountsDeps): ChatgptAccount
     },
 
     close: cancelRunning,
+
+    clearFlows() {
+      cancelRunning();
+      flows.clear();
+    },
   };
 }

@@ -1,6 +1,16 @@
-import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { renderHookCommand } from '../../src/server/integrations/claudeHooks/command.ts';
+import { hookPaths } from '../../src/server/integrations/claudeHooks/paths.ts';
 import { ClaudeHooksStatus } from '../../src/shared/contracts/hq.ts';
 import { USER_SETTINGS, asText, read, rig, type Rig } from './helpers.ts';
 
@@ -48,6 +58,22 @@ describe.skipIf(isRoot)('turning off when HQ’s own files cannot be removed', (
     });
     expect(await r.hooks.state()).toBe('off');
     expect(r.logs.some((line) => line['code'] === 'cleanup_incomplete')).toBe(true);
+  });
+
+  it('reports incomplete scoped cleanup when another installation has hooks', async () => {
+    const r = await onAndStuck();
+    const settings = JSON.parse(read(r.settings)) as { hooks: Record<string, unknown[]> };
+    const command = renderHookCommand({
+      node: process.execPath,
+      script: hookPaths(join(r.root, 'peer')).script,
+    });
+    settings.hooks['SessionStart']!.push({ hooks: [{ type: 'command', command, timeout: 3 }] });
+    writeFileSync(r.settings, asText(settings));
+    await expect(r.hooks.set(false, { currentInstallationOnly: true })).rejects.toMatchObject({
+      failure: 'not_writable',
+    });
+    expect(existsSync(r.hooks.paths.script)).toBe(true);
+    expect(read(r.settings)).toContain('peer/claude-hooks');
   });
 
   it('blanks the token in a registry it cannot delete, because the file itself can be rewritten', async () => {
@@ -103,6 +129,16 @@ describe.skipIf(isRoot)('turning off when HQ’s own files cannot be removed', (
       reason: 'cleanup_incomplete',
       leftover: { items: ['script'] },
     });
+  });
+
+  it('removes its hook after the data directory is opened through an alias', async () => {
+    const r = rig({ settings: original });
+    await r.hooks.set(true);
+    const alias = join(r.root, 'same data');
+    symlinkSync(r.data, alias);
+    await r.another({ dataDir: alias }).set(false, { currentInstallationOnly: true });
+    expect(read(r.settings)).toBe(original);
+    expect(existsSync(r.hooks.paths.script)).toBe(false);
   });
 
   it('is a clean off when everything could be removed', async () => {

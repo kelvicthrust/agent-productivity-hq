@@ -50,6 +50,7 @@ const StoredToken = z.object({
   refresh_token: z.string().min(1).nullable(),
   refresh_expires_at: z.number().nullable(),
   client_id: z.string().min(1),
+  owner_install_id: z.string().min(1).optional(),
 });
 export type StoredToken = z.infer<typeof StoredToken>;
 
@@ -237,6 +238,8 @@ export interface GithubAuthOptions {
    * (The account service owns that choice; it hands this in when it builds the auth it shares with the sync.)
    */
   ghEnabled?: () => boolean;
+  /** False after a reset, until this installation signs in through its GitHub App again. */
+  appEnabled?: () => boolean;
   /**
    * The saved GitHub App client ID, or null. Lets "no credential" say whether Connect can start the device flow
    * (`needs_connect`) or the one-time App setup comes first (`needs_app`); without it the answer is `not_connected`.
@@ -333,6 +336,7 @@ export function createGithubAuth(options: GithubAuthOptions): GithubAuth {
     }
     const next = storedFromGrant(answer.body, stored.client_id, now());
     if (!next) return { ok: false, result: fail('unreachable') };
+    if (stored.owner_install_id !== undefined) next.owner_install_id = stored.owner_install_id;
     // The old refresh token is spent. If the new pair cannot be saved, the saved sign-in is dead either way; say so.
     if (!writeStoredToken(keyring, next)) return { ok: false, result: fail('keychain_refused') };
     return { ok: true, token: next };
@@ -343,6 +347,7 @@ export function createGithubAuth(options: GithubAuthOptions): GithubAuth {
    * Keychain already holds a different token than the refused one (another caller refreshed in the meantime).
    */
   async function viaApp(force: boolean, refused?: string): Promise<CredentialResult> {
+    if (options.appEnabled?.() === false) return noToken();
     const read = readStoredToken(keyring);
     if (read.kind === 'none') return noToken();
     if (read.kind === 'refused') return fail('keychain_refused');

@@ -22,10 +22,17 @@ async function readBody(request: Request): Promise<unknown> {
  * client attaches to it. GET /api/refresh/{runId} is the run as it stands: the client polls it every second and reads
  * "Retrying…" and the outcome from it.
  */
-export function refreshRoutes(deps: { db: Db; runner: Runner }): Hono<HttpEnv> {
+export function refreshRoutes(deps: {
+  db: Db;
+  runner: Runner;
+  needsSetup?: (() => boolean) | undefined;
+}): Hono<HttpEnv> {
   const app = new Hono<HttpEnv>();
 
   app.post('/api/refresh', async (c) => {
+    if (deps.needsSetup?.()) {
+      throw new ApiError('invalid_input', 'Finish setup before refreshing the app.');
+    }
     const { sources } = RefreshRequest.parse(await readBody(c.req.raw));
     if (sources?.length === 0) {
       throw new ApiError('invalid_input', 'Some values are not valid.', {

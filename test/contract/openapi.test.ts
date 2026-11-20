@@ -198,6 +198,7 @@ describe('what the server serves against the document', () => {
       'POST /api/repos/{owner}/{name}/recheck',
       'POST /api/setup/complete',
       'POST /api/setup/discover',
+      'POST /api/setup/reset',
       'PUT /api/accounts/claude/usage-capture',
       'PUT /api/accounts/github/app',
       'PUT /api/hq/claude-hooks',
@@ -314,6 +315,7 @@ describe('what the server serves against the document', () => {
   const SUCCESS: Record<string, number> = {
     'POST /api/refresh': 202,
     'POST /api/setup/complete': 202,
+    'POST /api/setup/reset': 204,
     'POST /api/repos': 201,
     'DELETE /api/repos/{owner}/{name}': 204,
     'DELETE /api/prs/{prId}/links/{sessionId}': 204,
@@ -339,7 +341,9 @@ describe('what the server serves against the document', () => {
             ? await appWithGithub(false)
             : isRepoWrite
               ? await appWithGithub(true)
-              : app;
+              : key === 'POST /api/setup/reset'
+                ? testApp().app
+                : app;
     // A run has to exist before it can be read: start one (the app has no adapters, so every source is skipped).
     if (key === 'GET /api/refresh/{runId}')
       await call(app, '/api/refresh', { method: 'POST', headers: WRITE, body: '{}' });
@@ -394,7 +398,9 @@ describe('what the server serves against the document', () => {
                   })
                 : key === 'POST /api/hq/hooks/claude'
                   ? '{"hook_event_name":"Stop","session_id":"contract-session"}'
-                  : '{}';
+                  : key === 'POST /api/setup/reset'
+                    ? '{"confirmed":true}'
+                    : '{}';
     const path = key === 'GET /api/repos/discover' ? url + '?login=octo-kelvin&via=gh' : url;
     const res = await call(target, path, {
       method,

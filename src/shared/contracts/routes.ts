@@ -38,6 +38,7 @@ import {
   AccountStatus,
   RefreshRequest,
   RefreshRun,
+  ResetRequest,
   SetupDiscoverResponse,
   SourcesResponse,
 } from './sources.ts';
@@ -248,6 +249,13 @@ export const ROUTES: readonly RouteContract[] = [
     path: '/api/setup/complete',
     csrf: true,
     responses: { '202': RefreshRun },
+  },
+  {
+    method: 'post',
+    path: '/api/setup/reset',
+    csrf: true,
+    body: { schema: ResetRequest, required: true },
+    responses: { '204': null, '400': E, '409': E, '422': E, '500': E },
   },
 ];
 

@@ -104,6 +104,8 @@ export const AccountStatus = z.object({
 });
 export type AccountStatus = z.infer<typeof AccountStatus>;
 
+export const ResetRequest = z.strictObject({ confirmed: z.literal(true) });
+
 export const RefreshRun = z.object({
   id: Int,
   state: z.enum(['running', 'succeeded', 'partial', 'failed', 'interrupted']),

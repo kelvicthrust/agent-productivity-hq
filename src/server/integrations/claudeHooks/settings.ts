@@ -1,6 +1,6 @@
 import { CLAUDE_HOOK_EVENTS } from '../../../shared/contracts/hq.ts';
 import { isRecord } from '../claudeCapture/files.ts';
-import { HOOK_TIMEOUT_SECONDS, isHookCommand } from './command.ts';
+import { HOOK_TIMEOUT_SECONDS, parseHookCommand } from './command.ts';
 import { ClaudeHooksError } from './errors.ts';
 
 // What HQ's entries look like in a user-level settings file, and how they are added and removed. Pure: text in, text out.
@@ -111,8 +111,13 @@ function groupsOf(hooks: Json | null, event: string): unknown[] | null {
 }
 
 /** A handler is HQ's when its command is exactly HQ's shape, whatever else it says (a changed `type` or timeout still makes it HQ's, to be repaired). */
-const isHqHandler = (handler: unknown): handler is Json =>
-  isRecord(handler) && isHookCommand(handler['command']);
+export type ScriptScope = (script: string) => boolean;
+
+const isHqHandler = (handler: unknown, scope?: ScriptScope): handler is Json => {
+  if (!isRecord(handler)) return false;
+  const parsed = parseHookCommand(handler['command']);
+  return parsed !== null && (scope === undefined || scope(parsed.script));
+};
 
 /**
  * A matcher that filters nothing. The documentation (code.claude.com/docs/en/hooks) lists three: `"*"`, `""` and no matcher at all.
@@ -134,14 +139,14 @@ interface Found {
 }
 
 /** Every handler that is HQ's, anywhere under `hooks` (an event HQ no longer uses included), with the group it sits in. */
-function* hqHandlers(hooks: Json | null): Generator<Found> {
+function* hqHandlers(hooks: Json | null, scope?: ScriptScope): Generator<Found> {
   if (hooks === null) return;
   for (const [event, groups] of Object.entries(hooks)) {
     if (!Array.isArray(groups)) continue;
     for (const group of groups) {
       if (!isRecord(group) || !Array.isArray(group['hooks'])) continue;
       for (const handler of group['hooks'] as unknown[])
-        if (isHqHandler(handler)) yield { event, group, handler };
+        if (isHqHandler(handler, scope)) yield { event, group, handler };
     }
   }
 }
@@ -162,10 +167,10 @@ const isExact = (handler: Json, command: string): boolean => {
  * HQ has no handler anywhere else. A handler of HQ's inside a group with a matcher, or beside the owner's own handlers, is not present:
  * its reach is not what HQ reports.
  */
-export function inspect(value: Json, command: string): EntryState {
+export function inspect(value: Json, command: string, scope?: ScriptScope): EntryState {
   const hooks = eventsOf(value);
   for (const event of CLAUDE_HOOK_EVENTS) groupsOf(hooks, event);
-  const found = [...hqHandlers(hooks)];
+  const found = [...hqHandlers(hooks, scope)];
   if (found.length === 0) return 'absent';
   const complete = CLAUDE_HOOK_EVENTS.every((event) => {
     const here = found.filter((entry) => entry.event === event);
@@ -228,6 +233,7 @@ export function planEntries(
   command: string,
   enabled: boolean,
   layout: Layout = PLAIN_LAYOUT,
+  scope?: ScriptScope,
 ): EntryPlan {
   const next = structuredClone(value);
   const hooks = eventsOf(next);
@@ -251,14 +257,14 @@ export function planEntries(
         const handlers = group['hooks'] as unknown[];
         const removed: number[] = [];
         handlers.forEach((handler, index) => {
-          if (isHqHandler(handler)) removed.push(index);
+          if (isHqHandler(handler, scope)) removed.push(index);
         });
         if (removed.length === 0) {
           kept.push({ src, value: group, removed: [] });
           return;
         }
         removedAny = true;
-        group['hooks'] = handlers.filter((handler) => !isHqHandler(handler));
+        group['hooks'] = handlers.filter((handler) => !isHqHandler(handler, scope));
         const rest = group['hooks'] as unknown[];
         if (rest.length === 0 && isPlainGroup(group) && !layout.dirtyGroups.has(`${event}:${src}`))
           return;

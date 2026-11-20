@@ -1,6 +1,6 @@
 import { SOURCES_COPY } from '../../lib/copy';
 
-// "Data kept on this machine" (D7; requirements P-29 to P-31): the last card of Sources & repos. It is a statement, not a control: how
+// "Data kept on this machine" (D7; requirements P-29 to P-31) states how
 // long usage history is kept, what is never stored, and which reads leave the machine. The sentence is the product's promise, so it
 // is held to the code by tests elsewhere (the retention horizon, the no-conversation-bodies scan and the single outbound module).
 

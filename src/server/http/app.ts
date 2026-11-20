@@ -9,6 +9,7 @@ import type { ChatgptAccounts } from '../services/accounts.ts';
 import type { ClaudeAccounts } from '../services/claude-account.ts';
 import type { ClaudeHooks } from '../integrations/claudeHooks/index.ts';
 import type { HqService } from '../services/hq/service.ts';
+import { createResetService, RESET_PATH, type ResetService } from '../services/reset.ts';
 import { apiNotFound, correlation, errorHandler, type HttpEnv } from './errors.ts';
 import {
   csrfGuard,
@@ -51,6 +52,10 @@ export interface AppDeps {
   logger: Logger;
   /** The refresh runner, with the adapters this process has (none in production until the collectors land). */
   runner: Runner;
+  /** Shared by the loopback and managed listeners. */
+  reset?: ResetService;
+  /** Whether a manual refresh is available. */
+  refreshNeedsSetup?: () => boolean;
   /** The port the server listens on; the Host allowlist is built from it. */
   port: number;
   /** The managed Tailscale Serve listener accepts only this authority and owner identity. */
@@ -116,6 +121,17 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.use('*', csrfGuard(deps.logger));
   app.onError(errorHandler(deps.logger));
 
+  const reset = deps.reset ?? createResetService(deps);
+  app.use('/api/*', async (c, next) => {
+    if (c.req.path === RESET_PATH && c.req.method === 'POST') return next();
+    const leave = reset.enter();
+    try {
+      await next();
+    } finally {
+      leave();
+    }
+  });
+
   app.route('/', healthRoutes({ db: deps.db, version: deps.version }));
   app.route('/', bootstrapRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   app.route(
@@ -156,13 +172,17 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
     '/',
     hqHooksRoutes({ hooks: deps.claudeHooks, ingest: deps.remote ? undefined : deps.hookIngest }),
   );
-  app.route('/', refreshRoutes({ db: deps.db, runner: deps.runner }));
+  app.route(
+    '/',
+    refreshRoutes({ db: deps.db, runner: deps.runner, needsSetup: deps.refreshNeedsSetup }),
+  );
   // First-launch Setup (M10): discovery only looks, Finish starts the first run on the same runner as Refresh.
   app.route(
     '/',
     setupRoutes({
       db: deps.db,
       runner: deps.runner,
+      reset,
       now: deps.now,
       timezone: deps.timezone,
       local: deps.setup?.local,

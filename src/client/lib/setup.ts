@@ -36,6 +36,9 @@ export const discoverSetup = (): Promise<Discovery> =>
 export const completeSetup = (): Promise<FirstRun> =>
   apiSend('POST', SETUP_PATH_COMPLETE, RefreshRun, {});
 
+export const resetSetup = (): Promise<void> =>
+  apiSend('POST', '/api/setup/reset', null, { confirmed: true });
+
 /** Reads the sources, the issue count and every number again. */
 const refresh = (client: ReturnType<typeof useQueryClient>): Promise<void> =>
   invalidateServerState(client).catch(() => undefined);

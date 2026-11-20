@@ -71,7 +71,7 @@ const feedStatus = (status: LiveFeedStatus | TranscriptFeedStatus): HqFeed['stat
 
 type FeedLike = Pick<PaseoLiveFeed | TranscriptFeed, 'start' | 'stop' | 'ready' | 'status'>;
 
-export function createHqService(options: HqServiceOptions): HqService {
+export function createHqService(options: HqServiceOptions): HqService & { stop(): Promise<void> } {
   const { feeds, now, waitsForSetup } = options;
   const coldWaitMs = options.coldWaitMs ?? HQ_COLD_WAIT_MS;
   const sleep = options.sleep ?? abortableSleep;
@@ -238,6 +238,7 @@ export function createHqService(options: HqServiceOptions): HqService {
         return response(statuses, [], false);
       }
     },
+    stop: () => gate.stop(),
     close: () => {
       closed = true;
       return gate.close();

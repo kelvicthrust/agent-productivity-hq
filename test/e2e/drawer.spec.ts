@@ -582,7 +582,7 @@ test.describe('where there is nothing to show', () => {
     // The action goes to Sources after the drawer has left, and the new page's heading takes focus.
     await drawer.getByRole('link', { name: EMPTY_REPOS.action }).click();
     await expect(page).toHaveURL(`${ORIGIN}/sources`);
-    await expect(dialogElement(page)).toBeHidden();
+    await expect(page.getByRole('dialog', { includeHidden: true })).toBeHidden();
     await expect(page.getByRole('heading', { level: 1, name: 'Sources & repos' })).toBeFocused();
   });
 
