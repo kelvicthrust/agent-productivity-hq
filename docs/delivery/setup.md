@@ -7,12 +7,12 @@ and assessment results.
 ## Run a release archive with npx
 
 Use an Apple Silicon Mac with Node 22.x (22.16.0+) or any stable 24.0.0+ and npm. Get
-`kelvicthrust-agent-productivity-hq-1.0.1.tgz` and `SHA256SUMS` from the same GitHub release.
-Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.0.1.tgz` and compare the result with
+`kelvicthrust-agent-productivity-hq-1.0.2.tgz` and `SHA256SUMS` from the same GitHub release.
+Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.0.2.tgz` and compare the result with
 the delivered checksum. Keep the archive compressed at a path you can reuse.
 
 ```sh
-npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.1.tgz" agent-productivity-hq
+npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.2.tgz" agent-productivity-hq
 ```
 
 The launcher starts or reuses the dashboard for your data directory and opens the default browser.
@@ -22,7 +22,7 @@ If the browser cannot open, use the URL printed in the terminal. Add `--no-open`
 The launcher keeps its runtime files under `~/Library/Application Support/agent-productivity-cli/`,
 separate from the [data directory](#data-directory). Clearing the npm cache leaves those files in place.
 
-To stop a dashboard started by the terminal or skill, add `stop` at the end of the command. Use
+To stop a dashboard started from Terminal, add `stop` at the end of the command. Use
 the same `AGENT_PRODUCTIVITY_DATA_DIR` if you set one at launch. The command preserves your data.
 Stop a server started from source with Ctrl+C in its terminal. For a Paseo-managed server, disable
 the plugin from **Settings → Plugins** on the daemon host.
@@ -30,28 +30,6 @@ the plugin from **Settings → Plugins** on the daemon host.
 If the local port is occupied, follow the message printed by the launcher. Stop the app that owns
 the port or set `AGENT_PRODUCTIVITY_PORT` to a free port when launching a separate data directory.
 See [startup recovery](#when-something-is-wrong) for data-directory and port conflicts.
-
-## Install the agent skill
-
-For the private v0.3.0-rc.1 skill kit, use the same Node runtime as the terminal launcher. Put the matching RC CLI archive and
-`agent-productivity-hq-skills-0.3.0-rc.1.tar.gz` beside the delivered `SHA256SUMS`.
-Check that both downloaded archives report `OK` before extracting and installing the skill from that folder.
-
-```sh
-shasum -a 256 -c SHA256SUMS --ignore-missing
-tar -xzf agent-productivity-hq-skills-0.3.0-rc.1.tar.gz
-sh install-agent-productivity-hq-skill.sh claude
-```
-
-For Codex, use `sh install-agent-productivity-hq-skill.sh codex`. Run the installer once for each
-client you use. It checks the CLI archive against the expected checksum and copies it to
-`~/Library/Application Support/Agent Productivity Beta/` for future launches. The installed skill
-lives in `~/.claude/skills/agent-productivity-hq/` or `~/.agents/skills/agent-productivity-hq/`.
-
-Open a new session in the installed client. Enter `/agent-productivity-hq` in Claude Code or
-`$agent-productivity-hq` in Codex. The skill runs the terminal launcher and returns the dashboard URL.
-Ask the skill to stop the dashboard when you are done. Configure account connections in the dashboard’s
-Setup or Sources & repos screen.
 
 ## Requirements
 
@@ -169,7 +147,7 @@ Host compatibility is separate: the packaged server uses SQLite transaction stat
 
 Release builders run `pnpm pack:paseo` on Apple Silicon with npm 11 on `PATH` to produce the versioned tarball in
 `dist/paseo`. Use a compatible host Node to run `pnpm test:paseo-package` against that artifact before private distribution.
-Run `pnpm pack:cli` to build the terminal package and skill kit in `dist/cli`, then run `pnpm test:cli-package` with the supported host Node to exercise the packed launcher from an unrelated directory.
+Run `pnpm pack:cli` to build the terminal package in `dist/cli`, then run `pnpm test:cli-package` with the supported host Node to exercise the packed launcher from an unrelated directory.
 
 ## Isolated clean-checkout smoke start
 
