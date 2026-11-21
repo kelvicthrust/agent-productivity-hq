@@ -28,19 +28,12 @@ export default function contribute(client: PluginClientContext) {
   }
 
   function ProductivityScreen(props: PluginScreenProps) {
-    return (
-      <LauncherScreen
-        key={props.host.id}
-        {...props}
-        requests={requests}
-        configure={() => client.openSettings(launcherId)}
-      />
-    );
+    return <LauncherScreen key={props.host.id} {...props} requests={requests} />;
   }
 
   const removeSettings = client.addSettingsScreen({
     id: launcherId,
-    title: 'Dashboard workspace',
+    title: 'Launcher settings',
     icon: 'Settings',
     Component: ConfigureLauncher,
   });
