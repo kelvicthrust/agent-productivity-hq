@@ -14,6 +14,7 @@ export function isTailnetHttpsOrigin(value: string): boolean {
 }
 
 const bindingSchema = z.object({
+  // Keep the stored preference readable when rolling back to a workspace-based launcher.
   workspaceId: z.string().trim().default(''),
   // Only identifies the old share during an upgrade. Navigation always uses the launch RPC.
   privateUrl: z

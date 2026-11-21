@@ -7,12 +7,12 @@ and assessment results.
 ## Run a release archive with npx
 
 Use an Apple Silicon Mac with Node 22.x (22.16.0+) or any stable 24.0.0+ and npm. Get
-`kelvicthrust-agent-productivity-hq-1.0.2.tgz` and `SHA256SUMS` from the same GitHub release.
-Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.0.2.tgz` and compare the result with
+`kelvicthrust-agent-productivity-hq-1.0.3.tgz` and `SHA256SUMS` from the same GitHub release.
+Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.0.3.tgz` and compare the result with
 the delivered checksum. Keep the archive compressed at a path you can reuse.
 
 ```sh
-npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.2.tgz" agent-productivity-hq
+npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.0.3.tgz" agent-productivity-hq
 ```
 
 The launcher starts or reuses the dashboard for your data directory and opens the default browser.
@@ -65,28 +65,26 @@ checkout with the same settings. Run `pnpm build` again after client changes.
 
 ## Open Agent HQ from Paseo Desktop
 
-Click **Agent HQ** in the Paseo sidebar. On desktop, the dashboard opens in a
-Paseo workspace. On Android and iOS, it opens in the phone’s browser. Connect the phone
-to Tailscale using the same account as the daemon Mac. The dashboard runs on the Mac
-and stays available after you close the tab. If the phone cannot open its browser, copy the
-private address shown in the launcher and open it in your browser.
+Click **Agent HQ** in the Paseo sidebar. On desktop and mobile, the dashboard opens in your
+default browser. In Paseo web, choose **Open in browser** when the dashboard is ready. Connect
+the device to Tailscale using the same account as the daemon Mac. The dashboard runs on the Mac
+and stays available after you close the browser tab. If opening fails, copy the private address
+from the launcher and open it in your browser.
 
 ### Install from the release archive
 
-1. Use an Apple Silicon Mac for the daemon and Paseo Desktop 0.16.1 or later for the workspace
-   browser. Connect both devices to Tailscale with the same personal account. The host needs
+1. Use an Apple Silicon Mac for the daemon and Paseo 0.16.1 or later for the launcher.
+   Connect both devices to Tailscale with the same personal account. The host needs
    the Tailscale CLI, HTTPS certificates enabled, and permission to run Serve. If approval is
    required, complete it in Tailscale on the host and click **Retry**.
-2. On the daemon host, download `kelvicthrust-paseo-agent-productivity-hq-1.0.0.tgz` and
-   `SHA256SUMS` from the same GitHub release. Compare the archive's SHA-256 with the corresponding
+2. On the daemon host, download the versioned `kelvicthrust-paseo-agent-productivity-hq-*.tgz`
+   and `SHA256SUMS` from the same GitHub release. Compare the archive's SHA-256 with the corresponding
    entry and unpack it into a versioned directory owned by your macOS user. Keep the extracted
    `package` directory at a stable path while installed.
 3. On the target host in **Settings → Plugins**, enable plugins, enter the absolute path to
    that `package` directory and install it. The same operation is available in the host’s CLI
    as `paseo plugin install /absolute/path/to/package`.
-4. Click **Agent HQ**. The launcher looks for Apple Silicon Node.js 22.x (22.16.0+) or any stable 24.0.0+ on the daemon Mac. If it cannot find one, click **Install runtime** to download the official ARM64 build from nodejs.org. The launcher verifies its pinned SHA-256 and installs a private copy. This requires internet access once. Other devices only need Paseo and Tailscale. A fresh database opens Setup. On desktop the launcher uses
-   the saved workspace, or the only available workspace. If several are available, choose one
-   in plugin settings. On a phone you can open the dashboard without choosing a workspace.
+4. Click **Agent HQ**. The launcher looks for Apple Silicon Node.js 22.x (22.16.0+) or any stable 24.0.0+ on the daemon Mac. If it cannot find one, click **Install runtime** to download the official ARM64 build from nodejs.org. The launcher verifies its pinned SHA-256 and installs a private copy. This requires internet access once. Other devices only need Paseo and Tailscale. A fresh database opens Setup.
 
 The daemon can discover compatible Homebrew and nvm installations even when its PATH differs from your
 terminal. If it offers **Install runtime** despite Node working through a mise shim, add the installed
@@ -103,9 +101,10 @@ processes on the host. [How Tailscale Serve supplies identity](https://tailscale
 
 ### Upgrade a launcher or recover
 
-After the public release, install a pinned version on the daemon host with
-`paseo plugin install npm:@kelvicthrust/paseo-agent-productivity-hq@1.0.0`.
-Use the plugin listing once Paseo has approved the release.
+Use the [Agent HQ listing in Paseo](https://paseo.sh/plugins/kelvicthrust/agent-productivity).
+To install a specific published version on the daemon host, run
+`paseo plugin install npm:@kelvicthrust/paseo-agent-productivity-hq@VERSION`, replacing
+`VERSION` with the release version.
 
 Before the first managed launch, record the previous plugin source, workspace and Ports share.
 Stop the standalone app and back up its entire data directory, including SQLite companion files.
@@ -115,15 +114,15 @@ panel. Remove any other forwarding rule to the ordinary dashboard listener befor
 managed access. A route to that listener retains the access policy of its original proxy.
 
 For an existing directory-based launcher, the packaged plugin uses the same ID.
-Record its source and workspace before removing its registration in **Settings → Plugins**.
-Install the new extracted directory, then select the recorded workspace in **Dashboard
-workspace**. Removing a registration can discard plugin settings. The pilot cutover saves
-and restores that preference through Paseo. The dashboard database and Keychain items are
-stored separately. To reinstall an older version, remove the replacement registration,
-install the recorded source, and restore its original workspace and private URL.
+Record its source, workspace, and private URL before removing its registration in **Settings → Plugins**.
+Install the new extracted directory. Removing a registration can discard plugin settings. The
+dashboard database and Keychain items are stored separately. To reinstall an older version,
+remove the replacement registration, install the recorded source, and restore its original
+workspace and private URL.
 
 A launch error names the failed step. Resolve an occupied port or an existing database owner
-on the host, reconnect Tailscale, or select an available workspace as indicated. Click **Retry**.
+on the host, or reconnect Tailscale as indicated. Click **Retry**. For invalid saved plugin
+settings, open **Launcher settings** in Paseo Desktop to review the reset action.
 Disabling or removing the managed plugin ends its service and managed share. History and sign-ins
 stay on the host. For rollback, disable the plugin, restore the stopped backup if needed,
 start the previous application and restore the previous launcher and share from the recorded

@@ -92,19 +92,16 @@ type BrowserTarget = Parameters<
 >[0];
 
 function renderLauncher(
-  sourceWorkspace: string,
-  openBrowser: (source: string, target: BrowserTarget) => void,
+  openBrowser: (target: BrowserTarget) => void,
   clientLayout: PluginScreenProps['layout'] = layout,
   embeddedBrowser = clientLayout.platform === 'web',
 ) {
   const addSidebarHeaderItem = vi.fn<PluginClientContext['addSidebarHeaderItem']>(() => () => {});
   const addScreen = vi.fn<PluginClientContext['addScreen']>(() => () => {});
-  const openSettings = vi.fn<PluginClientContext['openSettings']>();
   contribute({
     addSidebarHeaderItem,
     addScreen,
     addSettingsScreen: () => () => {},
-    openSettings,
   } as unknown as PluginClientContext);
   const { Component: SidebarItem } = addSidebarHeaderItem.mock.calls[0]![0];
   const { Component: Launcher } = addScreen.mock.calls[0]![0];
@@ -146,7 +143,7 @@ function renderLauncher(
                       openWorkspace: () => {},
                       openAgent: () => {},
                       openBrowser: (target) => {
-                        openBrowser(sourceWorkspace, target);
+                        openBrowser(target);
                         setLauncherVisible(false);
                       },
                     }
@@ -166,16 +163,14 @@ function renderLauncher(
   );
   const { rerender } = render(renderHost());
   return {
-    openSettings,
-    refreshSettings: () => rerender(renderHost()),
     switchHost: (selectedHost: PluginScreenProps['host']) => rerender(renderHost(selectedHost)),
   };
 }
 
-function workspacePage(ids: string[], nextCursor: string | null = null) {
+function workspacePage(ids: string[]) {
   return {
     entries: ids.map((id) => ({ id, name: id, workspaceDirectory: '/workspaces/' + id })),
-    pageInfo: { nextCursor },
+    pageInfo: { nextCursor: null },
   };
 }
 
@@ -193,8 +188,37 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-it('offers a private Node.js install only after a launch discovers it is needed', async () => {
+it.each([
+  { label: 'a fresh install', workspace: '' },
+  { label: 'an upgrade with a saved workspace', workspace: workspaceId },
+])('opens the system browser on desktop for $label', async ({ workspace }) => {
+  useSettings.mockReturnValue({
+    status: 'ready',
+    values: { workspaceId: workspace, privateUrl: '' },
+  });
+  listWorkspaces.mockResolvedValue(workspacePage(['first', 'second']));
+  const openExternal = vi.fn(async () => {});
+  externalBrowser.open = openExternal;
   const openBrowser = vi.fn();
+  renderLauncher(openBrowser);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
+  expect(launch).toHaveBeenCalledTimes(1);
+  expect(openBrowser).not.toHaveBeenCalled();
+  expect(useSettings).not.toHaveBeenCalled();
+  expect(listWorkspaces).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Choose' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Leave launcher' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to launcher' }));
+  expect(launch).toHaveBeenCalledTimes(1);
+  expect(openExternal).toHaveBeenCalledTimes(1);
+});
+
+it('offers a private Node.js install only after a launch discovers it is needed', async () => {
+  const openExternal = vi.fn(async () => {});
+  externalBrowser.open = openExternal;
   launch.mockResolvedValueOnce({
     ok: false,
     reason: 'runtime-required',
@@ -210,37 +234,32 @@ it('offers a private Node.js install only after a launch discovers it is needed'
       },
     })
     .mockResolvedValueOnce({ state: 'finished', result: { ok: true, url: privateUrl } });
-  renderLauncher('other', openBrowser);
+  renderLauncher(vi.fn());
 
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
   const install = await screen.findByRole('button', { name: 'Install runtime' });
   expect(launch.mock.calls).toEqual([[{}]]);
   expect(installRuntime).not.toHaveBeenCalled();
-  expect(openBrowser).not.toHaveBeenCalled();
+  expect(openExternal).not.toHaveBeenCalled();
 
   fireEvent.click(install);
   await screen.findByText('The download could not be verified.');
   expect(installRuntime.mock.calls).toEqual([[{ action: 'start' }]]);
-  expect(openBrowser).not.toHaveBeenCalled();
+  expect(openExternal).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole('button', { name: 'Install runtime' }));
-  await waitFor(() =>
-    expect(openBrowser).toHaveBeenCalledExactlyOnceWith('other', {
-      serverId: host.id,
-      workspaceId,
-      url: privateUrl,
-    }),
-  );
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
   expect(installRuntime.mock.calls).toEqual([[{ action: 'start' }], [{ action: 'start' }]]);
 });
 
 it('polls an acknowledged runtime install beyond the invocation deadline without starting it again', async () => {
   vi.useFakeTimers();
   try {
-    const openBrowser = vi.fn();
+    const openExternal = vi.fn(async () => {});
+    externalBrowser.open = openExternal;
     launch.mockResolvedValue({ ok: false, reason: 'runtime-required', message: 'Node.js needed.' });
     installRuntime.mockResolvedValue({ state: 'installing' });
-    renderLauncher('other', openBrowser);
+    renderLauncher(vi.fn());
 
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Install runtime' })));
@@ -252,15 +271,11 @@ it('polls an acknowledged runtime install beyond the invocation deadline without
     expect(installRuntime.mock.calls.filter(([input]) => input.action === 'status')).toHaveLength(
       31,
     );
-    expect(openBrowser).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
 
     installRuntime.mockResolvedValue({ state: 'finished', result: { ok: true, url: privateUrl } });
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
-    expect(openBrowser).toHaveBeenCalledExactlyOnceWith('other', {
-      serverId: host.id,
-      workspaceId,
-      url: privateUrl,
-    });
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl);
   } finally {
     vi.useRealTimers();
   }
@@ -271,7 +286,7 @@ it('opens the private dashboard on iOS without the entity state provider', async
   externalBrowser.open = openExternal;
   const openBrowser = vi.fn();
   const phoneLayout = { platform: 'ios', compact: true } as const;
-  renderLauncher('other', openBrowser, phoneLayout);
+  renderLauncher(openBrowser, phoneLayout);
 
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
   await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
@@ -286,38 +301,47 @@ it('opens the private dashboard on iOS without the entity state provider', async
   expect(launch).toHaveBeenCalledTimes(1);
 
   render(<ConfigureLauncher host={host} layout={phoneLayout} theme={theme} />);
-  expect(screen.getByText('Choose a dashboard workspace in Paseo Desktop.')).toBeTruthy();
+  expect(screen.getByText('Use Paseo Desktop to repair saved launcher settings.')).toBeTruthy();
   expect(useSettings).not.toHaveBeenCalled();
   expect(usePaseo).not.toHaveBeenCalled();
 });
 
-it.each(['missing', 'rejects'])(
-  'keeps the selectable URL and retry when the phone opener %s',
-  async (behavior) => {
-    if (behavior === 'rejects') {
-      externalBrowser.open = vi.fn().mockRejectedValue(new Error('No browser handler'));
-    }
-    renderLauncher('other', vi.fn(), { platform: 'android', compact: true });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-    const address = await screen.findByText(privateUrl);
-    expect(address.style.userSelect).toBe('text');
-    expect(screen.getByText('Copy the private address and open it in your browser.')).toBeTruthy();
-
-    launch.mockResolvedValueOnce({ ok: true, url: 'https://invalid.example.com' });
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await screen.findByText(/The host returned an invalid private address/);
-    expect(screen.queryByText(privateUrl)).toBeNull();
-    expect(screen.queryByText('https://invalid.example.com')).toBeNull();
-    if (externalBrowser.open)
-      expect(externalBrowser.open).toHaveBeenCalledExactlyOnceWith(privateUrl);
+it.each([
+  {
+    label: 'the Android opener is missing',
+    clientLayout: { platform: 'android', compact: true } as const,
+    behavior: 'missing',
   },
-);
+  {
+    label: 'the Android opener rejects',
+    clientLayout: { platform: 'android', compact: true } as const,
+    behavior: 'rejects',
+  },
+  { label: 'the desktop opener rejects', clientLayout: layout, behavior: 'rejects' },
+])('keeps the selectable URL and retry when $label', async ({ clientLayout, behavior }) => {
+  if (behavior === 'rejects') {
+    externalBrowser.open = vi.fn().mockRejectedValue(new Error('No browser handler'));
+  }
+  renderLauncher(vi.fn(), clientLayout);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+  const address = await screen.findByText(privateUrl);
+  expect(address.style.userSelect).toBe('text');
+  expect(screen.getByText('Copy the private address and open it in your browser.')).toBeTruthy();
+
+  launch.mockResolvedValueOnce({ ok: true, url: 'https://invalid.example.com' });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await screen.findByText(/The host returned an invalid private address/);
+  expect(screen.queryByText(privateUrl)).toBeNull();
+  expect(screen.queryByText('https://invalid.example.com')).toBeNull();
+  if (externalBrowser.open)
+    expect(externalBrowser.open).toHaveBeenCalledExactlyOnceWith(privateUrl);
+});
 
 it('waits for a browser button press on web clients without workspace navigation', async () => {
   const openExternal = vi.fn(async () => {});
   externalBrowser.open = openExternal;
-  renderLauncher('other', vi.fn(), layout, false);
+  renderLauncher(vi.fn(), layout, false);
 
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
   const openButton = await screen.findByRole('button', { name: 'Open in browser' });
@@ -339,10 +363,10 @@ it('ignores a launch result from the host the phone left', async () => {
   launch.mockReturnValueOnce(firstLaunch.promise);
   const openExternal = vi.fn(async () => {});
   externalBrowser.open = openExternal;
-  const { switchHost } = renderLauncher('other', vi.fn(), { platform: 'ios', compact: true });
+  const { switchHost } = renderLauncher(vi.fn(), { platform: 'ios', compact: true });
 
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-  expect(launch).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
   switchHost({ id: 'another-host', label: 'Another host' });
   await act(async () =>
     firstLaunch.resolve({ ok: true, url: 'https://old.example-tailnet.ts.net' }),
@@ -355,71 +379,7 @@ it('ignores a launch result from the host the phone left', async () => {
   expect(launch).toHaveBeenCalledTimes(2);
 });
 
-it.each(['source-workspace-a', 'source-workspace-b'])(
-  'opens the same bound workspace when clicked from %s and does not replay on Back',
-  async (source) => {
-    const openBrowser = vi.fn();
-    renderLauncher(source, openBrowser);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-    await screen.findByRole('button', { name: 'Back to launcher' });
-    expect(openBrowser).toHaveBeenCalledExactlyOnceWith(source, {
-      url: privateUrl,
-      workspaceId,
-      serverId: host.id,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Back to launcher' }));
-    await screen.findByRole('button', { name: 'Change workspace' });
-    expect(openBrowser).toHaveBeenCalledTimes(1);
-  },
-);
-
-it('shows the saved destination and the settings action if the bound workspace is unavailable', async () => {
-  const openBrowser = vi.fn(() => {
-    throw new Error('Workspace is unavailable on the requested host.');
-  });
-  const { openSettings } = renderLauncher('source-workspace-b', openBrowser);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-  await screen.findByText(
-    'This workspace is unavailable. Choose another dashboard workspace, then retry.',
-  );
-  expect(screen.getByText(host.label)).toBeTruthy();
-  expect(launch).toHaveBeenCalledTimes(1);
-  expect(openBrowser).toHaveBeenCalledTimes(1);
-
-  fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-  await waitFor(() => expect(openBrowser).toHaveBeenCalledTimes(2));
-  fireEvent.click(screen.getByRole('button', { name: 'Change workspace' }));
-  expect(openSettings).toHaveBeenCalledExactlyOnceWith('dashboard');
-});
-
-it('opens the dashboard once when the first sidebar click precedes the settings response', async () => {
-  useSettings.mockReturnValue({ status: 'loading' });
-  const openBrowser = vi.fn();
-  const source = 'source-workspace-a';
-  const { refreshSettings } = renderLauncher(source, openBrowser);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-  await screen.findByText('Loading workspace settings…');
-  expect(openBrowser).not.toHaveBeenCalled();
-
-  launch.mockReset().mockResolvedValue({ ok: true, url: privateUrl });
-  useSettings.mockReturnValue({
-    status: 'ready',
-    values: { workspaceId, privateUrl: 'https://old.example.ts.net' },
-  });
-  refreshSettings();
-  await screen.findByRole('button', { name: 'Back to launcher' });
-  expect(openBrowser).toHaveBeenCalledExactlyOnceWith(source, {
-    url: privateUrl,
-    workspaceId,
-    serverId: host.id,
-  });
-});
-
-it('offers a reset for invalid saved settings and shows the empty form after a successful reset', async () => {
+it('offers a reset for invalid saved settings and shows the ready state after a successful reset', () => {
   const reset = vi.fn(async () => true);
   useSettings.mockReturnValue({ status: 'invalid', reset });
   const view = <ConfigureLauncher host={host} layout={layout} theme={theme} />;
@@ -430,7 +390,7 @@ it('offers a reset for invalid saved settings and shows the empty form after a s
 
   useSettings.mockReturnValue({ status: 'ready', values: { workspaceId: '', privateUrl: '' } });
   rerender(<ConfigureLauncher host={host} layout={layout} theme={theme} />);
-  expect(await screen.findByRole('button', { name: 'Choose' })).toBeTruthy();
+  expect(screen.getByText('Launcher settings are ready.')).toBeTruthy();
 });
 
 it('displays a reset failure and keeps the reset action available', () => {
@@ -453,49 +413,12 @@ it('shows a host recovery message and retries the managed launch without using t
     reason: 'route-conflict',
     message: 'Remove the previous private share.',
   });
-  const openBrowser = vi.fn();
-  renderLauncher('other', openBrowser);
+  const openExternal = vi.fn(async () => {});
+  externalBrowser.open = openExternal;
+  renderLauncher(vi.fn());
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
   await screen.findByText('Remove the previous private share.');
-  expect(openBrowser).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-  await waitFor(() =>
-    expect(openBrowser).toHaveBeenCalledExactlyOnceWith('other', {
-      serverId: host.id,
-      workspaceId,
-      url: privateUrl,
-    }),
-  );
-});
-
-it('offers a host workspace picker before starting when a new installation has several workspaces', async () => {
-  const save = vi.fn();
-  useSettings.mockReturnValue({
-    status: 'ready',
-    values: { workspaceId: '', privateUrl: '' },
-    save,
-    revision: 'one',
-  });
-  listWorkspaces.mockImplementation(async ({ page }: { page: { cursor?: string } }) =>
-    page.cursor ? workspacePage(['second']) : workspacePage(['first'], 'next-page'),
-  );
-  const openBrowser = vi.fn();
-  const { refreshSettings } = renderLauncher('other', openBrowser);
-  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-  const choices = await screen.findAllByRole('button', { name: 'Choose' });
-  expect(launch).not.toHaveBeenCalled();
-  fireEvent.click(choices[1]!);
-  expect(save).toHaveBeenCalledWith({ workspaceId: 'second', privateUrl: '' }, 'one');
-  useSettings.mockReturnValue({
-    status: 'ready',
-    values: { workspaceId: 'second', privateUrl: '' },
-  });
-  refreshSettings();
-  await waitFor(() =>
-    expect(openBrowser).toHaveBeenCalledExactlyOnceWith('other', {
-      serverId: host.id,
-      workspaceId: 'second',
-      url: privateUrl,
-    }),
-  );
+  expect(openExternal).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
 });

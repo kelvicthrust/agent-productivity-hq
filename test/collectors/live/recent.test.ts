@@ -148,7 +148,9 @@ describe('between listings', () => {
     }
     expect(asked).toBe(0);
     // A file is appended to: the folder's own time does not move, and nothing is listed.
-    writeFileSync(join(root, 'p/active.jsonl'), '{}\n{}\n');
+    const activePath = join(root, 'p/active.jsonl');
+    writeFileSync(activePath, '{}\n{}\n');
+    utimesSync(activePath, new Date(clock), new Date(clock));
     clock += 2_000;
     await finder.refresh();
     expect(asked).toBe(0);
@@ -170,6 +172,7 @@ describe('between listings', () => {
     await finder.refresh();
     clock += 2_000;
     writeFileSync(path, '{}\n{}\n');
+    utimesSync(path, new Date(clock), new Date(clock));
     rmSync(join(root, 'p/b.jsonl'));
     const seen = await finder.refresh();
     expect(names(seen.files)).toEqual(['p/a.jsonl']);
