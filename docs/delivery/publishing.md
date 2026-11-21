@@ -16,9 +16,9 @@ Configure both publishers when the first new release is ready. Each configuratio
 
 ### Publish a new version
 
-1. Update the version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Merge the reviewed changes into `main`.
-2. Tag that commit with the matching stable version, such as `v1.0.1`, and push the tag to `origin`. GitHub Actions checks the version and that the commit is in `main`.
-3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, then creates a GitHub release using the same tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
+1. In the release PR, update the stable version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Match the version in both entries in `plugins/paseo-agent-productivity/package-lock.json`. Use a patch bump for fixes, a minor bump for compatible features, or a major bump for breaking changes.
+2. Merge the reviewed PR into `main`. The higher version starts the Release workflow and serves as the release signal. Merges that leave the version unchanged skip publication. **Run workflow** still builds archives for testing.
+3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, then tags the tested commit and publishes the GitHub release with both tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
 
 If publishing fails after one package reaches npm, rerun failed jobs to reuse the original artifacts. The workflow reuses a published version only when its integrity matches the original archive. If the artifacts expire or the bytes differ, use a new version. For a GitHub release that already exists, verify its tag and assets before completing it manually.
 
