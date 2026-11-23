@@ -51,9 +51,11 @@ Install and open Agent Productivity HQ on the Mac that holds my agent activity. 
 The Terminal command opens HQ in your browser. If needed, copy the address it prints into your browser. [Downloadable releases](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest)
 
 In Paseo, a fresh installation opens Setup. After setup, **Agent HQ** opens the illustrated HQ.
-Use **Open full dashboard** to open the browser version. To reset HQ or change Claude Code settings,
-go to **Sources & repos → Open owner settings**. These browser actions use Tailscale and require the
-host owner’s account. [Paseo setup guide](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop)
+
+We recommend Tailscale for opening HQ in a browser from another device. In Paseo, choose
+**Open full dashboard** to open the browser version. To reset HQ or change Claude Code settings,
+go to **Sources & repos → Open owner settings**. Both browser actions use the host owner’s
+Tailscale account. [Paseo setup guide](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop)
 
 ## HQ: your agents at work
 
