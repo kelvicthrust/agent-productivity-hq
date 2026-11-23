@@ -11,9 +11,12 @@ _Overview with synthetic data._
 - **Codex and Claude Code** show current activity and recorded usage from the Mac running HQ. See which models and sessions used the most tokens, the units AI tools use to measure text they process or generate.
 - **GitHub** shows merged changes from the projects you choose to track. Open a change to see the agent sessions HQ can link to it and the evidence behind each link.
 - **ChatGPT and Claude subscriptions** can show how much of your plan limit you’ve used and when it resets, where your provider reports it.
-- **Paseo** can open HQ from its sidebar and help HQ identify agents and their helpers.
+- **Paseo** opens the illustrated HQ, setup, and reports inside Paseo. It supplies live agent
+  activity, relationships between agents, and weekly plan limits when available.
 
-HQ keeps its collected usage data on your Mac. You choose which accounts and projects to connect.
+HQ keeps its collected usage data on the Mac that runs your agents. You choose which accounts and
+projects to connect. Anyone with permission to manage Paseo on that Mac can also see its HQ data
+and manage its connections.
 
 ## Getting started
 
@@ -21,9 +24,10 @@ Use the Apple Silicon Mac that runs your agents. You can ask an agent to install
 
 ### First launch (Setup)
 
-1. Open HQ in your browser and review the activity sources it found on your Mac.
+1. Open HQ and review the activity sources it found on the Mac that runs your agents.
 2. To see merged changes, connect GitHub and choose the projects you want to track. You can add this connection and optional subscription reports later.
-3. Choose **Finish setup** to open Overview. Use **Sources & repos** whenever you want to change what HQ tracks.
+3. Choose **Finish setup**. Paseo opens the illustrated HQ and the standalone dashboard opens
+   **Overview**. Use **Sources & repos** whenever you want to change what HQ tracks.
 
 You can finish Setup and explore local activity before connecting an account.
 
@@ -39,12 +43,17 @@ Install and open Agent Productivity HQ on the Mac that holds my agent activity. 
 
 ### Open it yourself
 
-| Launch method | Before you start                                                                                                                                        | Open the dashboard                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Terminal      | Use an Apple Silicon Mac with [Node.js and npm](#node-compatibility). [Use a downloaded archive](docs/delivery/setup.md#run-a-release-archive-with-npx) | `npx --yes @kelvicthrust/agent-productivity-hq` |
-| Paseo         | Set up Tailscale on your Mac and install [Agent HQ from the Paseo plugin directory](https://paseo.sh/plugins/kelvicthrust/agent-productivity).          | Click **Agent HQ** in the Paseo sidebar.        |
+| Launch method | Before you start                                                                                                                                                             | Open the dashboard                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Terminal      | Use an Apple Silicon Mac with [Node.js and npm](#node-compatibility). [Use a downloaded archive](docs/delivery/setup.md#run-a-release-archive-with-npx)                      | `npx --yes @kelvicthrust/agent-productivity-hq`                 |
+| Paseo         | Use Paseo 0.16.1 or later and install [Agent HQ from the Paseo plugin directory](https://paseo.sh/plugins/kelvicthrust/agent-productivity) on the Mac that runs your agents. | Select that Mac in Paseo and click **Agent HQ** in the sidebar. |
 
 The Terminal command opens HQ in your browser. If needed, copy the address it prints into your browser. [Downloadable releases](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest)
+
+In Paseo, a fresh installation opens Setup. After setup, **Agent HQ** opens the illustrated HQ.
+Use **Open full dashboard** to open the browser version. To reset HQ or change Claude Code settings,
+go to **Sources & repos → Open owner settings**. These browser actions use Tailscale and require the
+host owner’s account. [Paseo setup guide](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop)
 
 ## HQ: your agents at work
 
@@ -83,7 +92,11 @@ HQ refreshes about every two seconds while the view is open. **A quiet one** mea
 
 **Session links.** A session that names a pull request or commit supplies evidence. A session active in the same repository in the 48 hours before a merge may appear as a suggestion. You can confirm or correct the match and use **Undo** to reverse it.
 
-**Optional account reports.** Connect the [ChatGPT account report](docs/tech/data-and-sources.md#chatgpt-account-report) or select [Show Claude plan limits](docs/tech/data-and-sources.md#claude-account-report) to check using the active Claude Code sign-in. After the first successful Claude check, **Refresh** and **Refresh all** also update those limits.
+**Optional account reports.** In Paseo, HQ uses the selected Mac’s Paseo quota reports when available.
+If a weekly report is unavailable, HQ can offer **Check Codex directly** or **Check Claude Code directly**.
+In the standalone dashboard, connect ChatGPT for Codex quota or select **Show Claude plan limits**
+to use your existing Claude Code sign-in. After the first successful Claude check, **Refresh** and
+**Refresh all** also update those limits. [ChatGPT reports](docs/tech/data-and-sources.md#chatgpt-account-report) · [Claude reports](docs/tech/data-and-sources.md#claude-account-report)
 
 ### Node compatibility
 

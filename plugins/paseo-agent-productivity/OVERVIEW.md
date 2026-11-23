@@ -8,6 +8,6 @@ Click **Agent HQ** in Paseo 0.16.1 or later. A fresh installation opens Setup. U
 
 The launcher uses an installed compatible Node runtime. If it cannot find one, **Install runtime** downloads the official ARM64 archive from nodejs.org after you choose that action. The launcher verifies the pinned SHA-256 before installing a private copy.
 
-HQ reads local provider transcripts and Paseo session metadata. It stores recorded usage and session metadata on the daemon host and reads Paseo's account reports separately. If Paseo cannot supply a weekly limit, you can explicitly check the provider using an existing sign-in. Optional GitHub access reads tracked pull requests. Optional Claude Code hooks show a preview and ask for confirmation before editing the user's Claude Code settings. Prompt and tool-result text stay out of stored records and plugin responses.
+HQ reads local provider transcripts and Paseo session metadata. It stores recorded usage and session metadata on the daemon host and reads Paseo's account reports separately. If Paseo cannot supply a weekly limit, you can explicitly check the provider using an existing sign-in. Optional GitHub access reads tracked pull requests. In owner settings, **Turn on** and **Turn off** apply changes to the optional Claude Code hooks. **What will change** shows which files and commands are involved. Prompt and tool-result text stay out of stored records and plugin responses.
 
 The screenshots use invented sessions.
