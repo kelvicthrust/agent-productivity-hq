@@ -17,6 +17,7 @@ import { greeting } from './greeting';
 import { Kpis, KpiRowSkeleton } from './Kpis';
 import { Notice } from './Notice';
 import { OverviewChart } from './OverviewChart';
+import { PaseoQuotaCard } from './PaseoQuotaCard';
 import { CardSkeleton, OverviewFailed, QuietOne } from './Panels';
 import { RecentMerged } from './RecentMerged';
 import { RepoTable } from './RepoTable';
@@ -185,7 +186,13 @@ export function OverviewRoute() {
               )
             )}
             <div className="col-span-12 min-w-0 min-[1280px]:col-span-4 min-[1280px]:col-start-9 min-[1280px]:row-start-1">
-              {data ? (
+              {bootstrap.paseoManaged ? (
+                <PaseoQuotaCard
+                  provider={filters.provider}
+                  timeZone={timeZone}
+                  today={bootstrap.today}
+                />
+              ) : data ? (
                 <AccountCards
                   accounts={data.coverage.accounts ?? []}
                   reports={data.accounts}

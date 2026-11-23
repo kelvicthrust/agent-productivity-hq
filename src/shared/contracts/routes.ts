@@ -13,11 +13,12 @@ import {
   UsageCaptureResponse,
 } from './accounts.ts';
 import { BootstrapResponse, HealthResponse } from './bootstrap.ts';
-import { Int } from './common.ts';
+import { Int, Provider } from './common.ts';
 import { ErrorEnvelope } from './errors.ts';
 import { FilterQuery, LimitQuery } from './filters.ts';
 import { ClaudeHooksRequest, ClaudeHooksStatus, HqClaudeHookEvent, HqResponse } from './hq.ts';
 import { OverviewResponse } from './overview.ts';
+import { PaseoQuotaResponse } from './paseo-quota.ts';
 import {
   LinkDecisionRequest,
   PrDetailResponse,
@@ -97,6 +98,14 @@ export const ROUTES: readonly RouteContract[] = [
     query: filters('start', 'end', 'repos', 'provider', 'author'),
     errors: ['400'],
   }),
+  get('/api/paseo-quota', PaseoQuotaResponse, { errors: ['404'] }),
+  {
+    method: 'post',
+    path: '/api/paseo-quota/{provider}/check',
+    params: { provider: Provider },
+    csrf: true,
+    responses: { '200': PaseoQuotaResponse, '404': E },
+  },
   get('/api/series', SeriesResponse, {
     query: filters('start', 'end', 'gran', 'repos', 'provider', 'author'),
     errors: ['400'],

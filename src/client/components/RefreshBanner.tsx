@@ -192,6 +192,7 @@ function sourceOutcomeText(
 export function useRefresh() {
   const client = useQueryClient();
   const toast = useToast();
+  const bootstrap = useBootstrap().data;
   const refreshClaudePlan = useClaudePlanLimitsCheck('refresh');
   const mutation = useMutation({
     mutationKey: REFRESH_KEY,
@@ -213,11 +214,14 @@ export function useRefresh() {
   });
 
   return {
+    description: bootstrap?.paseoManaged
+      ? 'Refresh local sources and GitHub.'
+      : REFRESH_COPY.allDescription,
     /** Starts a run for these sources (all when none are named); ignored while a run this tab follows is going. */
     refresh(sources?: SourceId[]) {
       if (running.length > 0) return;
       mutation.mutate(sources ? { sources } : {});
-      if (!sources) {
+      if (!sources && bootstrap && !bootstrap.paseoManaged) {
         void refreshClaudePlan.mutateAsync().catch(() => {
           toast({ body: 'Couldn’t reach the Claude plan check. Retry in Sources.', type: 'error' });
         });

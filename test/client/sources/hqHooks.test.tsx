@@ -2,13 +2,13 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeHooksStatus, ExactPrompts } from '../../../src/shared/contracts/hq';
+import { ClaudeHooksSwitch } from '../../../src/client/components/ClaudeHooksSwitch';
 import { HqHooks } from '../../../src/client/features/sources/HqHooks';
+import { useExactPrompts } from '../../../src/client/lib/hq';
 import { COMMAND, NOW, PREVIEW, json, mountRig, status, type Rig } from '../hooksRig';
 
-// The Claude Code hooks switch, as the Sources screen holds it, over a stubbed API: what it says before the owner acts, what the disclosure
-// reads from the server's preview, the one button, and the fixed words of the result and of a refusal. Nothing is asked of the preview
-// route until the owner opens the disclosure, and nothing is changed until they press the button. (HQ's first-time dialog holds the same
-// control: test/client/hq/hooksFirstRun.test.tsx.)
+// The Sources card uses one-press Turn on and Turn off. Exercise the default
+// review flow separately because the first-time HQ dialog still uses it.
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -21,6 +21,17 @@ afterEach(() => {
 });
 
 const mount = (over: Partial<Rig> = {}) => mountRig(<HqHooks />, over);
+
+function ReviewedSwitch() {
+  const { data } = useExactPrompts();
+  return (
+    <section aria-label="Know when Claude Code needs you">
+      {data !== undefined && <ClaudeHooksSwitch state={data} />}
+    </section>
+  );
+}
+
+const mountReview = (over: Partial<Rig> = {}) => mountRig(<ReviewedSwitch />, over);
 
 /** The card, once the switch's state has been read (before that it holds only a loading line). */
 const section = async () => {
@@ -192,13 +203,15 @@ describe('turning it on and off', () => {
     expect(screen.queryAllByRole('status').every((node) => (node.textContent ?? '') === '')).toBe(
       true,
     );
-    await showPreview(panel);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
     const puts = () => rig.calls.filter((call) => call.method === 'PUT');
     await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(
+      within(panel).getByRole('button', { name: 'What will change' }).getAttribute('aria-expanded'),
+    ).toBe('false');
     expect(puts()[0]).toMatchObject({
       path: '/api/hq/claude-hooks',
-      body: { enabled: true },
+      body: { enabled: true, preview: PREVIEW },
       headers: { 'X-Agent-Productivity-Request': '1', 'Content-Type': 'application/json' },
     });
     const said = await within(panel).findByText(/^Turned on\. Claude Code will tell HQ/);
@@ -209,22 +222,25 @@ describe('turning it on and off', () => {
     expect(within(panel).queryByRole('button', { name: 'Turn on' })).toBeNull();
   });
 
-  it('does not send a PUT before showing the settings file and command', async () => {
-    const rig = mount();
+  it('checks a fresh plan even when the disclosure has already loaded one', async () => {
+    let fingerprint = 'aa'.repeat(32);
+    const rig = mount({ preview: () => json(status({ preview: fingerprint })) });
     const panel = await section();
-    const turnOn = within(panel).queryByRole('button', { name: 'Turn on' });
-    if (turnOn) fireEvent.click(turnOn);
-
-    expect(await showPreview(panel)).toBeTruthy();
-    expect(await within(panel).findByText('~/.claude/settings.json')).toBeTruthy();
-    expect(paths(rig)).toContain('GET /api/hq/claude-hooks');
+    await showPreview(panel);
     expect(paths(rig)).not.toContain('PUT /api/hq/claude-hooks');
+    fingerprint = 'bb'.repeat(32);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
+    await waitFor(() =>
+      expect(rig.calls.find((call) => call.method === 'PUT')?.body).toEqual({
+        enabled: true,
+        preview: fingerprint,
+      }),
+    );
   });
 
   it('turns off, and repairs', async () => {
     const rig = mount({ state: 'on' });
     const panel = await section();
-    await showPreview(panel);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn off' }));
     expect(
       await within(panel).findByText(
@@ -235,6 +251,9 @@ describe('turning it on and off', () => {
       enabled: false,
       preview: PREVIEW,
     });
+    expect(
+      within(panel).getByRole('button', { name: 'What will change' }).getAttribute('aria-expanded'),
+    ).toBe('false');
 
     cleanup();
     const again = mount({ state: 'needs_repair' });
@@ -253,22 +272,31 @@ describe('turning it on and off', () => {
   });
 
   it('says the pending words while it works, and does not send a second request for a second press', async () => {
-    let release: (response: Response) => void = () => undefined;
+    let resolvePreview: (response: Response) => void = () => undefined;
+    let resolvePut: (response: Response) => void = () => undefined;
+    const preview = new Promise<Response>((resolve) => {
+      resolvePreview = resolve;
+    });
+    const put = new Promise<Response>((resolve) => {
+      resolvePut = resolve;
+    });
     const rig = mount({
-      put: () =>
-        new Promise<Response>((resolve) => {
-          release = resolve;
-        }),
+      preview: () => preview,
+      put: () => put,
     });
     const panel = await section();
-    await showPreview(panel);
     const button = within(panel).getByRole('button', { name: 'Turn on' });
     fireEvent.click(button);
     expect(await within(panel).findByRole('button', { name: 'Turning on…' })).toBeTruthy();
     expect(within(panel).getAllByText('Turning on…').length).toBeGreaterThan(0);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turning on…' }));
+    expect(paths(rig).filter((call) => call === 'GET /api/hq/claude-hooks')).toHaveLength(1);
+    expect(paths(rig)).not.toContain('PUT /api/hq/claude-hooks');
+    resolvePreview(await json(status()));
+    await waitFor(() => expect(paths(rig)).toContain('PUT /api/hq/claude-hooks'));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Turning on…' }));
     expect(rig.calls.filter((call) => call.method === 'PUT')).toHaveLength(1);
-    release(await json(status({ state: 'on' })));
+    resolvePut(await json(status({ state: 'on' })));
     expect(await within(panel).findByText(/^Turned on\./)).toBeTruthy();
   });
 
@@ -288,13 +316,15 @@ describe('turning it on and off', () => {
         ),
     });
     const panel = await section();
-    await showPreview(panel);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
     const alert = await within(panel).findByRole('alert');
     expect(alert.textContent).toContain(
       'Claude Code’s settings file isn’t valid JSON, so HQ didn’t change it.',
     );
     expect(alert.textContent).toContain('Nothing was turned on or off.');
+    expect(
+      within(panel).getByRole('button', { name: 'What will change' }).getAttribute('aria-expanded'),
+    ).toBe('false');
     expect(within(panel).getByRole('button', { name: 'Turn on' })).toBeTruthy();
     expect(
       within(panel).getByText('Off. HQ guesses, and says “May be waiting for you”.'),
@@ -343,7 +373,7 @@ describe('confirming a change', () => {
 
   it('does nothing but show the plan on the first press, and writes only on the second, carrying the plan’s fingerprint', async () => {
     const fingerprint = 'cd'.repeat(32);
-    const rig = mount({ preview: () => json(status({ preview: fingerprint })) });
+    const rig = mountReview({ preview: () => json(status({ preview: fingerprint })) });
     const panel = await section();
     expect(gets(rig)).toHaveLength(0);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
@@ -369,9 +399,7 @@ describe('confirming a change', () => {
     });
     const panel = await section();
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
-    expect(
-      await within(panel).findByText('Couldn’t read the settings to show what will change.'),
-    ).toBeTruthy();
+    expect(await within(panel).findByText(/Couldn’t check your Claude Code settings/)).toBeTruthy();
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
     await waitFor(() => expect(gets(rig).length).toBeGreaterThan(1)); // it reads again
     expect(puts(rig)).toHaveLength(0);
@@ -381,15 +409,15 @@ describe('confirming a change', () => {
     const rig = mount({ preview: () => json(status({ state: 'on' })) });
     const panel = await section();
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
-    expect(await within(panel).findByText(COMMAND)).toBeTruthy();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
-    fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
-    await waitFor(() => expect(gets(rig).length).toBeGreaterThan(1));
+    expect((await within(panel).findByRole('alert')).textContent).toContain(
+      'The available Claude Code settings actions changed.',
+    );
+    expect(gets(rig)).toHaveLength(1);
     expect(puts(rig)).toHaveLength(0);
   });
 
   it('does not write while the plan is shut, even with a plan already read', async () => {
-    const rig = mount();
+    const rig = mountReview();
     const panel = await section();
     await showPreview(panel);
     fireEvent.click(within(panel).getByRole('button', { name: 'What will change' })); // closed again
@@ -402,7 +430,7 @@ describe('confirming a change', () => {
 
   it('reads the plan and the page again when the server says the plan is stale, and writes nothing until it is confirmed again', async () => {
     let fingerprint = 'aa'.repeat(32);
-    const rig = mount({
+    const rig = mountReview({
       preview: () => json(status({ preview: fingerprint })),
       put: () =>
         json(
@@ -444,7 +472,7 @@ describe('confirming a change', () => {
   it.each(['on', 'needs_repair'] as const)(
     'shows what will be removed before turning off from %s, and only the files that hold HQ’s entries',
     async (state) => {
-      const rig = mount({
+      const rig = mountReview({
         state,
         preview: () =>
           json(
@@ -637,7 +665,7 @@ describe('every state shows the plan of the action pressed, before any write is 
   for (const c of cases) {
     for (const [label, action, shown] of c.buttons) {
       it(`${c.name}: pressing “${label}” shows that action’s plan first, and only a second press sends its fingerprint`, async () => {
-        const rig = mount({
+        const rig = mountReview({
           state: c.state,
           preview: () => json(status({ state: c.state, ...c.status })),
         });
@@ -666,7 +694,7 @@ describe('every state shows the plan of the action pressed, before any write is 
   }
 
   it('switching the action after a preview needs a new preview: the other button only shows its plan', async () => {
-    const rig = mount({
+    const rig = mountReview({
       state: 'needs_repair',
       preview: () =>
         json(status({ state: 'needs_repair', reason: 'entries_changed', plans: { repair, off } })),
@@ -746,8 +774,6 @@ describe('every state shows the plan of the action pressed, before any write is 
         ),
     });
     const panel = await section();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Turn off' }));
-    await within(panel).findByText('~/off-only/settings.json');
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn off' }));
     expect(
       await within(panel).findByText(

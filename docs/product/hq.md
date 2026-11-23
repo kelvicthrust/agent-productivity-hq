@@ -18,7 +18,7 @@ Each room represents a session. A solo agent gets its own room; when HQ can iden
 
 HQ uses recent local Claude Code and Codex session activity and, when available, the local Paseo daemon. While HQ is visible, the roster normally refreshes every two seconds. It is held in memory. For historical token totals or merged PRs, use **Overview**, **Usage**, or **Delivery**.
 
-For Claude Code sessions running outside Paseo, you can opt into more precise wait reporting. In **Sources & repos**, open **Know when Claude Code needs you**, review **What will change**, and confirm **Turn on**. You can also choose **Not now** on HQ’s first-visit prompt and use the roster immediately. The [setup guide](../delivery/setup.md#let-claude-code-tell-hq-when-it-needs-you-optional) explains the hook events, settings changes, repair, and removal.
+For Claude Code sessions running outside Paseo, you can opt into more precise wait reporting. In **Sources & repos**, open **Know when Claude Code needs you** and press **Turn on**. Use **What will change** if you want to inspect the settings files and hook command first. You can also choose **Not now** on HQ’s first-visit prompt and use the roster immediately. The [setup guide](../delivery/setup.md#let-claude-code-tell-hq-when-it-needs-you-optional) explains the hook events, settings changes, repair, and removal.
 
 ## When the room is empty
 

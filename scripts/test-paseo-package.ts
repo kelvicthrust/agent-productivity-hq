@@ -52,6 +52,8 @@ function checkArchiveNotices(plugin: string) {
     `${app}/${thirdPartyNoticesFile}`,
     `${app}/${nunitoNoticeFile}`,
     `${app}/${playpenNoticeFile}`,
+    'assets/OFL-PlaypenSans.txt',
+    'assets/OFL-Nunito.txt',
   ]) {
     assert.ok(files.includes(`package/${file}`), `The plugin archive is missing ${file}`);
   }
@@ -64,6 +66,16 @@ function checkArchiveNotices(plugin: string) {
     readFileSync(join(plugin, app, playpenNoticeFile)),
     readFileSync(playpenLicenseSource),
     'The plugin archive must include the original Playpen Sans OFL text',
+  );
+  assert.deepEqual(
+    readFileSync(join(plugin, 'assets/OFL-PlaypenSans.txt')),
+    readFileSync(playpenLicenseSource),
+    'The native outline bundle must carry the original Playpen Sans OFL text',
+  );
+  assert.deepEqual(
+    readFileSync(join(plugin, 'assets/OFL-Nunito.txt')),
+    readFileSync(nunitoLicenseSource),
+    'The native display font must carry the original Nunito OFL text',
   );
   const browser = readFileSync(join(plugin, app, thirdPartyNoticesFile), 'utf8');
   assert.match(browser, /^## react@\S+ \(MIT\)$/m);
@@ -212,26 +224,83 @@ async function checkPackagedService(plugin: string, scratch: string) {
         throw new Error(`Dashboard exited with ${String(code)} before readiness`);
       }),
     ]);
-    child.send({ type: 'start', ownerLogin, version, remoteHost });
+    child.send({ type: 'start', version });
     const ready = await response;
     assert.equal(ready.type, 'ready', JSON.stringify(ready));
     assert.equal(ready.version, version);
     assert.equal(ready.port, port);
-    assert.notEqual(ready.remotePort, port);
+    assert.equal(ready.remotePort, undefined, 'Native startup must not start a browser share');
+    let nextId = 0;
+    async function call(command: Record<string, string | { operation: string }>) {
+      const id = ++nextId;
+      const result = once(child, 'message', { signal: deadline.signal });
+      child.send({ ...command, id });
+      const [answer] = await result;
+      assert.equal(answer.id, id);
+      return answer as {
+        ok?: boolean;
+        port?: number;
+        result?: { ok: boolean; data: { setupComplete?: boolean } };
+      };
+    }
+    const fresh = await call({ type: 'native', request: { operation: 'bootstrap' } });
+    assert.equal(fresh.result?.ok, true);
+    assert.equal(fresh.result?.data.setupComplete, false);
+    const quotaId = ++nextId;
+    const hostRequest = once(child, 'message', { signal: deadline.signal });
+    child.send({ type: 'native', id: quotaId, request: { operation: 'usage' } });
+    const [read] = await hostRequest;
+    assert.equal(read.type, 'paseo-read');
+    assert.deepEqual(read.request, { kind: 'usage' });
+    const quotaReply = once(child, 'message', { signal: deadline.signal });
+    child.send({
+      type: 'paseo-read-result',
+      id: read.id,
+      ok: true,
+      value: {
+        fetchedAt: new Date().toISOString(),
+        providers: [
+          {
+            providerId: 'codex',
+            status: 'available',
+            windows: [
+              {
+                id: 'weekly',
+                label: 'Weekly',
+                usedPct: 36,
+                resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const [quota] = await quotaReply;
+    assert.equal(quota.id, quotaId);
+    assert.equal(quota.result.ok, true);
+    assert.equal(quota.result.data.providers[0].source, 'paseo');
+    assert.equal(quota.result.data.providers[0].usedPercent, 36);
+    const share = await call({ type: 'attach-remote', ownerLogin, remoteHost });
+    assert.equal(share.ok, true);
+    const remotePort = share.port;
+    assert.ok(remotePort && remotePort !== port);
     const expectedHealth = { status: 'ok', version, schemaVersion: listMigrations().length };
     const local = `http://127.0.0.1:${port}`;
     const signal = deadline.signal;
     const health = await fetch(`${local}/api/health`, { signal });
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), expectedHealth);
-    const protectedHealth = await new Promise<{ status: number | undefined; body: string }>(
-      (done, fail) => {
+    const protectedProbe = (identity?: string) =>
+      new Promise<{ status: number | undefined; body: string }>((done, fail) => {
         const probe = request(
           {
             hostname: '127.0.0.1',
-            port: ready.remotePort,
+            port: remotePort,
             path: '/api/health',
-            headers: { Host: remoteHost, 'Tailscale-User-Login': ownerLogin },
+            headers: {
+              Host: remoteHost,
+              ...(identity ? { 'Tailscale-User-Login': identity } : {}),
+            },
             signal,
           },
           (response) => {
@@ -246,8 +315,9 @@ async function checkPackagedService(plugin: string, scratch: string) {
         );
         probe.once('error', fail);
         probe.end();
-      },
-    );
+      });
+    assert.equal((await protectedProbe()).status, 403);
+    const protectedHealth = await protectedProbe(ownerLogin);
     assert.equal(protectedHealth.status, 200);
     assert.deepEqual(JSON.parse(protectedHealth.body), expectedHealth);
 
@@ -260,6 +330,12 @@ async function checkPackagedService(plugin: string, scratch: string) {
     assert.equal(javascript.status, 200);
     assert.match(javascript.headers.get('content-type') ?? '', /^text\/javascript/);
     await javascript.arrayBuffer();
+
+    assert.equal((await call({ type: 'detach-remote' })).ok, true);
+    assert.equal(
+      (await call({ type: 'native', request: { operation: 'bootstrap' } })).result?.ok,
+      true,
+    );
 
     child.send({ type: 'stop' });
     const [code] = await Promise.race([

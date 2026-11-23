@@ -340,9 +340,11 @@ export interface RoomProps {
   height: number;
   /** The room at the right end of its row draws the building's right wall. */
   edgeRight: boolean;
+  /** Native outlined lettering can measure the exact glyph advances. */
+  staggeredCaptions?: boolean;
 }
 
-export function Room({ room, width, height, edgeRight }: RoomProps) {
+export function Room({ room, width, height, edgeRight, staggeredCaptions }: RoomProps) {
   const seed = seedOf(room.id);
   const stage = planStage(room.characters, room.bench, width);
   const sign = signWidth(width);
@@ -353,7 +355,8 @@ export function Room({ room, width, height, edgeRight }: RoomProps) {
   const free = width - 22 - stage.end;
   const captain = room.characters[0];
   const captainStation = stage.stations[0];
-  const staggered = captionsCollide(room.characters, stage.stations, SMALL_SIZE);
+  const staggered =
+    staggeredCaptions ?? captionsCollide(room.characters, stage.stations, SMALL_SIZE);
   const shelfX = SIGN.x + sign + 80;
 
   return (
@@ -471,10 +474,18 @@ export function Room({ room, width, height, edgeRight }: RoomProps) {
           fontSize={TITLE_SIZE}
           fontWeight="600"
           className="fill-ink"
+          data-hq-max-width={signText}
         >
           {fit(room.name, signText, TITLE_SIZE)}
         </text>
-        <text x={SIGN.x + 12} y={SIGN.y + 36} fontSize={SMALL_SIZE} className="fill-ink-muted">
+        <text
+          x={SIGN.x + 12}
+          y={SIGN.y + 36}
+          fontSize={SMALL_SIZE}
+          className="fill-ink-muted"
+          data-hq-max-width={signText}
+          data-hq-priority={room.detail}
+        >
           {fitSecondLine(room.place, room.detail, signText, SMALL_SIZE)}
         </text>
         {room.characters.map((c, i) => {

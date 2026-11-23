@@ -50,6 +50,7 @@ export interface HqServiceOptions {
   };
   now: () => number;
   logger: Logger;
+  includePaseoAgentIds?: boolean | undefined;
   /** What Claude Code's hooks have reported (the opt-in switch). Without it the roster is built from the three feeds alone. */
   hooks?: HookStore | undefined;
   /** True until first-launch Setup has been finished: nothing starts and every feed says `setup_incomplete`. */
@@ -220,6 +221,7 @@ export function createHqService(options: HqServiceOptions): HqService & { stop()
           return response(statuses, [], false);
         const roster = buildRoster({
           agents: paseo?.agents ?? [],
+          includePaseoAgentIds: options.includePaseoAgentIds,
           transcripts,
           now: now(),
           repoOf: repoFor,

@@ -10,17 +10,17 @@ export function overviewRoutes(deps: {
   now: () => number;
   timezone: string;
   claude?: ClaudeAccounts | undefined;
+  paseoManaged?: boolean;
 }): Hono<HttpEnv> {
   const app = new Hono<HttpEnv>();
-  app.get('/api/overview', (c) =>
-    c.json(
-      buildOverview(
-        deps.db,
-        c.req.query(),
-        { nowMs: deps.now(), timezone: deps.timezone },
-        deps.claude?.planStatus(),
-      ),
-    ),
-  );
+  app.get('/api/overview', (c) => {
+    const answer = buildOverview(
+      deps.db,
+      c.req.query(),
+      { nowMs: deps.now(), timezone: deps.timezone },
+      deps.claude?.planStatus(),
+    );
+    return c.json(deps.paseoManaged ? { ...answer, accounts: [] } : answer);
+  });
   return app;
 }

@@ -9,10 +9,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { ScrollView, Text } from 'react-native';
 import { isTailnetHttpsOrigin } from '../shared/dashboard.ts';
 import { launchDashboard, runtimeInstall } from '../shared/rpc.ts';
-import type { LaunchRequests } from './launch.ts';
+import type { DashboardDestination, LaunchRequests } from './launch.ts';
 
 interface LauncherScreenProps extends paseoClient.PluginScreenProps {
   requests: LaunchRequests;
+  destination?: DashboardDestination;
 }
 
 export function LauncherScreen({
@@ -21,6 +22,7 @@ export function LauncherScreen({
   navigation,
   params,
   requests,
+  destination,
   theme,
 }: LauncherScreenProps) {
   const launch = paseoClient.useRpc(launchDashboard);
@@ -116,12 +118,14 @@ export function LauncherScreen({
           );
           return;
         }
+        const target =
+          destination === 'sources' ? new URL('/sources', result.url).href : result.url;
         if (browserNeedsClick && externalOpen) {
           // The RPC can outlive a browser's user activation. Offer a fresh click to open it.
-          setPrivateUrl(result.url);
+          setPrivateUrl(target);
           setStatus('Open the dashboard in your browser or copy the private address.');
         } else {
-          await openInBrowser(result.url);
+          await openInBrowser(target);
         }
       } catch {
         if (active.current)
@@ -131,19 +135,21 @@ export function LauncherScreen({
         if (active.current) setBusy(false);
       }
     },
-    [launch, browserNeedsClick, externalOpen, openInBrowser, waitForRuntime],
+    [launch, browserNeedsClick, destination, externalOpen, openInBrowser, waitForRuntime],
   );
 
-  // A restored route can contain an old launch ID. Only a fresh sidebar click starts the service.
+  // Only an explicit browser action issues a launch ID.
   useEffect(() => {
     let cancelled = false;
     queueMicrotask(() => {
-      if (!cancelled && requests.take(params.launch, host.id)) void open();
+      if (cancelled) return;
+      const request = requests.take(params.launch, host.id);
+      if (request && request.destination === destination) void open();
     });
     return () => {
       cancelled = true;
     };
-  }, [params.launch, host.id, requests, open]);
+  }, [destination, params.launch, host.id, requests, open]);
 
   const textStyle = { color: theme.colors.foreground, paddingHorizontal: 16, paddingVertical: 12 };
   return (

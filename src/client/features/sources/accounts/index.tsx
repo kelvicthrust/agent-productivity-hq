@@ -1,4 +1,5 @@
 import { SOURCES_COPY } from '../../../lib/copy';
+import { useBootstrap } from '../../../lib/bootstrap';
 import { GithubConnection } from '../github/GithubConnection';
 import { useGithub } from '../github/data';
 import { ChatgptRow } from './ChatgptRow';
@@ -16,6 +17,7 @@ import { useAccounts } from './data';
 export function AccountsSection() {
   const { sources, chatgpt, claude } = useAccounts();
   const { card: github } = useGithub();
+  const bootstrap = useBootstrap().data;
   // A process that serves none of the three accounts has nothing to set up here.
   if (sources.data && !chatgpt && !claude && !github) return null;
   return (
@@ -41,7 +43,9 @@ export function AccountsSection() {
         <ul className="m-0 flex list-none flex-col p-0">
           <GithubConnection />
           {chatgpt && <ChatgptRow card={chatgpt} />}
-          {claude && <ClaudeRow card={claude} />}
+          {claude && bootstrap && (!bootstrap.paseoManaged || claude.captureHealth?.recorded) && (
+            <ClaudeRow card={claude} removalOnly={bootstrap.paseoManaged === true} />
+          )}
         </ul>
       )}
       <p className="text-caption text-ink-muted">{SOURCES_COPY.accounts.footnote}</p>

@@ -122,6 +122,8 @@ interface Entity {
 export interface RosterInput {
   /** Paseo's agents. */
   agents: readonly LiveAgent[];
+  /** Whether the selected daemon can navigate to matched Paseo agents. */
+  includePaseoAgentIds?: boolean | undefined;
   /** The sessions the Claude Code and Codex feeds see. */
   transcripts?: readonly TranscriptAgent[] | undefined;
   now: number;
@@ -590,6 +592,7 @@ export function buildRoster(input: RosterInput): Roster {
       (paseo === null && transcript === null && hook?.kind === 'start' ? hook.at : null);
     return {
       id: idOf.get(entity) ?? keyId(entity.sortKey),
+      ...(input.includePaseoAgentIds && paseo ? { paseoAgentId: paseo.id } : {}),
       provider,
       kind: hasClaim ? 'child' : 'root',
       parentId: linked ? (idOf.get(parent) ?? null) : null,

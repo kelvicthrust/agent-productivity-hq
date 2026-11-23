@@ -17,6 +17,7 @@ import {
   HqResponse,
 } from './hq.ts';
 import { LinkHealth } from './link-health.ts';
+import { PaseoQuotaResponse } from './paseo-quota.ts';
 import { EvidenceItem, PullRequest } from './prs.ts';
 import { Repo } from './repos.ts';
 import { Bucket } from './series.ts';
@@ -48,6 +49,7 @@ export const COMPONENTS = {
   HqAgent,
   HqFeed,
   HqResponse,
+  PaseoQuotaResponse,
   ClaudeHooksStatus,
   ClaudeHooksFile,
   ClaudeHooksPlan,

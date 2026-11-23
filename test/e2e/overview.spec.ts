@@ -86,6 +86,20 @@ const FAIL_BODY = JSON.stringify({
   error: { code: 'internal', message: 'Something went wrong.', retryable: false },
 });
 
+test('Overview explains that imported pull requests can appear before session links', async ({
+  page,
+}) => {
+  const world = await openWorld(page);
+  world.db.exec("DELETE FROM app_meta WHERE key = 'links_last_rebuilt_at'");
+  await page.goto(ORIGIN + '/');
+  await expect(tile(page, 'Merged PRs')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Links between pull requests and agent sessions haven’t been calculated yet. Imported pull requests can still appear.',
+    ),
+  ).toBeVisible();
+});
+
 test('Overview and Delivery show cached link health after reload and clear it after rebuild', async ({
   page,
 }) => {

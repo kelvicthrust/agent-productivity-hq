@@ -15,7 +15,7 @@ import {
 } from './collectors/discovery.ts';
 import { createClaudeFeed } from './collectors/live/claudeFeed.ts';
 import { createCodexFeed } from './collectors/live/codexFeed.ts';
-import { createChatgptAdapter } from './collectors/chatgpt/collector.ts';
+import { checkCodexQuota, createChatgptAdapter } from './collectors/chatgpt/collector.ts';
 import { limitsOf as legacyClaudeLimits } from './collectors/claudeAccount/collector.ts';
 import type { LaunchAppServer } from './collectors/chatgpt/ports.ts';
 import type { GithubDeps } from './collectors/github/ports.ts';
@@ -32,7 +32,7 @@ import type { SourceAdapter } from './collectors/types.ts';
 import { checkIntegrity, openDatabase, type Db } from './db/open.ts';
 import { MigrationError, NewerSchemaError, migrate } from './db/migrate.ts';
 import { getMeta, setMeta, setMetaIfMissing } from './db/queries/meta.ts';
-import { retainLegacyClaudeSnapshot } from './db/queries/accounts.ts';
+import { readChatgptConnection, retainLegacyClaudeSnapshot } from './db/queries/accounts.ts';
 import { createClaudeCapture } from './integrations/claudeCapture/index.ts';
 import {
   createClaudeHooks,
@@ -60,6 +60,7 @@ import { createClaudeAccounts, type ClaudePlanLimitsPorts } from './services/cla
 import { createHookStore, type HookStore } from './services/hq/hookStore.ts';
 import { createHqService, type HqService } from './services/hq/service.ts';
 import { recomputeLinks } from './services/links.ts';
+import { createPaseoQuotaService } from './services/paseo-quota.ts';
 import { createResetService } from './services/reset.ts';
 import { runRetention } from './services/retention.ts';
 import { delayUntilLocalTime, startScheduler, type Scheduler } from './services/scheduler.ts';
@@ -172,6 +173,8 @@ export interface BootDeps {
   logger?: Logger;
   listen?: ListenFn;
   version?: string;
+  /** A managed child must own the data and finish normal startup before reporting readiness. */
+  managed?: boolean;
   /** Also bind an ephemeral loopback backend for Tailscale Serve, with its own request guards. */
   remote?: TailscaleAccess;
   /** The built SPA; `null` serves the API only. Default: config.staticDir. */
@@ -208,6 +211,8 @@ export interface BootDeps {
    * never a socket; the preview command gives none and runs its scripted Paseo source instead.
    */
   paseo?: PaseoAdapterOptions;
+  /** Reads the selected daemon's usage reports for a Paseo-managed HQ. */
+  paseoUsage?: () => Promise<unknown>;
   /**
    * The live HQ roster's seams. HQ has a Paseo feed where `paseo` is given (a process whose Paseo source is on): it connects to the same
    * daemon address, on demand, while someone has the HQ page open. `open` makes the live client (the real SDK by default; tests give
@@ -243,6 +248,8 @@ export interface RunningServer {
   app: Hono<HttpEnv>;
   db: Db | null;
   remotePort?: number;
+  attachRemote?(access: TailscaleAccess): Promise<{ port: number; close(): Promise<void> }>;
+  trackManagedOperation?(operation: Promise<void>): void;
   /**
    * Stops accepting, waits at most the shutdown timeout for requests, closes HQ (awaited to its end, before the database is closed),
    * closes the database and releases the lock.
@@ -285,7 +292,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
     // and this process says so and exits (TECH › Failure modes). Only when this process's own port is a different one and is free
     // does it serve the already-running page, and it still never opens the database.
     const holder = lock.holder;
-    if (deps.remote || holder === null || holder.port === config.port)
+    if (deps.managed || deps.remote || holder === null || holder.port === config.port)
       throw new AlreadyRunningError(holder?.port ?? null, config.lockPath);
     const pointer = createAlreadyRunningApp({
       port: config.port,
@@ -330,7 +337,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   const hookToken = newHookToken();
   let acceptsClaudeHookEvents = false;
   let requestChatgptRead: () => void = () => undefined;
-  const listeners: ListeningServer[] = [];
+  const listeners = new Set<ListeningServer>();
 
   try {
     const integrity = checkIntegrity(config.dbPath);
@@ -408,7 +415,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
     }
 
     let app: Hono<HttpEnv>;
-    let remoteApp: Hono<HttpEnv> | undefined;
+    let appDeps: AppDeps | undefined;
     const remote = deps.remote;
     if (db && !recovery) {
       setMetaIfMissing(db, 'install_id', randomUUID());
@@ -501,6 +508,18 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
               ...(claudeBoot.planLimits ? { planLimits: claudeBoot.planLimits } : {}),
             })
           : null;
+      const chatgptBoot = deps.chatgpt;
+      const paseoQuota = deps.paseoUsage
+        ? createPaseoQuotaService({
+            listUsage: deps.paseoUsage,
+            now,
+            checkCodex: () =>
+              chatgptBoot && !readChatgptConnection(dbForTasks).disconnected
+                ? checkCodexQuota({ ...chatgptBoot, clientVersion: version }, now)
+                : Promise.resolve(null),
+            checkClaude: async () => (await claude?.check())?.account.planLimits?.report ?? null,
+          })
+        : undefined;
       // Claude Code's hooks (the owner's opt-in switch): the installer exists where the Claude Code integration does, and what the hooks
       // report is held in memory beside the roster whether or not anyone has HQ open.
       claudeHooks = claudeBoot
@@ -559,6 +578,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
               logger,
               hooks: hookStore,
               waitsForSetup,
+              includePaseoAgentIds: deps.paseoUsage !== undefined,
               labelsOf: (keys) => readLiveSessionLabels(dbForTasks, keys),
               ...(deps.hq?.idleMs === undefined ? {} : { idleMs: deps.hq.idleMs }),
               ...(deps.hq?.coldWaitMs === undefined ? {} : { coldWaitMs: deps.hq.coldWaitMs }),
@@ -573,7 +593,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         // Stage 2 of a run: names and parentage from Paseo, after Codex and Claude Code have imported their sessions.
         ...(deps.paseo ? [createPaseoAdapter(deps.paseo)] : []),
         // Stage 4 of a run: ChatGPT's account report and the Codex session names, after everything local has been imported.
-        ...(deps.chatgpt
+        ...(deps.chatgpt && !paseoQuota
           ? [
               createChatgptAdapter({
                 launch: deps.chatgpt.launch,
@@ -655,6 +675,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         clearRuntime: async () => {
           await hq?.stop();
           hookStore.clear();
+          paseoQuota?.clear();
           if (!deps.logger) clearLogFiles(config.logDir);
         },
       });
@@ -669,7 +690,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       };
       /** A ChatGPT sign-in finished here: read the account now. One that is going now is followed by one more. */
       requestChatgptRead = (): void => {
-        if (closing || reset.running()) return;
+        if (closing || reset.running() || paseoQuota) return;
         const request = { trigger: 'manual', sources: ['chatgpt_account'] } as const;
         if (activeRunner.start(request).started) return;
         void activeRunner.idle().then(() => {
@@ -723,7 +744,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         };
       }
 
-      const appDeps: AppDeps = {
+      appDeps = {
         db,
         logger,
         port: config.port,
@@ -738,6 +759,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         github: github ?? undefined,
         chatgpt: chatgpt ?? undefined,
         claude: claude ?? undefined,
+        paseoQuota,
         hq: hq ?? undefined,
         claudeHooks: claudeHooks ?? undefined,
         hookIngest: claudeHooks
@@ -754,15 +776,18 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
             : undefined,
       };
       app = createApp(appDeps);
-      if (remote) remoteApp = createApp({ ...appDeps, remote });
     } else {
-      if (remote) throw new DatabaseRecoveryError(recovery!);
+      if (deps.managed || remote) throw new DatabaseRecoveryError(recovery!);
       app = createRecoveryApp({ port: config.port, info: recovery!, logger });
       step('recovery', { reason: recovery!.reason });
     }
 
-    const requests = new Set<Promise<Response>>();
-    let accepting = !remote;
+    const requests = new Set<Promise<unknown>>();
+    function track<T>(request: Promise<T>): Promise<T> {
+      requests.add(request);
+      return request.finally(() => requests.delete(request));
+    }
+    let accepting = !(deps.managed || remote);
     const bind = async (target: Hono<HttpEnv>, port: number) => {
       const dispatch = target.fetch;
       const listener = await (deps.listen ?? nodeListen)({
@@ -771,18 +796,12 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
             return new Response('Agent Productivity HQ is starting.', { status: 503 });
           if (closing)
             return new Response('Agent Productivity HQ is shutting down.', { status: 503 });
-          const response = Promise.resolve(dispatch(request));
-          requests.add(response);
-          try {
-            return await response;
-          } finally {
-            requests.delete(response);
-          }
+          return track(Promise.resolve(dispatch(request)));
         },
         port,
         host: config.host,
       });
-      listeners.push(listener);
+      listeners.add(listener);
       return listener;
     };
     try {
@@ -793,30 +812,45 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       throw error;
     }
 
-    let remotePort: number | undefined;
-    if (remote && remoteApp) {
-      const remoteListener = await bind(remoteApp, 0);
-      const address = remoteListener.address?.();
-      if (!address || typeof address === 'string' || !address.port) {
-        throw new Error(
-          'Agent Productivity HQ could not bind a loopback port for Tailscale Serve.',
-        );
-      }
-      remotePort = address.port;
-      // Both sockets are bound. Check each app's guarded database health route before publishing readiness.
-      const health = await Promise.all([
-        app.request('/api/health', { headers: { host: `${config.host}:${config.port}` } }),
-        remoteApp.request('/api/health', {
-          headers: { host: remote.host, [TAILSCALE_LOGIN_HEADER]: remote.ownerLogin },
-        }),
-      ]);
-      if (health.some((response) => !response.ok)) {
+    const assertHealth = async (target: Hono<HttpEnv>, headers: Record<string, string>) => {
+      if (!(await target.request('/api/health', { headers })).ok) {
         throw new Error(
           'An Agent Productivity HQ listener did not pass its startup health check. Check its local log.',
         );
       }
-      accepting = true;
+    };
+    const attachRemote = async (access: TailscaleAccess) => {
+      if (closing || !appDeps) throw new Error('The Agent Productivity HQ service is unavailable.');
+      const remoteApp = createApp({ ...appDeps, remote: access });
+      await assertHealth(remoteApp, {
+        host: access.host,
+        [TAILSCALE_LOGIN_HEADER]: access.ownerLogin,
+      });
+      if (closing) throw new Error('The Agent Productivity HQ service is unavailable.');
+      const listener = await bind(remoteApp, 0);
+      let closed: Promise<void> | undefined;
+      const close = () =>
+        (closed ??= new Promise<void>((done) => {
+          listener.close(() => {
+            listeners.delete(listener);
+            done();
+          });
+          listener.closeAllConnections?.();
+        }));
+      const address = listener.address?.();
+      if (closing || !address || typeof address === 'string' || !address.port) {
+        await close();
+        throw new Error(
+          'Agent Productivity HQ could not bind a loopback port for Tailscale Serve.',
+        );
+      }
+      return { port: address.port, close };
+    };
+    if (deps.managed || remote) {
+      await assertHealth(app, { host: `${config.host}:${config.port}` });
     }
+    const remotePort = remote ? (await attachRemote(remote)).port : undefined;
+    accepting = true;
     // The hook script finds this server through the registry, which is written once the server listens and removed at shutdown.
     await claudeHooks?.listening({ port: config.port, token: hookToken });
     step('listen', {
@@ -843,7 +877,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         // The hook registry goes first, so a hook that runs now finds no server; its events are dropped with the rest.
         const hooksClosed = claudeHooks?.close();
         hookStore.clear();
-        const closed = listeners.map((listener) => {
+        const closed = [...listeners].map((listener) => {
           const result = new Promise<void>((done) => listener.close(() => done()));
           listener.closeIdleConnections?.();
           return result;
@@ -877,6 +911,14 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       app,
       db,
       ...(remotePort === undefined ? {} : { remotePort }),
+      ...(deps.managed
+        ? {
+            attachRemote,
+            trackManagedOperation: (operation: Promise<void>) => {
+              void track(operation).catch(() => undefined);
+            },
+          }
+        : {}),
       shutdown,
     };
   } catch (error) {
@@ -886,7 +928,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
     const hooksClosed = claudeHooks?.close();
     hookStore.clear();
     await Promise.all(
-      listeners.map((listener) => {
+      [...listeners].map((listener) => {
         const closed = new Promise<void>((done) => listener.close(() => done()));
         listener.closeAllConnections?.();
         return closed;

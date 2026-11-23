@@ -22,6 +22,7 @@ import type { Sleep } from '../../../src/server/lib/sleep.ts';
 import { createChatgptAccounts } from '../../../src/server/services/accounts.ts';
 import { createGithubAccounts } from '../../../src/server/services/accounts-github.ts';
 import { createClaudeAccounts } from '../../../src/server/services/claude-account.ts';
+import { createPaseoQuotaService } from '../../../src/server/services/paseo-quota.ts';
 import { loadScenario, scriptedAppServer, withMethods } from '../../collectors/chatgpt/scripted.ts';
 import type { FakeGithub, MemoryKeyring } from '../../fixtures/github/scripted-github.ts';
 import { createScriptedGithub } from '../../fixtures/github/world.ts';
@@ -73,6 +74,7 @@ export interface WorldOptions {
    * scripted one that only flips in memory, starting in this state. Unset: no Claude Code integration, so the switch is unavailable.
    */
   hooks?: ScriptedHooksScenario;
+  paseoUsage?: unknown;
 }
 
 export interface World {
@@ -258,6 +260,15 @@ export function createWorld(options: WorldOptions = {}): World {
   });
   const hq = options.hq ? createScriptedHq(rosterFor(options.hq, now)) : null;
   const hooks = options.hooks ? createScriptedHooks(options.hooks) : null;
+  const paseoQuota =
+    options.paseoUsage === undefined
+      ? undefined
+      : createPaseoQuotaService({
+          listUsage: async () => options.paseoUsage,
+          checkCodex: async () => null,
+          checkClaude: async () => (await claude.check()).account.planLimits?.report ?? null,
+          now: () => now,
+        });
   const writeClaudeSettings = (value: unknown) => {
     writeFileSync(capture.settingsPath, `${JSON.stringify(value, null, 2)}\n`);
   };
@@ -274,6 +285,7 @@ export function createWorld(options: WorldOptions = {}): World {
     github: accounts,
     chatgpt,
     claude,
+    paseoQuota,
     ...(hq ? { hq } : {}),
     ...(hooks ? { claudeHooks: hooks } : {}),
     repos: {

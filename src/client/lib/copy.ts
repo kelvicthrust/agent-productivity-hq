@@ -151,7 +151,8 @@ export const COVERAGE_COPY = {
 const LINK_HEALTH_COPY: Record<LinkHealth['state'], string | null> = {
   fresh: null,
   stale: 'Pull request links are out of date. Showing the last successful rebuild.',
-  unavailable: 'Pull request links are unavailable until a rebuild succeeds.',
+  unavailable:
+    'Links between pull requests and agent sessions haven’t been calculated yet. Imported pull requests can still appear.',
 };
 
 export const linkHealthNotice = (health: LinkHealth | undefined): string | null =>

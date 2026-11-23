@@ -60,3 +60,10 @@ test('a newer sidebar click supersedes the pending route request', () => {
   assert.equal(requests.take(previous, serverId), undefined);
   assert.deepEqual(requests.take(current, serverId), { id: current, hostId: serverId });
 });
+
+test('an explicit owner settings launch keeps its fixed destination on the same host', () => {
+  const requests = createLaunchRequests();
+  const id = requests.issue(serverId, 'sources');
+  assert.deepEqual(requests.take(id, serverId), { id, hostId: serverId, destination: 'sources' });
+  assert.equal(requests.take(id, serverId), undefined);
+});

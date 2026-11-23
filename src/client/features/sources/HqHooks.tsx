@@ -23,7 +23,7 @@ export function HqHooks() {
         <p className="mt-0.5 text-caption text-ink-muted">{HOOKS_COPY.scope}</p>
       </div>
       {state.data !== undefined ? (
-        <ClaudeHooksSwitch state={state.data} />
+        <ClaudeHooksSwitch state={state.data} quickToggle />
       ) : state.isError ? (
         <p role="alert" className="text-copy text-danger">
           {HOOKS_COPY.stateFailed}

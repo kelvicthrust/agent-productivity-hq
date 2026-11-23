@@ -24,27 +24,60 @@ test('receives the matching IPC handshake from a live child and rejects a differ
   await writeFile(
     entry,
     `
-    process.on('message', ({ type, ownerLogin, remoteHost, version }) => {
-      if (type !== 'start' || ownerLogin !== ${JSON.stringify(ownerLogin)} || remoteHost !== ${JSON.stringify(authority)}) process.exit(2);
-      if (version === '1.2.5') {
-        process.send({ type: 'error', code: 'port-in-use', message: 'Sensitive local process details' });
-      } else {
-        process.send({ type: 'ready', version: '1.2.3', port: 4317, remotePort: 53270 });
+    let read;
+    let first;
+    process.on('message', ({ type, id, ownerLogin, remoteHost, version, request, ...response }) => {
+      if (type === 'start') {
+        if (ownerLogin !== undefined || remoteHost !== undefined) process.exit(2);
+        if (version === '1.2.5') {
+          process.send({ type: 'error', code: 'port-in-use', message: 'Sensitive local process details' });
+        } else {
+          process.send({ type: 'paseo-read', id: 1, request: { kind: 'usage' } });
+        }
       }
+      if (type === 'paseo-read-result' && id === 1) {
+        read = response;
+        process.send({ type: 'ready', version: '1.2.3', port: 4317 });
+      }
+      if (type === 'native') {
+        const result = { type: 'native-result', id, result: { ok: true, data: { request, read } } };
+        if (!first) {
+          first = result;
+          return;
+        }
+        process.send({ type: 'remote-result', id: first.id, ok: false });
+        process.send({ ...first, id: 9876 });
+        process.send(result);
+        process.send(first);
+      }
+      if (type === 'attach-remote') {
+        if (ownerLogin !== ${JSON.stringify(ownerLogin)} || remoteHost !== ${JSON.stringify(authority)}) process.exit(2);
+        process.send({ type: 'remote-result', id, ok: true, port: 53270 });
+      }
+      if (type === 'detach-remote') process.send({ type: 'remote-result', id, ok: true });
     });
   `,
   );
   const paths = { directory, version: '1.2.3', node: process.execPath, entry, serveSession };
   const host = { authority, ownerLogin, addresses: ['100.90.0.2'] };
   const { signal } = new AbortController();
-  const child = await startDashboard(paths, host, 4317, signal);
+  const child = await startDashboard(paths, 4317, signal, async ({ kind }) => ({ kind }));
   t.after(() => child.stop());
   assert.equal(child.alive(), true);
-  assert.equal(child.remotePort, 53270);
+  const requests = [{ operation: 'bootstrap' }, { operation: 'roster' }] as const;
+  assert.deepEqual(
+    await Promise.all(requests.map((request) => child.native(request))),
+    requests.map((request) => ({
+      ok: true,
+      data: { request, read: { ok: true, value: { kind: 'usage' } } },
+    })),
+  );
+  assert.equal(await child.attachRemote(host), 53270);
+  await child.detachRemote();
   await child.stop();
   assert.equal(child.alive(), false);
-  await assert.rejects(startDashboard({ ...paths, version: '1.2.4' }, host, 4317, signal));
-  await assert.rejects(startDashboard({ ...paths, version: '1.2.5' }, host, 4317, signal), {
+  await assert.rejects(startDashboard({ ...paths, version: '1.2.4' }, 4317, signal));
+  await assert.rejects(startDashboard({ ...paths, version: '1.2.5' }, 4317, signal), {
     message: /The local dashboard port is already in use/,
   });
 });

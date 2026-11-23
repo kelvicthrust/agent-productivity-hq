@@ -1,5 +1,6 @@
 import { Button } from '@astryxdesign/core/Button';
-import { useId, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useId, useRef, useState } from 'react';
 import type {
   ClaudeHooksAction,
   ClaudeHooksFileReason,
@@ -10,15 +11,14 @@ import type {
 import { ApiRequestError } from '../lib/api';
 import { useClaudeHooksPreview, useClaudeHooksSwitch } from '../lib/hq';
 import { HOOKS_COPY } from '../lib/hooksCopy';
+import { queryKeys } from '../lib/queryClient';
 import { Icon } from './Icon';
 
 // The switch that has Claude Code tell HQ exactly when an agent needs you (data-and-sources › Claude Code hooks). The control itself, with
 // no heading or frame of its own: what it is for, what it is now, a "What will change" disclosure read from the server's preview, and
 // the buttons. It lives on the Sources screen (a card with the heading) and, once, in the dialog HQ opens the first time (the dialog's
-// title is the heading). Nothing is changed until the owner has been shown the plan of the ACTION they are confirming (turn on, repair or turn
-// off: each has its own file list and its own fingerprint) AND presses its button again: the first press, or a press of a different
-// action from the one on screen, only opens and reads that action's plan. The change carries that plan's fingerprint, so the server
-// writes only what was shown. The result and any refusal are said in fixed words.
+// title is the heading). Sources applies on and off with one press after checking a fresh plan.
+// First-run and repair still ask the owner to review the action's plan. Every write carries its fingerprint.
 
 const COPY = HOOKS_COPY;
 /** A press target of 44px on a phone, and a busy button that keeps the focus (aria-disabled, not `disabled`). */
@@ -119,29 +119,41 @@ function Preview({
   );
 }
 
-export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
+export function ClaudeHooksSwitch({
+  state,
+  quickToggle = false,
+}: {
+  state: ExactPrompts;
+  quickToggle?: boolean;
+}) {
   const regionId = useId();
+  const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [checking, setChecking] = useState<Action | null>(null);
+  const checkingRef = useRef(false);
+  const [checkProblem, setCheckProblem] = useState<string | null>(null);
   // The action whose plan is on screen: what the owner pressed, or the state's first action when they only opened the disclosure.
   const [reviewed, setReviewed] = useState<Action | null>(null);
   const preview = useClaudeHooksPreview(open);
   const change = useClaudeHooksSwitch();
 
   const primary = primaryOf(state);
-  const busy = change.isPending;
+  const busy = checking !== null || change.isPending;
   // A plan the owner can confirm: it is open on screen, it was read successfully and is not being read again, it describes the state
   // the page is in now (another tab or the app itself may have changed it since), and it is the plan of the action pressed.
   const shown = open && !preview.isError && !preview.isFetching ? preview.data : undefined;
   const current = shown !== undefined && shown.state === state ? shown : undefined;
   const onScreen = reviewed ?? primary;
   const planOnScreen = onScreen === null ? undefined : preview.data?.plans[onScreen];
-  const send = (action: Action) => {
-    if (busy) return;
+  async function send(action: Action) {
+    if (busy || checkingRef.current) return;
+    const quick = quickToggle && (action === 'on' || (action === 'off' && state !== 'off'));
     setResult(null);
-    const plan = reviewed === action ? current?.plans[action] : undefined;
-    if (plan === undefined) {
+    setCheckProblem(null);
+    let plan = reviewed === action ? current?.plans[action] : undefined;
+    if (!quick && plan === undefined) {
       // Nothing is written by this press: it opens this action's plan, and reads it again if it was not this one or not good.
       setReviewed(action);
       setReviewing(true);
@@ -150,34 +162,63 @@ export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
       return;
     }
     setReviewing(false);
-    change.mutate(
-      { enabled: action !== 'off', preview: plan.preview },
-      {
-        onSuccess: (status) => {
-          // The plan that was confirmed is spent: the next press, of any button, reads the plan of its own action first.
-          setReviewed(null);
-          setResult(
-            action === 'off' && status.leftover !== null
-              ? COPY.done.offLeftover(status.leftover.folder)
-              : COPY.done[action],
-          );
+    if (quick) {
+      checkingRef.current = true;
+      setChecking(action);
+      change.reset();
+    }
+    try {
+      if (quick) {
+        const checked = await preview.refetch({ cancelRefetch: false });
+        if (checked.isError) {
+          setCheckProblem(COPY.checkFailed);
+          return;
+        }
+        plan = checked.data?.state === state ? checked.data.plans[action] : undefined;
+        if (!plan) {
+          void client.invalidateQueries({ queryKey: queryKeys.hq });
+          setCheckProblem(COPY.planChanged);
+          return;
+        }
+      }
+      if (!plan) return;
+      await change.mutateAsync(
+        { enabled: action !== 'off', preview: plan.preview },
+        {
+          onSuccess: (status) => {
+            // The plan that was confirmed is spent: the next press, of any button, reads the plan of its own action first.
+            setReviewed(null);
+            setResult(
+              action === 'off' && status.leftover !== null
+                ? COPY.done.offLeftover(status.leftover.folder)
+                : COPY.done[action],
+            );
+          },
+          onError: () => {
+            if (!quick) setOpen(true);
+          },
         },
-        onError: () => setOpen(true),
-      },
-    );
-  };
+      );
+    } catch {
+      // The mutation exposes its refusal below.
+    } finally {
+      if (quick) {
+        checkingRef.current = false;
+        setChecking(null);
+      }
+    }
+  }
   // Once the plans have been read, a state that offers no repair (the Node the hook would run is gone; a path HQ cannot quote) shows no
   // button for it: a press that can never be confirmed would only say "read what will change" again.
   const repairNotOffered =
     preview.data !== undefined &&
     preview.data.state === state &&
     preview.data.plans.repair === undefined;
-  const pendingLabel =
-    change.variables?.enabled === false
-      ? COPY.turningOff
-      : primary === 'repair'
-        ? COPY.repairing
-        : COPY.turningOn;
+  const pendingLabel = (checking ? checking === 'off' : change.variables?.enabled === false)
+    ? COPY.turningOff
+    : primary === 'repair'
+      ? COPY.repairing
+      : COPY.turningOn;
   const said = busy ? pendingLabel : (result ?? (reviewing ? COPY.reviewFirst : null));
   const reasonNote =
     preview.data !== undefined &&
@@ -187,11 +228,12 @@ export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
       ? COPY.reasonNote(preview.data.reason, preview.data.leftover?.folder)
       : null;
   const refusal =
-    change.isError && change.error instanceof ApiRequestError && change.error.message !== ''
+    checkProblem ??
+    (change.isError && change.error instanceof ApiRequestError && change.error.message !== ''
       ? change.error.message
       : change.isError
         ? COPY.failed
-        : null;
+        : null);
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -226,7 +268,7 @@ export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
             className={BUTTON}
             aria-busy={busy || undefined}
             aria-disabled={busy || undefined}
-            onClick={() => send('on')}
+            onClick={() => void send('on')}
           />
         )}
         {primary === 'repair' && !repairNotOffered && (
@@ -237,7 +279,7 @@ export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
             className={BUTTON}
             aria-busy={busy || undefined}
             aria-disabled={busy || undefined}
-            onClick={() => send('repair')}
+            onClick={() => void send('repair')}
           />
         )}
         {(primary === 'off' ||
@@ -245,18 +287,18 @@ export function ClaudeHooksSwitch({ state }: { state: ExactPrompts }) {
           (state === 'off' && preview.data?.plans.off !== undefined)) && (
           <Button
             label={
-              busy && change.variables?.enabled === false
+              busy && (checking === 'off' || change.variables?.enabled === false)
                 ? COPY.turningOff
                 : state === 'off'
                   ? COPY.removeFiles
                   : COPY.turnOff
             }
             size="sm"
-            variant="secondary"
+            variant="destructive"
             className={BUTTON}
             aria-busy={busy || undefined}
             aria-disabled={busy || undefined}
-            onClick={() => send('off')}
+            onClick={() => void send('off')}
           />
         )}
       </div>

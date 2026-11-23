@@ -1,3 +1,9 @@
+import type {
+  NativeRequest,
+  NativeResult,
+  NativeRuntimeInstallStatus,
+  PaseoRead,
+} from '../shared/native.ts';
 import type { DashboardLaunchResult, RuntimeInstallStatus } from '../shared/rpc.ts';
 import { dashboardUnavailable, LaunchError, routeConflict, runtimeInstalling } from './errors.ts';
 import {
@@ -17,8 +23,11 @@ import {
   type TailnetHost,
 } from './tailscale.ts';
 
-interface LaunchInputs {
+interface NativeInputs {
   directory: string | undefined;
+}
+
+interface LaunchInputs extends NativeInputs {
   legacyUrl: string;
 }
 
@@ -47,161 +56,294 @@ const host = {
   },
 };
 
-interface RunningDashboard {
-  service: DashboardProcess;
+interface BrowserRoute {
   serve: OwnedProcess;
   tailnet: TailnetHost;
+  remotePort: number;
+  session: string;
+}
+
+interface RunningDashboard {
+  service: DashboardProcess;
   runtime: RuntimePaths;
-  serveSession: string;
+  lifetime: AbortController;
+  route?: BrowserRoute;
+  routeCleanup?: Promise<void>;
+}
+
+const failure = (error: unknown) =>
+  (error instanceof LaunchError ? error : dashboardUnavailable()).result();
+
+function sameService(running: RunningDashboard, runtime: RuntimePaths, port: number): boolean {
+  return (
+    running.service.alive() &&
+    running.service.port === port &&
+    running.runtime.directory === runtime.directory &&
+    running.runtime.version === runtime.version &&
+    running.runtime.node === runtime.node
+  );
 }
 
 export function createDashboardLauncher(deps: typeof host = host) {
   const lifetime = new AbortController();
+  const { signal } = lifetime;
   let active: RunningDashboard | undefined;
-  let cleanup: Promise<void> | undefined;
-  let pending: Promise<DashboardLaunchResult> | undefined;
+  let serviceCleanup: Promise<void> | undefined;
+  let pendingService: Promise<RunningDashboard> | undefined;
+  let pendingBrowser: Promise<DashboardLaunchResult> | undefined;
   let pendingInstall: Promise<void> | undefined;
   let installStatus: RuntimeInstallStatus = { state: 'idle' };
+  let nativeInstallStatus: NativeRuntimeInstallStatus = { state: 'idle' };
 
-  function release(): Promise<void> | undefined {
-    const owned = active;
-    if (!owned) return cleanup;
-    active = undefined;
-    cleanup = owned.serve.stop().finally(() => owned.service.stop());
-    return cleanup;
+  async function releaseRoute(running: RunningDashboard | undefined): Promise<void> {
+    if (!running) return;
+    const route = running.route;
+    if (!route) return running.routeCleanup;
+    running.route = undefined;
+    return (running.routeCleanup = route.serve
+      .stop()
+      .finally(async () => {
+        if (running.service.alive()) await running.service.detachRemote();
+      })
+      .catch(() => console.error('[Agent HQ] Could not finish releasing the browser route.')));
   }
 
-  async function ensure(
-    inputs: LaunchInputs,
-    installRuntime: boolean,
-  ): Promise<DashboardLaunchResult> {
-    const { signal } = lifetime;
+  function releaseService(): Promise<void> | undefined {
+    const running = active;
+    if (!running) return serviceCleanup;
+    active = undefined;
+    running.lifetime.abort();
+    return (serviceCleanup = releaseRoute(running).finally(() => running.service.stop()));
+  }
+
+  async function ensureService(runtime: RuntimePaths, port: number, readPaseo?: PaseoRead) {
+    while (pendingService) await pendingService;
     if (signal.aborted) throw dashboardUnavailable();
-    const runtime = await deps.runtimePaths(inputs.directory, signal, installRuntime);
-    const binary = deps.findTailscale();
-    const readConfig = () => deps.readTailscaleJson(binary, ['serve', 'status', '--json'], signal);
-    const status = await deps.readTailscaleJson(binary, ['status', '--json'], signal);
-    const tailnet = readTailnetHost(status);
-    const localPort = deps.localPort();
-    const baseCheck = { authority: tailnet.authority, localPort, legacyUrl: inputs.legacyUrl };
-    const success = { ok: true, url: `https://${tailnet.authority}` } as const;
+    if (active && sameService(active, runtime, port)) return active;
+    return (pendingService = (async () => {
+      await releaseService();
+      const service = await deps.startDashboard(runtime, port, signal, readPaseo);
+      if (signal.aborted || !service.alive()) {
+        await service.stop();
+        throw dashboardUnavailable();
+      }
+      const running = { service, runtime, lifetime: new AbortController() };
+      active = running;
+      void service.closed
+        .then(() => {
+          if (active === running) return releaseService();
+        })
+        .catch(() => console.error('[Agent HQ] Could not finish releasing the dashboard.'));
+      return running;
+    })().finally(() => {
+      pendingService = undefined;
+    }));
+  }
 
-    if (
-      active &&
-      active.service.alive() &&
-      active.serve.alive() &&
-      active.runtime.directory === runtime.directory &&
-      active.runtime.version === runtime.version &&
-      active.runtime.node === runtime.node &&
-      active.tailnet.authority === tailnet.authority &&
-      active.tailnet.ownerLogin === tailnet.ownerLogin &&
-      active.service.port === localPort
-    ) {
-      const running = active;
-      checkRoutes(await readConfig(), {
-        ...baseCheck,
-        remotePort: running.service.remotePort,
-        ownSession: running.serveSession,
-      });
-      if (signal.aborted) throw dashboardUnavailable();
-      if (running.service.alive() && running.serve.alive()) return success;
-    }
-
-    await release();
-    checkRoutes(await readConfig(), baseCheck);
-    await deps.requireFreeTailnetPort(tailnet.addresses);
-    const service = await deps.startDashboard(runtime, tailnet, localPort, signal);
+  async function startRoute(
+    running: RunningDashboard,
+    binary: string,
+    tailnet: TailnetHost,
+    baseCheck: Parameters<typeof checkRoutes>[1],
+    readConfig: () => Promise<unknown>,
+  ) {
+    const { service, runtime } = running;
     let serve: OwnedProcess | undefined;
     try {
-      const check = { ...baseCheck, remotePort: service.remotePort };
+      const remotePort = await service.attachRemote(tailnet);
+      const check = { ...baseCheck, remotePort };
       checkRoutes(await readConfig(), check);
-      if (!service.alive()) throw dashboardUnavailable();
-      const serviceLifetime = new AbortController();
-      const stopRoute = () => serviceLifetime.abort();
-      signal.addEventListener('abort', stopRoute, { once: true });
-      if (signal.aborted) stopRoute();
-      void service.closed.then(stopRoute);
+      if (signal.aborted || !service.alive()) throw dashboardUnavailable();
       try {
         serve = await deps.startServe(
           runtime,
           binary,
           tailnet.authority,
-          service.remotePort,
-          serviceLifetime.signal,
+          remotePort,
+          running.lifetime.signal,
         );
       } catch (error) {
         // The daemon checks concurrent config updates. Report any newly visible collision.
         checkRoutes(await readConfig(), check);
         throw error;
-      } finally {
-        signal.removeEventListener('abort', stopRoute);
       }
-      const serveSession = checkRoutes(await readConfig(), { ...check, discoverNewSession: true });
-      if (!serveSession || !serve.alive()) throw routeConflict();
-      if (!service.alive()) throw dashboardUnavailable();
-      if (signal.aborted) throw dashboardUnavailable();
-      const running = { service, serve, tailnet, runtime, serveSession };
-      active = running;
-      void Promise.race([service.closed, serve.closed])
-        .then(() => {
-          if (active === running) return release();
-        })
-        .catch(() => console.error('[Agent HQ] Could not finish releasing the dashboard.'));
-      return success;
+      const session = checkRoutes(await readConfig(), { ...check, discoverNewSession: true });
+      if (!session || !serve.alive()) throw routeConflict();
+      if (signal.aborted || !service.alive()) throw dashboardUnavailable();
+      const route = { serve, tailnet, remotePort, session };
+      running.route = route;
+      void serve.closed.then(() => {
+        if (running.route === route) return releaseRoute(running);
+      });
     } catch (error) {
       try {
         await serve?.stop();
       } finally {
-        await service.stop();
+        if (service.alive()) await service.detachRemote().catch(() => undefined);
       }
       throw error;
     }
   }
 
-  function attempt(input: () => Promise<LaunchInputs>, installRuntime: boolean) {
-    return Promise.resolve()
-      .then(input)
-      .then((inputs) => ensure(inputs, installRuntime))
-      .catch(async (error: unknown) => {
-        await release();
-        return (error instanceof LaunchError ? error : dashboardUnavailable()).result();
+  async function attemptBrowser(
+    input: () => Promise<LaunchInputs>,
+    install: boolean,
+    readPaseo?: PaseoRead,
+  ): Promise<DashboardLaunchResult> {
+    try {
+      if (signal.aborted) throw dashboardUnavailable();
+      const inputs = await input();
+      const runtime = await deps.runtimePaths(inputs.directory, signal, install);
+      const binary = deps.findTailscale();
+      const readConfig = () =>
+        deps.readTailscaleJson(binary, ['serve', 'status', '--json'], signal);
+      const status = await deps.readTailscaleJson(binary, ['status', '--json'], signal);
+      const tailnet = readTailnetHost(status);
+      const port = deps.localPort();
+      const check = { authority: tailnet.authority, localPort: port, legacyUrl: inputs.legacyUrl };
+      const success = { ok: true, url: `https://${tailnet.authority}` } as const;
+      const route = active?.route;
+      if (
+        active &&
+        route &&
+        sameService(active, runtime, port) &&
+        route.serve.alive() &&
+        route.tailnet.authority === tailnet.authority &&
+        route.tailnet.ownerLogin === tailnet.ownerLogin
+      ) {
+        const { service } = active;
+        const session = checkRoutes(await readConfig(), {
+          ...check,
+          remotePort: route.remotePort,
+          ownSession: route.session,
+        });
+        if (signal.aborted) throw dashboardUnavailable();
+        if (session && service.alive() && route.serve.alive()) return success;
+      }
+
+      await releaseRoute(active);
+      checkRoutes(await readConfig(), check);
+      await deps.requireFreeTailnetPort(tailnet.addresses);
+      const running = await ensureService(runtime, port, readPaseo);
+      await startRoute(running, binary, tailnet, check, readConfig);
+      return success;
+    } catch (error) {
+      await releaseRoute(active);
+      return failure(error);
+    }
+  }
+
+  async function nativeService(
+    input: () => Promise<NativeInputs>,
+    install: boolean,
+    readPaseo: PaseoRead,
+  ) {
+    if (signal.aborted) throw dashboardUnavailable();
+    const inputs = await input();
+    const port = deps.localPort();
+    const running = active;
+    if (
+      running?.service.alive() &&
+      running.runtime.directory === inputs.directory &&
+      running.service.port === port
+    ) {
+      return running;
+    }
+    const runtime = await deps.runtimePaths(inputs.directory, signal, install);
+    return ensureService(runtime, port, readPaseo);
+  }
+
+  function install<T>(
+    attempt: () => Promise<T>,
+    finish: (result: T) => void,
+    failed: (error: unknown) => void,
+  ) {
+    const previous = pendingInstall;
+    const job = (async () => {
+      await previous;
+      return attempt();
+    })()
+      .then(finish, failed)
+      .finally(() => {
+        if (pendingInstall === job) pendingInstall = undefined;
       });
+    pendingInstall = job;
   }
 
   return {
-    launch(input: () => Promise<LaunchInputs>): Promise<DashboardLaunchResult> {
+    async native(
+      input: () => Promise<NativeInputs>,
+      request: NativeRequest,
+      readPaseo: PaseoRead,
+    ): Promise<NativeResult> {
+      if (pendingInstall && !active?.service.alive()) return runtimeInstalling().result();
+      try {
+        const running = await nativeService(input, false, readPaseo);
+        return await running.service.native(request);
+      } catch (error) {
+        return failure(error);
+      }
+    },
+    launch(
+      input: () => Promise<LaunchInputs>,
+      readPaseo?: PaseoRead,
+    ): Promise<DashboardLaunchResult> {
       if (pendingInstall) return Promise.resolve(runtimeInstalling().result());
-      return (pending ??= attempt(input, false).finally(() => {
-        pending = undefined;
+      return (pendingBrowser ??= attemptBrowser(input, false, readPaseo).finally(() => {
+        pendingBrowser = undefined;
       }));
     },
-    startRuntimeInstall(input: () => Promise<LaunchInputs>): RuntimeInstallStatus {
-      if (lifetime.signal.aborted) {
-        return { state: 'finished', result: dashboardUnavailable().result() };
-      }
-      if (pendingInstall) return installStatus;
+    startRuntimeInstall(
+      input: () => Promise<LaunchInputs>,
+      readPaseo?: PaseoRead,
+    ): RuntimeInstallStatus {
+      if (signal.aborted) return { state: 'finished', result: dashboardUnavailable().result() };
+      if (installStatus.state === 'installing') return installStatus;
       installStatus = { state: 'installing' };
+      const previous = pendingBrowser;
       const finish = (result: DashboardLaunchResult) => {
         installStatus = { state: 'finished', result };
       };
-      pendingInstall = (async () => {
-        const previous = await pending;
-        return previous?.ok ? previous : attempt(input, true);
-      })()
-        .then(finish, () => finish(dashboardUnavailable().result()))
-        .finally(() => {
-          pendingInstall = undefined;
-        });
+      install(
+        async () => {
+          const result = await previous;
+          return result?.ok ? result : attemptBrowser(input, true, readPaseo);
+        },
+        finish,
+        (error) => finish(failure(error)),
+      );
       return installStatus;
     },
     runtimeInstallStatus(): RuntimeInstallStatus {
       return installStatus;
     },
+    startNativeRuntimeInstall(
+      input: () => Promise<NativeInputs>,
+      readPaseo: PaseoRead,
+    ): NativeRuntimeInstallStatus {
+      if (signal.aborted) return { state: 'finished', result: dashboardUnavailable().result() };
+      if (nativeInstallStatus.state === 'installing') return nativeInstallStatus;
+      nativeInstallStatus = { state: 'installing' };
+      install(
+        async () => {
+          await nativeService(input, true, readPaseo);
+          return { ok: true } as const;
+        },
+        (result) => {
+          nativeInstallStatus = { state: 'finished', result };
+        },
+        (error) => {
+          nativeInstallStatus = { state: 'finished', result: failure(error) };
+        },
+      );
+      return nativeInstallStatus;
+    },
+    nativeRuntimeInstallStatus(): NativeRuntimeInstallStatus {
+      return nativeInstallStatus;
+    },
     async stop(): Promise<void> {
       lifetime.abort();
-      await release();
-      await pending;
-      await pendingInstall;
+      await Promise.allSettled([releaseService(), pendingService, pendingBrowser, pendingInstall]);
     },
   };
 }
