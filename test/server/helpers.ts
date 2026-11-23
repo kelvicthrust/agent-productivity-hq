@@ -10,6 +10,7 @@ import type { ClaudeAccounts } from '../../src/server/services/claude-account.ts
 import type { HookIngest } from '../../src/server/http/routes/hqHooks.ts';
 import type { ClaudeHooks } from '../../src/server/integrations/claudeHooks/index.ts';
 import type { HqService } from '../../src/server/services/hq/service.ts';
+import type { PaseoQuotaService } from '../../src/server/services/paseo-quota.ts';
 import { createRunner } from '../../src/server/collectors/runner.ts';
 import { migrate } from '../../src/server/db/migrate.ts';
 import { createApp } from '../../src/server/http/app.ts';
@@ -75,6 +76,7 @@ export function testApp(
     claude?: ClaudeAccounts;
     /** The live HQ roster; without it GET /api/hq says every feed is unavailable. */
     hq?: HqService;
+    paseoQuota?: PaseoQuotaService;
     /** The owner's switch for Claude Code hooks, and what the hook script posts to (loopback only). */
     claudeHooks?: ClaudeHooks;
     hookIngest?: HookIngest;
@@ -99,6 +101,7 @@ export function testApp(
     chatgpt: overrides.chatgpt,
     claude: overrides.claude,
     hq: overrides.hq,
+    paseoQuota: overrides.paseoQuota,
     claudeHooks: overrides.claudeHooks,
     hookIngest: overrides.hookIngest,
     ...(overrides.remote ? { remote: overrides.remote } : {}),

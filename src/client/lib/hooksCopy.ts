@@ -59,6 +59,9 @@ export const HOOKS_COPY = {
   removeFiles: 'Remove HQ’s files',
   loading: 'Reading your Claude Code settings…',
   readFailed: 'Couldn’t read the settings to show what will change.',
+  checkFailed: 'Couldn’t check your Claude Code settings. Try again.',
+  planChanged:
+    'The available Claude Code settings actions changed. Try again after the card updates.',
   retry: 'Read again',
   files: 'Settings files',
   willCreate: 'will be created',

@@ -9,11 +9,11 @@ import { APPBAR_BUTTON } from './appBarButton';
  * words remain for assistive technology.
  */
 export function RefreshButton() {
-  const { refresh, isBusy } = useRefresh();
+  const { refresh, isBusy, description } = useRefresh();
   return (
     <button
       type="button"
-      title={REFRESH_COPY.allDescription}
+      title={description}
       aria-busy={isBusy || undefined}
       aria-disabled={isBusy || undefined}
       onClick={() => refresh()}

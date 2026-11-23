@@ -52,6 +52,7 @@ export function accountRoutes(deps: {
   chatgpt?: ChatgptAccounts | undefined;
   /** The Claude plan-usage capture (services/claude-account.ts). Without it the two capture routes say so. */
   claude?: ClaudeAccounts | undefined;
+  paseoManaged?: boolean;
 }): Hono<HttpEnv> {
   const app = new Hono<HttpEnv>();
 
@@ -106,6 +107,11 @@ export function accountRoutes(deps: {
     return deps.claude;
   };
   app.post('/api/accounts/claude/plan-limits/check', async (c) => {
+    if (deps.paseoManaged) {
+      throw new ApiError('invalid_input', 'Use the weekly quota check in this Paseo session.', {
+        status: 422,
+      });
+    }
     const request = ClaudePlanLimitsCheckRequest.safeParse(
       Object.keys(c.req.query()).length === 0 ? await readJson(c.req.raw) : null,
     );

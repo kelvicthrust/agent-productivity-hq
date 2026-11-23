@@ -15,7 +15,7 @@ import { TrackedRepos } from './repos/TrackedRepos';
 // repositories, followed by data retention and reset.
 
 export function SourcesRoute() {
-  const { refresh, isBusy: busy } = useRefresh();
+  const { refresh, isBusy: busy, description } = useRefresh();
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -28,7 +28,7 @@ export function SourcesRoute() {
             icon={<Icon name={busy ? 'spinner' : 'refresh'} />}
             size="sm"
             variant="secondary"
-            tooltip={REFRESH_COPY.allDescription}
+            tooltip={description}
             aria-busy={busy || undefined}
             aria-disabled={busy || undefined}
             className="max-[719px]:min-h-11 aria-disabled:cursor-default aria-disabled:opacity-70"

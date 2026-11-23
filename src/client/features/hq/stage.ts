@@ -92,9 +92,10 @@ export function captionsCollide(
   characters: readonly SceneCharacter[],
   stations: readonly Pick<Station, 'x'>[],
   size: number,
+  measure = (text: string, fontSize: number) => text.length * fontSize * 0.56,
 ): boolean {
   // Estimate 0.56 em a character so caption layout is available while the font loads.
-  const width = (c: SceneCharacter) => c.caption.length * size * 0.56 + 4;
+  const width = (c: SceneCharacter) => measure(c.caption, size) + 4;
   return characters.some((c, i) => {
     const next = characters[i + 1];
     const a = stations[i];

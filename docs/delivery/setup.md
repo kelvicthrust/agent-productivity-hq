@@ -65,18 +65,30 @@ checkout with the same settings. Run `pnpm build` again after client changes.
 
 ## Open Agent HQ from Paseo Desktop
 
-Click **Agent HQ** in the Paseo sidebar. On desktop and mobile, the dashboard opens in your
-default browser. In Paseo web, choose **Open in browser** when the dashboard is ready. Connect
-the device to Tailscale using the same account as the daemon Mac. The dashboard runs on the Mac
-and stays available after you close the browser tab. If opening fails, copy the private address
-from the launcher and open it in your browser.
+Click **Agent HQ** in the Paseo sidebar. A new installation opens Setup inside Paseo.
+Find local sources, optionally connect accounts and choose repositories, then click **Finish setup**.
+After setup, the sidebar opens the illustrated HQ for the selected host. The rooms and characters
+follow the live roster, which lists agents and their activity under the drawing. Use **Overview**,
+**Trends**, **Delivery**, **Usage**, and **Sources & repos** to see reports, review PR links,
+refresh sources, and manage connections inside Paseo.
+
+Paseo uses the selected daemon's management permission. Other managers of the same host can read
+HQ data and manage reports, PR links, and source connections.
+
+Weekly limits come from the selected host's Paseo usage reports. When a provider has no usable
+weekly report, **Check provider directly** makes an explicit check using the provider's existing
+sign-in on the Mac. Quota percentages and recorded local token counts describe different things.
+
+Under **Sources & repos**, choose **Open owner settings** to reset HQ or review changes to Claude Code
+settings. The action opens the private browser dashboard at Sources & repos using the owner check
+described below. After a reset finishes, returning to HQ opens Setup again. The optional
+**Open full dashboard** action opens the browser version. In Paseo web, choose **Open in browser**
+when the private address is ready, or copy that address.
 
 ### Install from the release archive
 
-1. Use an Apple Silicon Mac for the daemon and Paseo 0.16.1 or later for the launcher.
-   Connect both devices to Tailscale with the same personal account. The host needs
-   the Tailscale CLI, HTTPS certificates enabled, and permission to run Serve. If approval is
-   required, complete it in Tailscale on the host and click **Retry**.
+1. Use an Apple Silicon Mac for the daemon and Paseo 0.16.1 or later.
+   Connect your device to the daemon in Paseo.
 2. On the daemon host, download the versioned `kelvicthrust-paseo-agent-productivity-hq-*.tgz`
    and `SHA256SUMS` from the same GitHub release. Compare the archive's SHA-256 with the corresponding
    entry and unpack it into a versioned directory owned by your macOS user. Keep the extracted
@@ -84,7 +96,10 @@ from the launcher and open it in your browser.
 3. On the target host in **Settings → Plugins**, enable plugins, enter the absolute path to
    that `package` directory and install it. The same operation is available in the host’s CLI
    as `paseo plugin install /absolute/path/to/package`.
-4. Click **Agent HQ**. The launcher looks for Apple Silicon Node.js 22.x (22.16.0+) or any stable 24.0.0+ on the daemon Mac. If it cannot find one, click **Install runtime** to download the official ARM64 build from nodejs.org. The launcher verifies its pinned SHA-256 and installs a private copy. This requires internet access once. Other devices only need Paseo and Tailscale. A fresh database opens Setup.
+4. Click **Agent HQ**. The plugin looks for Apple Silicon Node.js 22.x (22.16.0+) or any stable
+   24.0.0+ on the daemon Mac. If it cannot find one, click **Install runtime** to download the
+   official ARM64 build from nodejs.org. The plugin verifies its pinned SHA-256 and installs a
+   private copy. This requires internet access once.
 
 The daemon can discover compatible Homebrew and nvm installations even when its PATH differs from your
 terminal. If it offers **Install runtime** despite Node working through a mise shim, add the installed
@@ -94,7 +109,8 @@ The optional runtime lives in `~/Library/Application Support/agent-productivity/
 on the daemon Mac. It contains the executable and its license. After disabling the plugin, you can remove
 that directory to reclaim space. The dashboard database and provider sign-ins are stored separately.
 
-The remote address uses the daemon's private HTTPS name on port 4317. The managed server
+The full dashboard's browser action needs the Tailscale CLI, HTTPS certificates, and Serve
+permission on the daemon Mac. It uses the daemon's private HTTPS name on port 4317. The managed server
 checks the Serve identity on every remote dashboard request. Use an untagged client device signed
 into the host owner's Tailscale account. The normal local dashboard remains available to
 processes on the host. [How Tailscale Serve supplies identity](https://tailscale.com/docs/features/tailscale-serve#identity-headers)
@@ -138,6 +154,13 @@ npm --prefix plugins/paseo-agent-productivity ci --ignore-scripts
 npm --prefix plugins/paseo-agent-productivity run typecheck
 npm --prefix plugins/paseo-agent-productivity test
 ```
+
+The native screens reuse the web dashboard's filter and chart logic and original HQ drawings.
+After editing those sources, regenerate the plugin modules with `node scripts/generate-paseo-reporting.ts`
+and `node scripts/generate-paseo-hq-art.ts`. `node scripts/generate-paseo-hq-boil.ts` refreshes the
+roof and ground animation frames using the pinned Playwright Chromium. The font outline generator
+`scripts/generate-paseo-hq-font.py` documents its pinned FontTools requirement. Release packaging
+checks the generated modules and frames from disk.
 
 Before cutting a release, check the [Node security releases](https://nodejs.org/en/blog/vulnerability)
 when selecting the private fallback. Pin the official ARM64 archive and its SHA-256 together.
@@ -208,8 +231,9 @@ HQ can only guess when a Claude Code session that Paseo does not run is waiting 
 first eligible HQ visit in each browser offers the same control in a dismissible dialog while hooks
 are off. The switch affects only HQ.
 
-**What will change** shows the settings files, five hook events and exact command. The settings
-change only after you review the preview and confirm **Turn on**. This adds one entry per event to the
+**What will change** shows the settings files, five hook events and exact command. In Sources &
+repos, **Turn on** and **Turn off** apply the change with one press. In HQ’s first-visit dialog,
+review the preview to confirm. Turning on adds one entry per event to the
 user-level `settings.json` in each Claude Code folder (`$CLAUDE_CONFIG_DIR`, else `~/.claude` and
 `~/.config/claude`), keeps everything else in the file, copies the hook script into
 `claude-hooks/` in the data directory and saves a copy of the file beside it once, as
@@ -221,8 +245,8 @@ of notification, why a session ended and the working folder, and only to this da
 JSON, or is laid out in a way HQ can't edit safely; HQ never rewrites a settings file, it only edits
 its own entries in place); fix the file and look again. After an upgrade, **Repair** brings the
 entries up to date. If HQ can't delete its own files after **Turn off**, the page says so and names
-the folder; you can delete them, or press **Remove HQ's files** to try again. **Turn off**, **Repair**
-and **Turn on** each show their own list of files before anything is written.
+the folder. **Repair** and **Remove HQ's files** in Sources & repos show their own file list for
+confirmation.
 
 ## Environment variables
 
@@ -243,6 +267,7 @@ Variables used by Agent Productivity HQ and its checks.
 | `NODE_ENV`                        | `pnpm test`, `pnpm build`                         | Tests always run as `test` and the build always builds for production, whatever the shell exported.                                                                                                         |
 | `PDLC_TEST_WORKERS`               | `pnpm test:e2e`                                   | How many Playwright workers to use (a number); default half the machine.                                                                                                                                    |
 | `PLAYWRIGHT_BROWSERS_PATH`        | `pnpm test:e2e`                                   | Where Playwright's headless shell is installed. Checks never install it.                                                                                                                                    |
+| `HQ_ART_CHROME`                   | `scripts/generate-paseo-hq-boil.ts`               | Optional path to a Chromium executable for regenerating the illustrated HQ's ink frames. Defaults to the pinned Playwright Chromium.                                                                        |
 | `BENCH_RECORD`                    | `pnpm bench`                                      | When set, writes the measured table to `test/bench/RESULTS.md` (then run `pnpm exec prettier --write test/bench/RESULTS.md`).                                                                               |
 | `EXPERIMENTS_FORCE_NO_ZSTD`       | experiment self-tests                             | Test-only: makes the readers behave as if no zstd decoder were installed.                                                                                                                                   |
 

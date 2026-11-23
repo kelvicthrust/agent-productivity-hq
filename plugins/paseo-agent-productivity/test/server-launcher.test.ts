@@ -9,6 +9,7 @@ import {
 import { createDashboardLauncher } from '../server/launcher.ts';
 import type { OwnedProcess } from '../server/processes.ts';
 import { checkRoutes, readTailnetHost } from '../server/tailscale.ts';
+import type { PaseoRead } from '../shared/native.ts';
 
 const dnsName = 'mini.example-tailnet.ts.net';
 const authority = `${dnsName}:4317`;
@@ -30,6 +31,8 @@ const route = {
 
 const check = { authority, legacyUrl: '', localPort: port };
 const attached = { ...check, remotePort, ownSession: 'active' };
+const bootstrap = { operation: 'bootstrap' } as const;
+const readPaseo: PaseoRead = async ({ kind }) => ({ kind });
 const conflict = (error: unknown) =>
   error instanceof LaunchError && error.reason === 'route-conflict';
 
@@ -147,8 +150,10 @@ function testLauncher(
   let serveConfig: unknown = {};
   let spawnFailure = false;
   let app: OwnedProcess | undefined;
+  let share: OwnedProcess | undefined;
   let serviceStarts = 0;
   let serveStarts = 0;
+  let tailscaleChecks = 0;
   let installs = 0;
   const cleanup: string[] = [];
   const launcher = createDashboardLauncher({
@@ -167,15 +172,31 @@ function testLauncher(
         serveSession: '/serve-session.mjs',
       };
     },
-    findTailscale: () => '/tailscale',
+    findTailscale: () => {
+      tailscaleChecks++;
+      return '/tailscale';
+    },
     readTailscaleJson: async (_binary, [command]) => (command === 'status' ? status : serveConfig),
     requireFreeTailnetPort: async () => {},
     localPort: () => port,
-    startDashboard: async (_runtime, host) => {
-      assert.equal(host.ownerLogin, ownerLogin);
+    startDashboard: async (_runtime, localPort, _signal, reader) => {
+      assert.equal(localPort, port);
       serviceStarts++;
       app = ownedProcess(() => cleanup.push('dashboard'));
-      return { ...app, port, remotePort };
+      return {
+        ...app,
+        port,
+        async attachRemote(host) {
+          assert.equal(host.ownerLogin, ownerLogin);
+          return remotePort;
+        },
+        async detachRemote() {
+          cleanup.push('listener');
+        },
+        async native({ operation }) {
+          return { ok: true, data: { operation, paseo: await reader!({ kind: 'usage' }) } };
+        },
+      };
     },
     startServe: async (_runtime, _binary, host, target) => {
       assert.equal(host, authority);
@@ -183,10 +204,11 @@ function testLauncher(
       serveStarts++;
       if (spawnFailure) throw tailscaleUnavailable();
       serveConfig = { Foreground: { active: route } };
-      return ownedProcess(() => {
+      share = ownedProcess(() => {
         cleanup.push('serve');
         serveConfig = {};
       });
+      return share;
     },
   });
   return {
@@ -200,7 +222,9 @@ function testLauncher(
       spawnFailure = true;
     },
     stopDashboard: () => app?.stop(),
+    stopShare: () => share?.stop(),
     counts: () => [serviceStarts, serveStarts],
+    tailscaleChecks: () => tailscaleChecks,
     installs: () => installs,
   };
 }
@@ -259,10 +283,10 @@ test('concurrent calls share one startup and the next click reuses the tracked h
   assert.deepEqual(await launcher.launch(inputs), { ok: true, url });
   assert.deepEqual(counts(), [1, 1]);
   await launcher.stop();
-  assert.deepEqual(cleanup, ['serve', 'dashboard']);
+  assert.deepEqual(cleanup, ['serve', 'listener', 'dashboard']);
 });
 
-test('does not start either process behind an old Ports share, and rolls back a failed private route', async (t) => {
+test('does not start either process behind an old Ports share, and releases a failed route listener', async (t) => {
   const { launcher, inputs, counts, cleanup, configure, failServe } = testLauncher();
   t.after(() => launcher.stop());
   configure(route);
@@ -273,7 +297,8 @@ test('does not start either process behind an old Ports share, and rolls back a 
   failServe();
   const failure = await launcher.launch(inputs);
   assert.equal(failure.ok ? undefined : failure.reason, 'tailscale-unavailable');
-  assert.deepEqual(cleanup, ['dashboard']);
+  assert.deepEqual(cleanup, ['listener']);
+  assert.deepEqual(counts(), [1, 1]);
 });
 
 test('losing the live dashboard ends its owned Serve session and permits a fresh handshake', async (t) => {
@@ -284,4 +309,69 @@ test('losing the live dashboard ends its owned Serve session and permits a fresh
   assert.deepEqual(await launcher.launch(inputs), { ok: true, url });
   assert.deepEqual(counts(), [2, 2]);
   assert.deepEqual(cleanup, ['dashboard', 'serve']);
+});
+
+test('native starts one reusable child without Tailscale and survives loss of the browser share', async (t) => {
+  const { launcher, inputs, counts, tailscaleChecks, cleanup, stopShare } = testLauncher();
+  t.after(() => launcher.stop());
+  const ready = { ok: true, data: { operation: 'bootstrap', paseo: { kind: 'usage' } } };
+  assert.deepEqual(
+    await Promise.all([
+      launcher.native(inputs, bootstrap, readPaseo),
+      launcher.native(inputs, bootstrap, readPaseo),
+    ]),
+    [ready, ready],
+  );
+  assert.deepEqual(counts(), [1, 0]);
+  assert.equal(tailscaleChecks(), 0);
+  assert.deepEqual(await launcher.launch(inputs, readPaseo), { ok: true, url });
+  await stopShare();
+  assert.deepEqual(await launcher.native(inputs, bootstrap, readPaseo), ready);
+  assert.deepEqual(cleanup, ['serve', 'listener']);
+  assert.deepEqual(await launcher.launch(inputs, readPaseo), { ok: true, url });
+  assert.deepEqual(counts(), [1, 2]);
+});
+
+test('a refused browser route leaves native data available', async (t) => {
+  const { launcher, inputs, counts, configure, failServe } = testLauncher();
+  t.after(() => launcher.stop());
+  const before = await launcher.native(inputs, bootstrap, readPaseo);
+  assert.equal(before.ok, true);
+  configure(route);
+  const conflict = await launcher.launch(inputs, readPaseo);
+  assert.equal(!conflict.ok && conflict.reason, 'route-conflict');
+  assert.deepEqual(await launcher.native(inputs, bootstrap, readPaseo), before);
+  configure({});
+  failServe();
+  const failed = await launcher.launch(inputs, readPaseo);
+  assert.equal(!failed.ok && failed.reason, 'tailscale-unavailable');
+  assert.deepEqual(await launcher.native(inputs, bootstrap, readPaseo), before);
+  assert.deepEqual(counts(), [1, 1]);
+});
+
+test('an explicit native runtime install never checks Tailscale', async (t) => {
+  const holdInstall = deferred();
+  const { launcher, inputs, installs, counts, tailscaleChecks } = testLauncher(
+    false,
+    () => holdInstall.promise,
+  );
+  t.after(() => holdInstall.resolve());
+  t.after(() => launcher.stop());
+  assert.deepEqual(launcher.nativeRuntimeInstallStatus(), { state: 'idle' });
+  const missing = await launcher.native(inputs, bootstrap, readPaseo);
+  assert.equal(!missing.ok && missing.reason, 'runtime-required');
+  assert.deepEqual(launcher.startNativeRuntimeInstall(inputs, readPaseo), { state: 'installing' });
+  assert.deepEqual(launcher.startNativeRuntimeInstall(inputs, readPaseo), { state: 'installing' });
+  const installing = await launcher.native(inputs, bootstrap, readPaseo);
+  assert.equal(!installing.ok && installing.reason, 'runtime-installing');
+  holdInstall.resolve();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(launcher.nativeRuntimeInstallStatus(), {
+    state: 'finished',
+    result: { ok: true },
+  });
+  assert.deepEqual(launcher.runtimeInstallStatus(), { state: 'idle' });
+  assert.equal(installs(), 1);
+  assert.equal(tailscaleChecks(), 0);
+  assert.deepEqual(counts(), [1, 0]);
 });

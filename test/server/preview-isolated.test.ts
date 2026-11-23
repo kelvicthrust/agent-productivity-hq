@@ -37,7 +37,7 @@ describe('the preview command and this machine', () => {
     expect(main).toMatch(/\bboot\(config,\s*liveBootDeps\(\)\)/);
     const managed = code(read('src/server/managed.ts'));
     expect(managed).toMatch(
-      /\bboot\(config,\s*\{\s*\.\.\.liveBootDeps\(\),\s*version,\s*remote:\s*startup\.remote\s*\}\)/,
+      /\bboot\(config,\s*\{\s*\.\.\.liveBootDeps\(\),\s*\.\.\.\(startup\.remote\s*\?\s*\{\}\s*:\s*paseoBootDeps\(readPaseo\)\),\s*version,\s*managed:\s*true,\s*remote:\s*startup\.remote/,
     );
   });
 });

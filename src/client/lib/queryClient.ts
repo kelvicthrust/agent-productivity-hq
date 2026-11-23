@@ -11,6 +11,7 @@ export const STALE_TIME_MS = 30_000;
 export const queryKeys = {
   bootstrap: ['bootstrap'] as const,
   sources: ['sources'] as const,
+  paseoQuota: ['paseo-quota'] as const,
   /** The live roster is its own key, not under `analytics`: it is polled, and a finished refresh run does not touch it. */
   hq: ['hq'] as const,
   /** The Claude Code hooks switch's preview and status: read when the owner opens "What will change", and after a change. */
@@ -37,6 +38,7 @@ export function invalidateServerState(client: QueryClient): Promise<void> {
   return Promise.all([
     client.invalidateQueries({ queryKey: ['analytics'] }),
     client.invalidateQueries({ queryKey: queryKeys.sources }),
+    client.invalidateQueries({ queryKey: queryKeys.paseoQuota }),
     client.invalidateQueries({ queryKey: queryKeys.bootstrap }),
   ]).then(() => undefined);
 }

@@ -208,6 +208,71 @@ it('rejects invalid startup configuration before touching data', async () => {
   });
 });
 
+it.skipIf(!loopbackAvailable)(
+  'starts native with one listener and can attach and release an owner-guarded browser listener',
+  async () => {
+    const port = await freePort();
+    await runManaged(port, async (child, dataDir) => {
+      expect(await send(child, { type: 'start', version })).toEqual({
+        type: 'ready',
+        version,
+        port,
+      });
+      const lock = join(dataDir, 'agent-productivity.lock');
+      const lease = readFileSync(lock, 'utf8');
+      expect(
+        await send(child, {
+          type: 'attach-remote',
+          id: 1,
+          remoteHost,
+          ownerLogin: 'bad,owner',
+        }),
+      ).toEqual({ type: 'remote-result', id: 1, ok: false });
+      expect(
+        await send(child, {
+          type: 'native',
+          id: 2,
+          request: { operation: 'bootstrap' },
+        }),
+      ).toMatchObject({ type: 'native-result', id: 2, result: { ok: true } });
+      const attached = (await send(child, {
+        type: 'attach-remote',
+        id: 3,
+        remoteHost,
+        ownerLogin,
+      })) as { port: number };
+      expect(attached).toEqual({
+        type: 'remote-result',
+        id: 3,
+        ok: true,
+        port: expect.any(Number),
+      });
+      expect(attached.port).not.toBe(port);
+      expect(
+        (await request(attached.port, '/api/health', { headers: { host: remoteHost } })).status,
+      ).toBe(403);
+      expect(
+        await (await request(attached.port, '/api/health', { headers: remoteHeaders })).json(),
+      ).toEqual(await (await request(port)).json());
+      expect(await send(child, { type: 'detach-remote', id: 4 })).toEqual({
+        type: 'remote-result',
+        id: 4,
+        ok: true,
+      });
+      await expect(request(attached.port)).rejects.toThrow();
+      expect(
+        await send(child, {
+          type: 'native',
+          id: 5,
+          request: { operation: 'bootstrap' },
+        }),
+      ).toMatchObject({ type: 'native-result', id: 5, result: { ok: true } });
+      expect(readFileSync(lock, 'utf8')).toBe(lease);
+      expect((await request(port)).ok).toBe(true);
+    });
+  },
+);
+
 it('refuses relative data paths before opening a database inside the installed release', async () => {
   await runManaged(
     4317,
@@ -324,5 +389,51 @@ it('closes the local listener and releases the database when the managed listene
     }),
   ).rejects.toThrow('remote bind failed');
   expect(closed).toEqual([config.port]);
+  expect(existsSync(config.lockPath)).toBe(false);
+});
+
+it('keeps managed data available while retrying and detaching an optional browser listener', async () => {
+  const config = tempConfig();
+  const closed: number[] = [];
+  const bound: Parameters<ListenFn>[0][] = [];
+  const remotePort = 44_321;
+  let failRemote = true;
+  const listen: ListenFn = async (options) => {
+    if (options.port === 0 && failRemote) throw new Error('remote bind failed');
+    bound.push(options);
+    return {
+      address: () => ({ port: options.port || remotePort }),
+      close: (done) => {
+        closed.push(options.port);
+        done?.();
+      },
+    };
+  };
+  const server = await boot(config, { listen, logger: memoryLogger().logger, managed: true });
+  try {
+    const lease = readFileSync(config.lockPath, 'utf8');
+    expect(bound.map(({ port }) => port)).toEqual([config.port]);
+    const access = { host: remoteHost, ownerLogin };
+    await expect(server.attachRemote!(access)).rejects.toThrow('remote bind failed');
+    expect(closed).toEqual([]);
+    expect(server.db?.prepare('SELECT 1 AS value').get()).toEqual({ value: 1 });
+
+    failRemote = false;
+    const browser = await server.attachRemote!(access);
+    expect(browser.port).toBe(remotePort);
+    const { fetch, host } = bound[1]!;
+    expect(host).toBe('127.0.0.1');
+    const health = (headers: Record<string, string>) =>
+      fetch(new Request(`http://${host}:${remotePort}/api/health`, { headers }));
+    expect((await health({ host: remoteHost })).status).toBe(403);
+    expect((await health(remoteHeaders)).ok).toBe(true);
+    await Promise.all([browser.close(), browser.close()]);
+    expect(closed).toEqual([0]);
+    expect(readFileSync(config.lockPath, 'utf8')).toBe(lease);
+    expect(server.db?.prepare('SELECT 1 AS value').get()).toEqual({ value: 1 });
+  } finally {
+    await server.shutdown();
+  }
+  expect(closed).toEqual([0, config.port]);
   expect(existsSync(config.lockPath)).toBe(false);
 });

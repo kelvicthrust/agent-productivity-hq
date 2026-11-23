@@ -6,5 +6,5 @@
   "requirements": {
     "paseo": ">=0.16.1"
   },
-  "media": ["assets/hq.png"]
+  "media": ["assets/hq.png", "assets/hq-mobile.png"]
 }

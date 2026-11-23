@@ -19,7 +19,7 @@ import { Alert, BUTTON, ROW } from './parts';
 
 const COPY = ACCOUNTS_COPY.claude;
 
-export function ClaudeRow({ card }: { card: Account }) {
+export function ClaudeRow({ card, removalOnly = false }: { card: Account; removalOnly?: boolean }) {
   const toast = useToast();
   const bootstrap = useBootstrap().data;
   const check = useClaudePlanLimitsCheck();
@@ -49,22 +49,28 @@ export function ClaudeRow({ card }: { card: Account }) {
     <li className={ROW}>
       <div className="flex flex-col gap-1">
         <b className="text-copy font-bold text-ink">{COPY.title}</b>
-        <span role="status">
-          {check.isPending ? (
-            <StatusTag kind="checking">{COPY.checking}</StatusTag>
-          ) : (
-            <StatusTag kind={status.kind}>{status.text}</StatusTag>
-          )}
-        </span>
+        {!removalOnly && (
+          <span role="status">
+            {check.isPending ? (
+              <StatusTag kind="checking">{COPY.checking}</StatusTag>
+            ) : (
+              <StatusTag kind={status.kind}>{status.text}</StatusTag>
+            )}
+          </span>
+        )}
       </div>
       <div className="flex min-w-0 flex-col gap-1 text-caption text-ink-muted">
-        <p id="claude-plan-check-description">
-          {report?.provenance === 'claude_code_oauth'
-            ? SOURCES_COPY.accounts.claudeRefresh
-            : SOURCES_COPY.accounts.purpose.claude}
-        </p>
-        {plan?.lastCheckedAt && <p>{CLAUDE_PLAN_COPY.lastChecked(when(plan.lastCheckedAt))}</p>}
-        {report && (
+        {!removalOnly && (
+          <p id="claude-plan-check-description">
+            {report?.provenance === 'claude_code_oauth'
+              ? SOURCES_COPY.accounts.claudeRefresh
+              : SOURCES_COPY.accounts.purpose.claude}
+          </p>
+        )}
+        {!removalOnly && plan?.lastCheckedAt && (
+          <p>{CLAUDE_PLAN_COPY.lastChecked(when(plan.lastCheckedAt))}</p>
+        )}
+        {!removalOnly && report && (
           <>
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
               {report.rateLimits?.map((limit) => (
@@ -89,7 +95,12 @@ export function ClaudeRow({ card }: { card: Account }) {
             )}
           </>
         )}
-        {check.isError ? <Alert>{COPY.checkFailed}</Alert> : guidance && <Alert>{guidance}</Alert>}
+        {!removalOnly &&
+          (check.isError ? (
+            <Alert>{COPY.checkFailed}</Alert>
+          ) : (
+            guidance && <Alert>{guidance}</Alert>
+          ))}
         <a
           href="https://claude.ai/settings/usage"
           target="_blank"
@@ -102,19 +113,21 @@ export function ClaudeRow({ card }: { card: Account }) {
         {health?.state === 'state_unreadable' && <p>{COPY.recordUnreadable}</p>}
       </div>
       <div className="flex flex-wrap justify-end gap-2 max-[719px]:justify-start">
-        <Button
-          ref={checkButton}
-          label={plan?.lastCheckedAt ? COPY.checkAgain : COPY.check}
-          size="sm"
-          variant="secondary"
-          className={BUTTON}
-          aria-describedby="claude-plan-check-description"
-          aria-busy={check.isPending || undefined}
-          aria-disabled={check.isPending || coolingDown || undefined}
-          onClick={() => {
-            if (!check.isPending && !coolingDown) check.mutate();
-          }}
-        />
+        {!removalOnly && (
+          <Button
+            ref={checkButton}
+            label={plan?.lastCheckedAt ? COPY.checkAgain : COPY.check}
+            size="sm"
+            variant="secondary"
+            className={BUTTON}
+            aria-describedby="claude-plan-check-description"
+            aria-busy={check.isPending || undefined}
+            aria-disabled={check.isPending || coolingDown || undefined}
+            onClick={() => {
+              if (!check.isPending && !coolingDown) check.mutate();
+            }}
+          />
+        )}
         {health?.recorded && (
           <Button
             ref={removalButton}

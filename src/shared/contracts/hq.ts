@@ -23,6 +23,8 @@ export const HqWaitReason = z.enum(['permission', 'question', 'plan_approval']);
 export const HqAgent = z.object({
   /** Opaque and stable for as long as the agent is on the roster. */
   id: z.string(),
+  /** Selected daemon's agent identity, available to managed Paseo clients for navigation. */
+  paseoAgentId: z.string().optional(),
   provider: HqProvider,
   kind: z.enum(['root', 'child']),
   /** Only when the parent is on this roster; see `parentAway`. */

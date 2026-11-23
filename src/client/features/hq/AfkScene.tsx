@@ -245,6 +245,69 @@ function Frame({ seed }: { seed: number }) {
   );
 }
 
+/** The quiet room drawing shared by the browser and the native plugin. */
+export function AfkRoom() {
+  return (
+    <svg
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      className="block h-auto w-full overflow-visible"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g
+        className={cx('fill-none stroke-ink', BOIL[0])}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <Frame seed={61} />
+        <Sign />
+        <Note />
+        <g transform={`translate(${DOOR_X} ${FLOOR})`}>
+          <AjarDoor />
+        </g>
+      </g>
+      <g
+        className={cx('fill-none stroke-ink', BOIL[1])}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <g transform={`translate(${CHAIR_X - 64} ${FLOOR})`}>
+          <Plant />
+        </g>
+        <g transform={`translate(${DESK_X} ${FLOOR})`}>
+          <DeskBig />
+        </g>
+        <g transform={`translate(${DESK_X + 34} ${FLOOR - 33})`}>
+          <Mug />
+        </g>
+        <g transform={`translate(${CHAIR_X} ${FLOOR})`}>
+          <Chair />
+        </g>
+      </g>
+      <g
+        className={cx('fill-none stroke-ink', BOIL[2])}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <Prints />
+      </g>
+      <g>
+        <text
+          x={SIGN.x + SIGN.w / 2}
+          y={SIGN.y + 66}
+          fontSize="68"
+          fontWeight="700"
+          textAnchor="middle"
+          className="fill-ink"
+        >
+          {AFK_COPY.sign}
+        </text>
+        <NoteText />
+      </g>
+    </svg>
+  );
+}
+
 /** Nobody is in. Decorative; the footnote beside it says it in words. */
 export function AfkScene() {
   const filters = useSceneFilters();
@@ -261,63 +324,7 @@ export function AfkScene() {
       <div className="relative">
         <Roof />
         <Vent />
-        <svg
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="block h-auto w-full overflow-visible"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <g
-            className={cx('fill-none stroke-ink', BOIL[0])}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <Frame seed={61} />
-            <Sign />
-            <Note />
-            <g transform={`translate(${DOOR_X} ${FLOOR})`}>
-              <AjarDoor />
-            </g>
-          </g>
-          <g
-            className={cx('fill-none stroke-ink', BOIL[1])}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <g transform={`translate(${CHAIR_X - 64} ${FLOOR})`}>
-              <Plant />
-            </g>
-            <g transform={`translate(${DESK_X} ${FLOOR})`}>
-              <DeskBig />
-            </g>
-            <g transform={`translate(${DESK_X + 34} ${FLOOR - 33})`}>
-              <Mug />
-            </g>
-            <g transform={`translate(${CHAIR_X} ${FLOOR})`}>
-              <Chair />
-            </g>
-          </g>
-          <g
-            className={cx('fill-none stroke-ink', BOIL[2])}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <Prints />
-          </g>
-          <g>
-            <text
-              x={SIGN.x + SIGN.w / 2}
-              y={SIGN.y + 66}
-              fontSize="68"
-              fontWeight="700"
-              textAnchor="middle"
-              className="fill-ink"
-            >
-              {AFK_COPY.sign}
-            </text>
-            <NoteText />
-          </g>
-        </svg>
+        <AfkRoom />
         <Ground />
       </div>
     </div>

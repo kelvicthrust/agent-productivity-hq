@@ -3,17 +3,46 @@ import { access, constants, readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
+import {
+  nativeDashboard,
+  type NativeRequest,
+  type NativeResult,
+  type PaseoRead,
+} from '../shared/native.ts';
 import { dashboardUnavailable, LaunchError, tailscaleUnavailable } from './errors.ts';
 import { nodeEnvironment, resolveNodeExecutable } from './node-runtime.ts';
 import { dashboardHttpsPort, type TailnetHost } from './tailscale.ts';
 
 const versionPattern = /^\d+\.\d+\.\d+(?:[-+][\da-z.+-]+)?$/i;
 const port = z.int().min(1).max(65535);
-const dashboardReady = z.object({
+const dashboardReady = z.strictObject({
   type: z.literal('ready'),
   version: z.string(),
   port,
-  remotePort: port,
+});
+const id = z.int().positive();
+const nativeResult = z.strictObject({
+  type: z.literal('native-result'),
+  id,
+  result: nativeDashboard.output,
+});
+const remoteResult = z.discriminatedUnion('ok', [
+  z.strictObject({
+    type: z.literal('remote-result'),
+    id,
+    ok: z.literal(true),
+    port: port.optional(),
+  }),
+  z.strictObject({ type: z.literal('remote-result'), id, ok: z.literal(false) }),
+]);
+const commandReply = z.object({ type: z.enum(['native-result', 'remote-result']), id });
+const paseoRead = z.strictObject({
+  type: z.literal('paseo-read'),
+  id,
+  request: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('agents'), options: z.json() }),
+    z.strictObject({ kind: z.literal('usage') }),
+  ]),
 });
 const dashboardError = z.object({
   type: z.literal('error'),
@@ -90,7 +119,9 @@ export interface OwnedProcess {
 
 export interface DashboardProcess extends OwnedProcess {
   port: number;
-  remotePort: number;
+  attachRemote(host: TailnetHost): Promise<number>;
+  detachRemote(): Promise<void>;
+  native(request: NativeRequest): Promise<NativeResult>;
 }
 
 function track(child: ChildProcess, stopMessage?: Serializable): OwnedProcess {
@@ -176,14 +207,16 @@ function spawnPackagedChild(paths: RuntimePaths, entry: string, args: string[]):
 
 export async function startDashboard(
   paths: RuntimePaths,
-  host: TailnetHost,
   expectedLocalPort: number,
   signal: AbortSignal,
+  readPaseo?: PaseoRead,
 ): Promise<DashboardProcess> {
   if (signal.aborted) throw dashboardUnavailable();
   const child = spawnPackagedChild(paths, paths.entry, []);
   const owned = track(child, { type: 'stop' });
+  const commands = dashboardCommands(child, owned, expectedLocalPort, readPaseo);
   const ready = waitForMessage(child, signal, dashboardUnavailable, (raw) => {
+    if (paseoRead.safeParse(raw).success) return undefined;
     const serviceError = dashboardError.safeParse(raw);
     if (serviceError.success) {
       const { code } = serviceError.data;
@@ -194,9 +227,7 @@ export async function startDashboard(
     if (
       !result.success ||
       result.data.version !== paths.version ||
-      result.data.port !== expectedLocalPort ||
-      result.data.remotePort === expectedLocalPort ||
-      result.data.remotePort === dashboardHttpsPort
+      result.data.port !== expectedLocalPort
     ) {
       throw dashboardUnavailable();
     }
@@ -207,19 +238,119 @@ export async function startDashboard(
       {
         type: 'start',
         version: paths.version,
-        ownerLogin: host.ownerLogin,
-        remoteHost: host.authority,
       },
       (error) => {
         if (error && child.connected) child.disconnect();
       },
     );
-    const { port, remotePort } = await ready;
-    return { ...owned, port, remotePort };
+    const { port } = await ready;
+    return { ...owned, port, ...commands };
   } catch (error) {
     await owned.stop();
     throw error;
   }
+}
+
+function dashboardCommands(
+  child: ChildProcess,
+  owned: OwnedProcess,
+  localPort: number,
+  readPaseo?: PaseoRead,
+): Pick<DashboardProcess, 'attachRemote' | 'detachRemote' | 'native'> {
+  let nextRequestId = 0;
+  const pending = new Map<number, (message?: unknown) => void>();
+  function cancel() {
+    for (const finish of pending.values()) finish();
+  }
+  function send(message: Serializable, failed: () => void) {
+    if (!child.connected) {
+      failed();
+      return;
+    }
+    child.send(message, (error) => {
+      if (error) failed();
+    });
+  }
+  child.on('message', (raw: unknown) => {
+    const read = paseoRead.safeParse(raw);
+    if (read.success) {
+      const { id, request } = read.data;
+      void Promise.resolve()
+        .then(() => readPaseo?.(request))
+        .then(
+          (raw) => {
+            const value = z.json().safeParse(raw);
+            send(
+              value.success
+                ? { type: 'paseo-read-result', id, ok: true, value: value.data }
+                : { type: 'paseo-read-result', id, ok: false },
+              () => {},
+            );
+          },
+          () => send({ type: 'paseo-read-result', id, ok: false }, () => {}),
+        );
+      return;
+    }
+    const message = commandReply.safeParse(raw);
+    if (message.success) pending.get(message.data.id)?.(raw);
+  });
+  child.once('disconnect', cancel);
+  void owned.closed.then(cancel);
+
+  function call(
+    message: object,
+    responseType: z.infer<typeof commandReply>['type'],
+    timeoutMs = 12_000,
+  ): Promise<unknown> {
+    if (!owned.alive()) return Promise.reject(dashboardUnavailable());
+    const requestId = ++nextRequestId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => finish(), timeoutMs).unref();
+      function finish(response?: unknown) {
+        if (response && (response as { type: string }).type !== responseType) return;
+        clearTimeout(timer);
+        pending.delete(requestId);
+        if (response) resolve(response);
+        else reject(dashboardUnavailable());
+      }
+      pending.set(requestId, finish);
+      send({ ...message, id: requestId }, () => finish());
+    });
+  }
+  return {
+    async attachRemote(host) {
+      const result = remoteResult.parse(
+        await call(
+          {
+            type: 'attach-remote',
+            ownerLogin: host.ownerLogin,
+            remoteHost: host.authority,
+          },
+          'remote-result',
+        ),
+      );
+      if (
+        !result.ok ||
+        !result.port ||
+        result.port === localPort ||
+        result.port === dashboardHttpsPort
+      ) {
+        throw dashboardUnavailable();
+      }
+      return result.port;
+    },
+    async detachRemote() {
+      const result = remoteResult.parse(await call({ type: 'detach-remote' }, 'remote-result'));
+      if (!result.ok || result.port !== undefined) throw dashboardUnavailable();
+    },
+    async native(request) {
+      // Paseo's usage providers can take 20 seconds on a cold read.
+      const usage = request.operation === 'usage' || request.operation === 'usageFallback';
+      return nativeResult.parse(
+        await call({ type: 'native', request }, 'native-result', usage ? 29_000 : 12_000),
+      ).result;
+    },
+  };
 }
 
 export async function startServe(

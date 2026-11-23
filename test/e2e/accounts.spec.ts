@@ -754,6 +754,61 @@ test.describe('the Overview account cards', () => {
   });
 });
 
+test.describe('managed weekly subscription quota', () => {
+  test.use({
+    worldOptions: {
+      paseoUsage: {
+        fetchedAt: new Date(FIXED_NOW).toISOString(),
+        providers: [
+          {
+            providerId: 'codex',
+            status: 'available',
+            windows: [
+              {
+                id: 'weekly',
+                label: 'Weekly',
+                usedPct: 41,
+                resetsAt: new Date(FIXED_NOW + 86_400_000).toISOString(),
+              },
+              { id: 'limit:gpt-x:weekly', label: 'GPT X · Weekly', usedPct: 17 },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  test('shows Paseo quota and checks Claude only on request @a11y @responsive', async ({
+    page,
+    world,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`${ORIGIN}/`);
+    const quota = card(page, 'Weekly subscription quota');
+    await expect(quota).toContainText('41% of general weekly limit used');
+    await expect(quota).toContainText('Paseo report');
+    await expect(quota).toContainText('GPT X · Weekly · 17% used');
+    await expect(quota.getByRole('button', { name: 'Check Codex quota' })).toHaveCount(0);
+    const checkClaude = quota.getByRole('button', { name: 'Check Claude Code quota' });
+    await expect(checkClaude).toHaveAccessibleDescription(/existing Claude Code sign-in/);
+    expect(world.claude.planRequests()).toBe(0);
+    await checkClaude.click();
+    await expect(quota).toContainText('62% of general weekly limit used');
+    await expect(quota).toContainText('Direct Claude Code check');
+    expect(world.claude.planRequests()).toBe(1);
+    expect(failures(await measureContainment(page))).toEqual([]);
+    expect(await axeViolations(page)).toEqual([]);
+
+    await page.goto(`${ORIGIN}/sources`);
+    await expect(section(page)).toBeVisible();
+    await expect(checkPlan(page)).toHaveCount(0);
+    const refresh = page.getByRole('button', { name: 'Refresh all', exact: true });
+    await refresh.click();
+    await expect(refresh).toBeEnabled();
+    expect(world.claude.planRequests()).toBe(1);
+  });
+});
+
 // ===========================================================================================================================
 // Layout and accessibility
 // ===========================================================================================================================

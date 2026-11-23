@@ -173,6 +173,18 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
 
   const scratch = mkdtempSync(join(tmpdir(), 'agent-productivity-pack-'));
   try {
+    if (kind === 'paseo') {
+      for (const generator of [
+        'generate-paseo-hq-art.ts',
+        'generate-paseo-hq-boil.ts',
+        'generate-paseo-reporting.ts',
+      ]) {
+        execFileSync(process.execPath, [join(root, 'scripts', generator), '--check'], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+      }
+    }
     const stage = join(scratch, 'package');
     const app = join(stage, 'runtime/app');
     execFileSync('pnpm', ['build', '--outDir', join(app, 'dist/client'), '--sourcemap', 'false'], {
@@ -200,6 +212,16 @@ export function packDashboard(kind: 'cli' | 'paseo'): string {
       JSON.stringify({ name: 'agent-productivity', version, type: 'module' }),
     );
     for (const file of files) cpSync(join(source, file), join(stage, file), { recursive: true });
+    if (kind === 'paseo') {
+      copyFileSync(
+        join(root, 'src/client/theme/fonts/OFL.txt'),
+        join(stage, 'assets/OFL-Nunito.txt'),
+      );
+      copyFileSync(
+        join(root, 'src/client/theme/fonts/OFL-PlaypenSans.txt'),
+        join(stage, 'assets/OFL-PlaypenSans.txt'),
+      );
+    }
     for (const file of ['README.md', 'LICENSE']) copyFileSync(join(root, file), join(stage, file));
     writeFileSync(
       join(stage, 'package.json'),

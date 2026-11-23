@@ -3,14 +3,42 @@
 The current contract exposes an explicit Claude subscription check and a read-only GitHub repository
 picker. Earlier milestone deltas below describe their original revisions. The Sources response
 includes saved account coverage and does not trigger Claude credential reads or provider checks.
-The global browser refresh buttons also send `{ "mode": "refresh" }` to the protected plan-check
+The standalone browser refresh buttons also send `{ "mode": "refresh" }` to the protected plan-check
 endpoint. This checks only a profile with a saved successful OAuth reading and honors the existing
 cooldown. The ordinary `/api/refresh` run proceeds independently.
 
-Overview's ChatGPT report contains the saved weekly Codex subscription limit when the source
+Standalone Overview's ChatGPT report contains the saved weekly Codex subscription limit when the source
 identified the general Codex quota. `coverage.accounts` carries connection status even when the
 weekly reading is unavailable. `/api/sources` carries saved account coverage, including the
 available daily token span.
+
+The managed Paseo session reports its mode in `/api/bootstrap` and serves weekly subscription
+readings at `/api/paseo-quota`. This cache is independent of the roster and local token history.
+The explicit per-provider action rechecks Paseo and uses the local provider sign-in only if Paseo
+lacks a current general weekly reading for that provider. Ordinary managed refreshes leave direct
+checks to that action.
+
+### Native Paseo reports
+
+The Paseo plugin calls `dashboard.native` on the selected host. The managed process validates
+each operation's parameters and calls the existing guarded app in process. Query fields use the
+same names and filter values as HTTP, with integers sent as JSON numbers and `repos` as a
+comma-separated string. Read operations use the same scope, coverage and cursor semantics.
+
+| Native operation | HTTP route |
+| --- | --- |
+| `overview`, `series`, `year`, `models`, `records` | `GET /api/overview`, `/api/series`, `/api/year`, `/api/models`, `/api/records` |
+| `prs`, `prDetail` | `GET /api/prs`, `GET /api/prs/{prId}` |
+| `prLinkSet`, `prLinkRemove` | `PUT` and `DELETE /api/prs/{prId}/links/{sessionId}` |
+| `usageCategories`, `usageGroups`, `usageRoots` | `GET /api/usage/categories`, `/api/usage/groups`, `/api/usage/groups/{groupKey}/roots` |
+| `refresh`, `refreshStatus` | `POST /api/refresh`, `GET /api/refresh/{runId}` |
+
+The plugin supplies raw PR and group IDs. The bridge URL-encodes them, parses the public report
+responses with their API codecs and translates public errors to `reason`, `message` and
+`retryable`. A refresh in progress also returns `details.runId` so the screen can follow it.
+The native allowlist keeps the existing setup, account, repo and quota operations, including
+the explicit managed quota fallback. Reset and Claude settings and legacy capture actions are
+available through their existing web flows.
 
 **Product follow-up:** `RefreshRun.linkRebuild` is `null` when the run reaches the link stage and
 the stored computation is already fresh. That skip preserves the last successful rebuild time.
@@ -168,6 +196,37 @@ components:
             retryable: { type: boolean }
             details: { type: object, additionalProperties: true }
     Provider: { type: string, enum: [codex, claude] }
+    PaseoQuotaResponse:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            required: [provider, source, usedPercent, resetsAt, refreshedAt, stale, canCheck, windows]
+            properties:
+              provider: { $ref: "#/components/schemas/Provider" }
+              source: { anyOf: [{ type: string, enum: [paseo, direct] }, { type: "null" }] }
+              usedPercent: { type: [number, "null"], description: Usage of the general seven-day subscription limit }
+              resetsAt: { type: [string, "null"], format: date-time }
+              refreshedAt: { type: [string, "null"], format: date-time }
+              stale: { type: boolean }
+              canCheck: { type: boolean, description: Paseo lacks a current general weekly reading for this provider }
+              windows:
+                type: array
+                description: Weekly windows scoped to a model, feature, or surface
+                items:
+                  type: object
+                  required: [id, label, usedPercent, resetsAt, source, refreshedAt, stale]
+                  properties:
+                    id: { type: string }
+                    label: { type: string }
+                    usedPercent: { type: number }
+                    resetsAt: { type: [string, "null"], format: date-time }
+                    source: { type: string, enum: [paseo, direct] }
+                    refreshedAt: { type: [string, "null"], format: date-time }
+                    stale: { type: boolean }
     Scope:
       type: object
       required: [start, end, gran, repos, provider, author, timezone]
@@ -413,6 +472,7 @@ components:
       required: [id, provider, kind, parentId, parentBasis, parentAway, title, repo, workspace, state, activity, waitReason, confidence, since, lastActivityAt, startedAt, seenBy]
       properties:
         id: { type: string, description: opaque and stable while the agent is on the roster }
+        paseoAgentId: { type: string, description: same-host Paseo navigation target when known in a managed installation }
         provider: { type: string, enum: [codex, claude, other] }
         kind: { type: string, enum: [root, child] }
         parentId: { type: [string, "null"] }
@@ -559,10 +619,11 @@ paths:
                   lookbackStart: { type: string, format: date, description: today minus 365 days }
                   githubLogin: { type: [string, "null"] }
                   greetingName: { type: [string, "null"], description: GitHub profile name's first word if set, else null (UI then greets without a name) }
+                  paseoManaged: { const: true, description: The session uses Paseo provider quota reports }
                   issues: { type: array, items: { type: object, properties: { kind: { type: string, enum: [source, account, repo] }, id: { type: string }, label: { type: string } } } }
   /api/overview:
     get:
-      description: The ChatGPT entry in accounts contains one verified general Codex quota window of 10080 minutes with unit percent. The report is independent of the filters and is omitted when no verified weekly reading is available. If the refresh leaves the general weekly window unreadable, the last verified reading keeps its original fetch time and becomes stale.
+      description: The standalone ChatGPT entry in accounts contains one verified general Codex quota window of 10080 minutes with unit percent. The report is independent of the filters and is omitted when no verified weekly reading is available. If the refresh leaves the general weekly window unreadable, the last verified reading keeps its original fetch time and becomes stale. Managed sessions use /api/paseo-quota and receive an empty accounts array here.
       parameters: [ { $ref: "#/components/parameters/start" }, { $ref: "#/components/parameters/end" }, { $ref: "#/components/parameters/repos" }, { $ref: "#/components/parameters/provider" }, { $ref: "#/components/parameters/author" } ]
       responses:
         "200":
@@ -590,6 +651,19 @@ paths:
                   periodMergedCount: { type: integer }
                   trueZero: { type: boolean, description: every in-scope source covered the whole elapsed range and there were no events or merges (quiet panel) }
         "400": { $ref: "#/components/responses/Error" }
+  /api/paseo-quota:
+    get:
+      description: Read the managed Paseo session's weekly subscription percentages, independent of local token counts and roster availability. A passive read uses the daemon or retains the result of a prior explicit check.
+      responses:
+        "200": { description: Codex and Claude quota readings, content: { application/json: { schema: { $ref: "#/components/schemas/PaseoQuotaResponse" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/paseo-quota/{provider}/check:
+    post:
+      description: Recheck Paseo and use the selected provider's existing sign-in for a direct limits check only when Paseo has no usable general weekly reading.
+      parameters: [ { name: provider, in: path, required: true, schema: { $ref: "#/components/schemas/Provider" } }, { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
+      responses:
+        "200": { description: Updated quota readings, content: { application/json: { schema: { $ref: "#/components/schemas/PaseoQuotaResponse" } } } }
+        "404": { $ref: "#/components/responses/Error" }
   /api/series:
     get:
       parameters: [ { $ref: "#/components/parameters/start" }, { $ref: "#/components/parameters/end" }, { $ref: "#/components/parameters/gran" }, { $ref: "#/components/parameters/repos" }, { $ref: "#/components/parameters/provider" }, { $ref: "#/components/parameters/author" } ]
@@ -726,7 +800,7 @@ paths:
         plan and fingerprint. If they cannot be removed the answer is still the new status, read from disk, with `reason:
         cleanup_incomplete` and `leftover`. Changes are made one at a time. The answer is the new status, read from disk.
       parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], additionalProperties: false, properties: { enabled: { type: boolean }, preview: { type: string, maxLength: 200, description: "the `plans.<action>.preview` of the action that was shown and is confirmed; required in effect: without a current one for that action the answer is 409 claude_hooks_stale" } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], additionalProperties: false, properties: { enabled: { type: boolean }, preview: { type: string, maxLength: 200, description: "the `plans.<action>.preview` for the action the owner chose; required in effect: without a current one for that action the answer is 409 claude_hooks_stale" } } } } } }
       responses:
         "200": { description: The new status, content: { application/json: { schema: { $ref: "#/components/schemas/ClaudeHooksStatus" } } } }
         "400": { $ref: "#/components/responses/Error" }
@@ -860,7 +934,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
   /api/accounts/claude/plan-limits/check:
     post:
-      description: Check the active Claude Code profile once. Refresh mode requires a previous successful check for that profile. Expected provider failures are returned as account states.
+      description: Check the active Claude Code profile once in a standalone session. Refresh mode requires a previous successful check for that profile. Expected provider failures are returned as account states. Managed sessions use /api/paseo-quota/claude/check.
       parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
       requestBody: { content: { application/json: { schema: { type: object, properties: { mode: { type: string, const: refresh } }, additionalProperties: false } } } }
       responses:

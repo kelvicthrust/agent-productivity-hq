@@ -28,10 +28,8 @@ export function useHq() {
 }
 
 // Claude Code's hooks, the owner's opt-in switch (docs/tech/local-api.md, GET and PUT /api/hq/claude-hooks). The preview is read only
-// when the owner opens "What will change", or presses the button before it is open (the roster's own `exactPrompts` says whether it is
-// on, so the screen asks for nothing else). The switch is a PUT that carries the preview's fingerprint, so the server
-// writes only what was shown; its answer is the new status. A failed change reads the preview and the roster again, so the page shows
-// what is on disk, not what it expected.
+// when the owner opens the disclosure or presses an action. The switch is a PUT that carries the action’s
+// fingerprint, so the server can reject changes to settings that occurred after the preview was read.
 
 const HOOKS_PATH = '/api/hq/claude-hooks';
 

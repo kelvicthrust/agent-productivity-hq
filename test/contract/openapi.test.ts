@@ -17,6 +17,7 @@ import { createClaudeCapture } from '../../src/server/integrations/claudeCapture
 import { createGithubAccounts } from '../../src/server/services/accounts-github.ts';
 import { createClaudeAccounts } from '../../src/server/services/claude-account.ts';
 import { createHookStore } from '../../src/server/services/hq/hookStore.ts';
+import { createPaseoQuotaService } from '../../src/server/services/paseo-quota.ts';
 import { rig } from '../claudeHooks/helpers.ts';
 import { upsertPullRequests } from '../../src/server/db/queries/prs.ts';
 import { upsertSession } from '../../src/server/db/queries/usage.ts';
@@ -154,6 +155,14 @@ describe('what the server serves against the document', () => {
   const hookIngest = { store: createHookStore({ now: () => NOW }), token: hookToken };
   const { app } = testApp({ hookIngest });
   const served = servedRoutes(app);
+  const managed = testApp({
+    paseoQuota: createPaseoQuotaService({
+      listUsage: async () => ({ providers: [] }),
+      checkCodex: async () => null,
+      checkClaude: async () => null,
+      now: () => NOW,
+    }),
+  }).app;
 
   it('serves only routes the contracts describe', () => {
     for (const key of served) expect(all, key).toContain(key);
@@ -177,6 +186,7 @@ describe('what the server serves against the document', () => {
       'GET /api/hq/claude-hooks',
       'GET /api/models',
       'GET /api/overview',
+      'GET /api/paseo-quota',
       'GET /api/prs',
       'GET /api/prs/{prId}',
       'GET /api/records',
@@ -193,6 +203,7 @@ describe('what the server serves against the document', () => {
       'POST /api/accounts/{account}/connect',
       'POST /api/accounts/{account}/disconnect',
       'POST /api/hq/hooks/claude',
+      'POST /api/paseo-quota/{provider}/check',
       'POST /api/refresh',
       'POST /api/repos',
       'POST /api/repos/{owner}/{name}/recheck',
@@ -343,7 +354,9 @@ describe('what the server serves against the document', () => {
               ? await appWithGithub(true)
               : key === 'POST /api/setup/reset'
                 ? testApp().app
-                : app;
+                : key.includes('/api/paseo-quota')
+                  ? managed
+                  : app;
     // A run has to exist before it can be read: start one (the app has no adapters, so every source is skipped).
     if (key === 'GET /api/refresh/{runId}')
       await call(app, '/api/refresh', { method: 'POST', headers: WRITE, body: '{}' });
@@ -372,6 +385,7 @@ describe('what the server serves against the document', () => {
       .replace('{groupKey}', '__untracked')
       .replace('{runId}', '1')
       .replace('{account}', 'github')
+      .replace('{provider}', 'codex')
       .replace('{loginId}', loginId)
       .replace('{owner}', 'kelvin')
       .replace('{name}', 'atlas-api');

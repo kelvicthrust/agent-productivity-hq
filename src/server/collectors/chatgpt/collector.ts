@@ -1,4 +1,5 @@
 import type { Db } from '../../db/open.ts';
+import type { AccountReport } from '../../../shared/contracts/accounts.ts';
 import {
   readChatgptConnection,
   recordFailedChatgptRead,
@@ -67,6 +68,48 @@ const FAILED: Record<Failure, { code: string; message: string }> = {
 
 export function createChatgptAdapter(options: ChatgptAdapterOptions): SourceAdapter {
   return { id: 'chatgpt_account', refresh: (context) => refreshChatgpt(context, options) };
+}
+
+/** An explicit managed fallback reads just the general Codex quota. */
+export async function checkCodexQuota(
+  options: ChatgptAdapterOptions,
+  now: () => number,
+): Promise<AccountReport | null> {
+  const opened = await openSession(options.launch, {
+    ...(options.clientVersion === undefined ? {} : { clientVersion: options.clientVersion }),
+    ...(options.callTimeoutMs === undefined ? {} : { callTimeoutMs: options.callTimeoutMs }),
+  });
+  if (opened.kind !== 'ready') return null;
+  const { session } = opened;
+  try {
+    const account = await session.call('account/read', { refreshToken: false });
+    if (account.kind !== 'result' || parseAccount(account.result) !== 'chatgpt') return null;
+    const reply = await session.call('account/rateLimits/read', {});
+    if (reply.kind !== 'result') return null;
+    const report = parseRateLimits(reply.result);
+    if (report?.quota !== 'codex') return null;
+    const weekly = report.limits.find((limit) => limit.windowMinutes === 10_080);
+    if (!weekly) return null;
+    const at = now();
+    return {
+      account: 'chatgpt',
+      unit: 'percent',
+      scopeLabel: 'ChatGPT subscription plan limits',
+      refreshedAt: new Date(at).toISOString(),
+      stale: weekly.resetsAt !== null && weekly.resetsAt <= at,
+      rateLimits: [
+        {
+          limitId: weekly.limitId,
+          label: 'Weekly',
+          usedPercent: weekly.usedPercent,
+          windowMinutes: weekly.windowMinutes,
+          resetsAt: weekly.resetsAt === null ? null : new Date(weekly.resetsAt).toISOString(),
+        },
+      ],
+    };
+  } finally {
+    session.close();
+  }
 }
 
 function failedReport(db: Db, at: number, why: Failure): AdapterReport {

@@ -9,6 +9,7 @@ import type { ChatgptAccounts } from '../services/accounts.ts';
 import type { ClaudeAccounts } from '../services/claude-account.ts';
 import type { ClaudeHooks } from '../integrations/claudeHooks/index.ts';
 import type { HqService } from '../services/hq/service.ts';
+import type { PaseoQuotaService } from '../services/paseo-quota.ts';
 import { createResetService, RESET_PATH, type ResetService } from '../services/reset.ts';
 import { apiNotFound, correlation, errorHandler, type HttpEnv } from './errors.ts';
 import {
@@ -26,6 +27,7 @@ import { hqHooksRoutes, type HookIngest } from './routes/hqHooks.ts';
 import { linksRoutes } from './routes/links.ts';
 import { modelsRoutes } from './routes/models.ts';
 import { overviewRoutes } from './routes/overview.ts';
+import { paseoQuotaRoutes } from './routes/paseo-quota.ts';
 import { prsRoutes } from './routes/prs.ts';
 import { recordsRoutes } from './routes/records.ts';
 import { refreshRoutes } from './routes/refresh.ts';
@@ -79,6 +81,8 @@ export interface AppDeps {
   chatgpt?: ChatgptAccounts | undefined;
   /** The Claude plan-usage capture (services/claude-account.ts): the preview and switch routes and the Claude card. */
   claude?: ClaudeAccounts | undefined;
+  /** The managed app uses the owning Paseo daemon for provider quota. */
+  paseoQuota?: PaseoQuotaService | undefined;
   /**
    * The live HQ roster (services/hq/service.ts) behind GET /api/hq. Without it the route answers with every feed unavailable and no
    * agents: no live feeder is wired yet.
@@ -121,7 +125,8 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.use('*', csrfGuard(deps.logger));
   app.onError(errorHandler(deps.logger));
 
-  const reset = deps.reset ?? createResetService(deps);
+  const reset =
+    deps.reset ?? createResetService({ ...deps, clearRuntime: () => deps.paseoQuota?.clear() });
   app.use('/api/*', async (c, next) => {
     if (c.req.path === RESET_PATH && c.req.method === 'POST') return next();
     const leave = reset.enter();
@@ -133,7 +138,11 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   });
 
   app.route('/', healthRoutes({ db: deps.db, version: deps.version }));
-  app.route('/', bootstrapRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
+  const paseoManaged = deps.paseoQuota !== undefined;
+  app.route(
+    '/',
+    bootstrapRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone, paseoManaged }),
+  );
   app.route(
     '/',
     repoRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone, github: deps.repos }),
@@ -145,7 +154,7 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.route('/', usageRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   // The review surfaces (M7): one clock and one report timezone for every figure on a page.
   const review = { db: deps.db, now: deps.now, timezone: deps.timezone };
-  app.route('/', overviewRoutes({ ...review, claude: deps.claude }));
+  app.route('/', overviewRoutes({ ...review, claude: deps.claude, paseoManaged }));
   app.route('/', seriesRoutes(review));
   app.route('/', recordsRoutes(review));
   app.route('/', modelsRoutes(review));
@@ -162,8 +171,14 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   );
   app.route(
     '/',
-    accountRoutes({ github: deps.github, chatgpt: deps.chatgpt, claude: deps.claude }),
+    accountRoutes({
+      github: deps.github,
+      chatgpt: deps.chatgpt,
+      claude: deps.claude,
+      paseoManaged,
+    }),
   );
+  app.route('/', paseoQuotaRoutes(deps.paseoQuota));
   app.route(
     '/',
     hqRoutes({ now: deps.now, hq: deps.hq, exactPrompts: () => exactPrompts(deps.claudeHooks) }),

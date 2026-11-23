@@ -21,6 +21,7 @@ export const BootstrapResponse = z.object({
   lookbackStart: DateString,
   githubLogin: z.string().nullable().optional(),
   greetingName: z.string().nullable().optional(),
+  paseoManaged: z.literal(true).optional(),
   issues: z.array(BootstrapIssue),
 });
 export type BootstrapResponse = z.infer<typeof BootstrapResponse>;

@@ -514,19 +514,18 @@ test.describe('Sources hooks switch', () => {
     );
     await expect(section).toContainText(': agent-productivity-hq-hook;');
     expect(world.hooks!.changes).toEqual([]);
+    await toggle.click();
 
     await section.getByRole('button', { name: 'Turn on' }).click();
     await expect(section.getByText(/^Turned on\. Claude Code will tell HQ/)).toBeVisible();
     await expect(section.getByRole('button', { name: 'Turn off' })).toBeVisible();
     await expect(section).toContainText('On. Claude Code tells HQ when it needs you.');
     expect(world.hooks!.changes).toEqual([true]);
-    // The plan that was confirmed is spent: the first press of Turn off reads turning off's own plan and writes nothing; the second confirms.
-    await section.getByRole('button', { name: 'Turn off' }).click();
-    expect(world.hooks!.changes).toEqual([true]);
-    await expect(section.getByText(/^Nothing has changed\./)).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await section.getByRole('button', { name: 'Turn off' }).click();
     await expect(section.getByText(/^Turned off\./)).toBeVisible();
     await expect(section.getByRole('button', { name: 'Turn on' })).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(world.hooks!.changes).toEqual([true, false]);
   });
 
@@ -536,14 +535,16 @@ test.describe('Sources hooks switch', () => {
     const world = await openSources(page, 1280, 'off');
     world.hooks!.failNext('not_json');
     const section = hooksSection(page);
-    await section.getByRole('button', { name: 'What will change' }).click();
-    await expect(section).toContainText(': agent-productivity-hq-hook;');
     await section.getByRole('button', { name: 'Turn on' }).click();
     const alert = section.getByRole('alert');
     await expect(alert).toContainText(
       'Claude Code’s settings file isn’t valid JSON, so HQ didn’t change it.',
     );
     await expect(alert).toContainText('Nothing was turned on or off.');
+    await expect(section.getByRole('button', { name: 'What will change' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     await expect(section.getByRole('button', { name: 'Turn on' })).toBeVisible();
     // Trying again works: the next call succeeds.
     await section.getByRole('button', { name: 'Turn on' }).click();
