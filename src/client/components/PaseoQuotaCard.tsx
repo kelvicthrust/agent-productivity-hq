@@ -106,26 +106,30 @@ export function PaseoQuotaCard({
                   key={row.provider}
                   className="flex min-w-0 flex-col gap-2 py-3 first:pt-0 last:pb-0"
                 >
-                  <h3 className="text-label font-semibold text-ink">{name}</h3>
-                  <div aria-live="polite">
-                    {row.usedPercent === null ? (
-                      <p className="text-copy text-ink-muted">General weekly quota unavailable.</p>
-                    ) : (
-                      <>
-                        <p className="font-display text-metric text-ink">
+                  <div aria-live="polite" className="flex min-w-0 flex-col gap-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <h3 className="text-label font-semibold text-ink">{name}</h3>
+                      {row.usedPercent === null ? (
+                        <p className="text-caption text-ink-muted">
+                          General weekly quota unavailable.
+                        </p>
+                      ) : (
+                        <p className="font-display text-title-page tabular-nums text-ink">
                           {PERCENT.format(row.usedPercent)}%{' '}
                           <span className="font-sans text-label tracking-normal text-ink-muted">
                             of general weekly limit used
                           </span>
                         </p>
-                        <p className="text-caption text-ink-muted">{details(row.provider, row)}</p>
-                      </>
+                      )}
+                    </div>
+                    {row.usedPercent !== null && (
+                      <p className="text-caption text-ink-muted">{details(row.provider, row)}</p>
                     )}
                     {row.windows.length > 0 && (
-                      <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+                      <ul className="m-0 mt-2 flex list-none flex-col gap-2 border-s border-border py-0 pe-0 ps-3">
                         {row.windows.map((window) => (
                           <li key={`${window.source}/${window.id}`} className="min-w-0 break-words">
-                            <p className="text-label font-semibold text-ink">
+                            <p className="text-caption font-semibold tabular-nums text-ink">
                               {window.label} · {PERCENT.format(window.usedPercent)}% used
                             </p>
                             <p className="text-caption text-ink-muted">
