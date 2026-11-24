@@ -6,7 +6,15 @@ import type { Problem } from '../../../lib/repos';
 
 // A failed add, in words, with the one step that fixes it when there is one: the GitHub setup (no sign-in yet) or the page where
 // the App gets installed on an owner. It is an alert, so it is read out when it appears; the field names it with aria-describedby.
-export function ProblemLine({ id, problem }: { id: string; problem: Problem }) {
+export function ProblemLine({
+  id,
+  problem,
+  onNeedsGithub = focusGithubSection,
+}: {
+  id: string;
+  problem: Problem;
+  onNeedsGithub?: () => void;
+}) {
   return (
     <div
       id={id}
@@ -35,7 +43,7 @@ export function ProblemLine({ id, problem }: { id: string; problem: Problem }) {
           size="sm"
           variant="secondary"
           className="max-[719px]:min-h-11"
-          onClick={focusGithubSection}
+          onClick={onNeedsGithub}
         />
       )}
     </div>
