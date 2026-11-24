@@ -3,11 +3,12 @@ import { boot, type ListenFn, type RunningServer } from '../../src/server/boot.t
 import { migrate } from '../../src/server/db/migrate.ts';
 import { openDatabase } from '../../src/server/db/open.ts';
 import { completeSetup } from '../../src/server/db/queries/setup.ts';
+import { FULL_LISTING_EVERY_MS } from '../../src/server/collectors/live/heuristics.ts';
 import { HqResponse } from '../../src/shared/contracts/hq.ts';
 import { SENTINELS } from '../collectors/live/lines.ts';
-import { at, makeHomes, stamp } from '../collectors/live/feedHelpers.ts';
+import { at, makeHomes, S1, stamp } from '../collectors/live/feedHelpers.ts';
 import { HOST, TZ, call, memoryLogger, tempConfig, tempDir } from './helpers.ts';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // HQ's transcript feeds through the real boot, over temp provider homes holding invented transcripts. What is checked is the demand: nothing
@@ -42,7 +43,9 @@ afterEach(async () => {
   looks.refreshes = 0;
 });
 
-async function start(options: { setupDone?: boolean; local?: boolean; idleMs?: number } = {}) {
+async function start(
+  options: { setupDone?: boolean; local?: boolean; idleMs?: number; now?: () => number } = {},
+) {
   const homes = makeHomes(CLOCK);
   const config = tempConfig();
   mkdirSync(config.dataDir, { recursive: true });
@@ -54,7 +57,7 @@ async function start(options: { setupDone?: boolean; local?: boolean; idleMs?: n
   const server = await boot(config, {
     logger,
     listen,
-    now: () => CLOCK,
+    now: options.now ?? (() => CLOCK),
     timezone: TZ,
     scheduler: false,
     // No batch import: the only readers of the provider folders in this process are the live feeds.
@@ -79,6 +82,20 @@ const hq = async (server: RunningServer) => {
   return HqResponse.parse(await response.json());
 };
 
+function writeWorkingChild(project: string, name: string): void {
+  const child = join(project, S1, 'subagents', `${name}.jsonl`);
+  writeFileSync(
+    child,
+    JSON.stringify({
+      type: 'user',
+      isSidechain: true,
+      timestamp: new Date(CLOCK - 1000).toISOString(),
+      message: { content: SENTINELS[0] },
+    }) + '\n',
+  );
+  stamp(child, CLOCK);
+}
+
 async function until(condition: () => boolean, what: string): Promise<void> {
   for (let waited = 0; waited < 5_000; waited += 5) {
     if (condition()) return;
@@ -102,6 +119,142 @@ async function stillFor(quietMs: number): Promise<number> {
 }
 
 describe('transcript feeds through boot', () => {
+  it.each(['recent housekeeping', 'old modification time'] as const)(
+    'groups working Claude subagents under their expired parent on first load (%s)',
+    async (parentFile) => {
+      const { server, homes, logs } = await start();
+      const project = join(homes.claudeDir, 'projects', '-work-invented-project');
+      const parent = join(project, `${S1}.jsonl`);
+      const old = CLOCK - 60 * 60_000;
+      const conversation = {
+        type: 'assistant',
+        timestamp: new Date(old).toISOString(),
+        message: { stop_reason: 'end_turn', content: [{ type: 'text', text: SENTINELS[0] }] },
+      };
+      const records = [
+        conversation,
+        ...(parentFile === 'recent housekeeping'
+          ? [{ type: 'cost-state', timestamp: new Date(CLOCK).toISOString() }]
+          : []),
+      ];
+      writeFileSync(parent, records.map((record) => JSON.stringify(record)).join('\n') + '\n');
+      stamp(parent, parentFile === 'recent housekeeping' ? CLOCK : old);
+      for (const name of ['agent-a1', 'agent-a2']) writeWorkingChild(project, name);
+
+      const body = await hq(server);
+      const children = body.agents.filter(
+        (agent) => agent.provider === 'claude' && agent.kind === 'child',
+      );
+      expect(children).toHaveLength(2);
+      expect(children[0]).toMatchObject({
+        parentId: expect.any(String),
+        parentBasis: 'native',
+        parentAway: false,
+        state: 'working',
+      });
+      expect(children[1]).toMatchObject({ parentId: children[0]!.parentId, state: 'working' });
+      expect(body.agents.filter((agent) => agent.id === children[0]!.parentId)).toEqual([
+        expect.objectContaining({
+          kind: 'root',
+          state: 'idle',
+          lastActivityAt: new Date(old).toISOString(),
+        }),
+      ]);
+      const output = JSON.stringify({ body, logs });
+      for (const sentinel of [SENTINELS[0], homes.root, S1]) expect(output).not.toContain(sentinel);
+    },
+  );
+
+  it.each(['missing', 'symbolic link', 'housekeeping only', 'recent activity'] as const)(
+    'keeps a working Claude subagent visible when idle parent context is unavailable (%s)',
+    async (parentFile) => {
+      const { server, homes } = await start();
+      const project = join(homes.claudeDir, 'projects', '-work-invented-project');
+      const parent = join(project, `${S1}.jsonl`);
+      rmSync(parent);
+      if (parentFile === 'symbolic link') {
+        const outside = join(homes.root, 'outside.jsonl');
+        writeFileSync(
+          outside,
+          JSON.stringify({
+            type: 'user',
+            timestamp: new Date(at(1)).toISOString(),
+            message: { content: SENTINELS[0] },
+          }) + '\n',
+        );
+        stamp(outside, CLOCK);
+        symlinkSync(outside, parent);
+      } else if (parentFile === 'housekeeping only') {
+        writeFileSync(parent, JSON.stringify({ type: 'cost-state', timestamp: CLOCK }) + '\n');
+        stamp(parent, CLOCK);
+      } else if (parentFile === 'recent activity') {
+        // The ordinary discovery window misses this file. A recent conversation cannot make an idle parent.
+        writeFileSync(
+          parent,
+          JSON.stringify({
+            type: 'user',
+            timestamp: new Date(CLOCK - 1000).toISOString(),
+            message: { content: SENTINELS[0] },
+          }) + '\n',
+        );
+        stamp(parent, CLOCK - 60 * 60_000);
+      }
+      writeWorkingChild(project, 'agent-a1');
+
+      const body = await hq(server);
+      const children = body.agents.filter(
+        (agent) => agent.provider === 'claude' && agent.kind === 'child',
+      );
+      expect(children).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          parentBasis: 'native',
+          parentAway: true,
+          parentId: null,
+        }),
+      ]);
+    },
+  );
+
+  it('keeps the same parent id after an expired parent resumes and is discovered again', async () => {
+    let clock = CLOCK;
+    const { server, homes } = await start({ now: () => clock });
+    const project = join(homes.claudeDir, 'projects', '-work-invented-project');
+    const parent = join(project, `${S1}.jsonl`);
+    const recordParent = (at: number) => {
+      writeFileSync(
+        parent,
+        JSON.stringify({
+          type: 'user',
+          timestamp: new Date(at).toISOString(),
+          message: { content: SENTINELS[0] },
+        }) + '\n',
+      );
+      stamp(parent, at);
+    };
+    recordParent(clock - 60 * 60_000);
+    writeWorkingChild(project, 'agent-a1');
+
+    const childIn = (body: HqResponse) =>
+      body.agents.find((agent) => agent.provider === 'claude' && agent.kind === 'child');
+    const initial = await hq(server);
+    const parentId = childIn(initial)?.parentId;
+    expect(initial.agents.find((agent) => agent.id === parentId)?.state).toBe('idle');
+
+    recordParent(clock);
+    // The exact lookup sees the write between full scans. It must stop reporting the parent as idle.
+    await vi.waitFor(async () => {
+      const body = await hq(server);
+      expect(body.agents.find((agent) => agent.id === parentId)?.state).not.toBe('idle');
+    });
+    clock += FULL_LISTING_EVERY_MS;
+    await vi.waitFor(async () => {
+      const body = await hq(server);
+      expect(body.agents.find((agent) => agent.id === parentId)?.state).toBe('working');
+      expect(childIn(body)).toMatchObject({ parentId, parentAway: false });
+    });
+  });
+
   it('reads nothing until the first /api/hq, then answers with the sessions the transcripts show', async () => {
     const { server } = await start();
     await new Promise((resolve) => setTimeout(resolve, 60));

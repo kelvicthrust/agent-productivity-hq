@@ -213,9 +213,9 @@ export function createHqService(options: HqServiceOptions): HqService & { stop()
         const readOptions = {
           guessesPermission: (sessionId: string) => !(options.hooks?.delivered(sessionId) ?? false),
         };
-        const transcripts = [feeds.claude, feeds.codex].flatMap((feed) =>
-          feed?.status() === 'live' ? feed.read(readOptions).agents : [],
-        );
+        const claude = feeds.claude?.status() === 'live' ? feeds.claude.read(readOptions) : null;
+        const codex = feeds.codex?.status() === 'live' ? feeds.codex.read(readOptions) : null;
+        const transcripts = [...(claude?.agents ?? []), ...(codex?.agents ?? [])];
         const hooks = options.hooks?.read();
         if (paseo === null && transcripts.length === 0 && (hooks?.size ?? 0) === 0)
           return response(statuses, [], false);
@@ -223,6 +223,7 @@ export function createHqService(options: HqServiceOptions): HqService & { stop()
           agents: paseo?.agents ?? [],
           includePaseoAgentIds: options.includePaseoAgentIds,
           transcripts,
+          claudeParents: claude?.parents,
           now: now(),
           repoOf: repoFor,
           labelsOf: storedLabels,

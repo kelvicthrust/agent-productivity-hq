@@ -5,8 +5,8 @@ import { MAX_LIVE_TITLE_CHARS, clipped } from '../../lib/liveText.ts';
 import { normaliseProvider } from '../../collectors/paseo/agents.ts';
 import type { LiveAgent } from '../../collectors/paseo/liveAgent.ts';
 import { mapLiveState, type LiveState } from '../../collectors/paseo/liveState.ts';
-import type { TranscriptAgent } from '../../collectors/live/feed.ts';
-import { FINISHED_VISIBLE_MS } from '../../collectors/live/heuristics.ts';
+import type { TranscriptAgent, TranscriptParent } from '../../collectors/live/feed.ts';
+import { DROP_AFTER_MS, FINISHED_VISIBLE_MS } from '../../collectors/live/heuristics.ts';
 import type { HookRecord } from './hookStore.ts';
 import { liveSessionKey, type LiveSessionKey, type LiveSessionLabel } from '../../db/queries/hq.ts';
 
@@ -128,7 +128,7 @@ interface Entity {
   /** What orders the entity among equals: the Paseo id when there is one, else the transcript key. */
   sortKey: string;
   shown: Shown;
-  /** An expired Paseo row that can still link a crew with actionable work. */
+  /** An inactive parent that can still link a crew with actionable work. */
   ancestorOnly?: true;
 }
 
@@ -139,6 +139,8 @@ export interface RosterInput {
   includePaseoAgentIds?: boolean | undefined;
   /** The sessions the Claude Code and Codex feeds see. */
   transcripts?: readonly TranscriptAgent[] | undefined;
+  /** Claude Code parents verified independently of the normal live window. */
+  claudeParents?: readonly TranscriptParent[] | undefined;
   now: number;
   /** `owner/name` for a working directory, or null. Read-only; defaults to "no repo". */
   repoOf?: ((cwd: string | null) => string | null) | undefined;
@@ -453,6 +455,45 @@ export function buildRoster(input: RosterInput): Roster {
         since: agent.updatedAt,
         lastActivityAt: agent.updatedAt,
       },
+      ancestorOnly: true,
+    });
+  }
+
+  const claudeParents = [...(input.claudeParents ?? [])].sort(
+    (a, b) => b.lastActivityAt - a.lastActivityAt,
+  );
+  for (const parent of claudeParents) {
+    const session = liveSessionKey('claude', parent.sessionId);
+    if (activeSessions.has(session) || contextualSessions.has(session)) continue;
+    const at = liveTime(parent.lastActivityAt, now);
+    // A recent parent goes through normal live discovery, even when its file has not been followed yet.
+    if (at === null || now - at < DROP_AFTER_MS) continue;
+    const idle = {
+      state: 'idle',
+      activity: 'none',
+      waitReason: null,
+      since: at,
+      lastActivityAt: at,
+    } as const;
+    const transcript: TranscriptAgent = {
+      ...parent,
+      ...idle,
+      provider: 'claude',
+      parentSessionId: null,
+      startedAt: null,
+    };
+    const hook = hookViews.get(session);
+    if (hook && fromHook(hook, transcript, now) === 'ended') continue;
+    contextualSessions.add(session);
+    entities.push({
+      paseo: null,
+      transcript,
+      hook: null,
+      identity: session,
+      session,
+      keys: [session],
+      sortKey: session,
+      shown: { ...idle, confidence: 'inferred' },
       ancestorOnly: true,
     });
   }

@@ -34,6 +34,8 @@ const transcript = (over: Partial<TranscriptAgent> & { sessionId: string }): Tra
 const build = (input: {
   paseo?: Parameters<typeof liveAgent>[0][];
   transcripts?: TranscriptAgent[];
+  claudeParents?: Parameters<typeof buildRoster>[0]['claudeParents'];
+  hooks?: Parameters<typeof buildRoster>[0]['hooks'];
   memo?: KeyMemo;
   labelsOf?: Parameters<typeof buildRoster>[0]['labelsOf'];
   now?: number;
@@ -41,6 +43,8 @@ const build = (input: {
   buildRoster({
     agents: (input.paseo ?? []).map(liveAgent),
     transcripts: input.transcripts ?? [],
+    claudeParents: input.claudeParents,
+    hooks: input.hooks,
     now: input.now ?? NOW,
     memo: input.memo,
     labelsOf: input.labelsOf,
@@ -505,6 +509,153 @@ describe('parents', () => {
       transcripts: [transcript({ sessionId: 'b-s', parentSessionId: 'a-s' })],
     });
     expect(roster.agents.every((agent) => agent.parentId === null)).toBe(true);
+  });
+});
+
+describe('an aged-out Claude parent', () => {
+  const parent = {
+    sessionId: 'main',
+    cwd: '/work/invented/parent-project',
+    lastActivityAt: NOW - 35 * MIN,
+  };
+  const child = transcript({ sessionId: 'main:helper', parentSessionId: parent.sessionId });
+  const parentId = keyId('claude:main');
+  const childId = keyId('claude:main:helper');
+
+  it('provides idle context for an actionable child and keeps its identity when it resumes', () => {
+    const memo = createKeyMemo();
+    const contextual = build({
+      transcripts: [child],
+      claudeParents: [parent, parent],
+      memo,
+    });
+    expect(contextual.agents).toHaveLength(2);
+    expect(contextual.agents.find((agent) => agent.id === parentId)).toMatchObject({
+      provider: 'claude',
+      kind: 'root',
+      state: 'idle',
+      activity: 'none',
+      waitReason: null,
+      confidence: 'inferred',
+      workspace: 'parent-project',
+      lastActivityAt: new Date(parent.lastActivityAt).toISOString(),
+      seenBy: { paseo: false, transcript: true },
+    });
+    expect(contextual.agents.find((agent) => agent.id === childId)).toMatchObject({
+      kind: 'child',
+      parentId,
+      parentBasis: 'native',
+      parentAway: false,
+    });
+
+    const resumed = build({
+      transcripts: [child, transcript({ sessionId: parent.sessionId })],
+      claudeParents: [parent],
+      memo,
+    });
+    expect(resumed.agents).toHaveLength(2);
+    expect(resumed.agents.find((agent) => agent.id === parentId)).toMatchObject({
+      state: 'working',
+      activity: 'editing',
+      workspace: 'project',
+    });
+    expect(resumed.agents.find((agent) => agent.id === childId)?.parentId).toBe(parentId);
+  });
+
+  it('drops the context once the child is idle or gone', () => {
+    const claudeParents = [parent];
+    const memo = createKeyMemo();
+    expect(build({ transcripts: [child], claudeParents, memo }).agents).toHaveLength(2);
+    const idle = build({
+      transcripts: [{ ...child, state: 'idle', activity: 'none' }],
+      claudeParents,
+      memo,
+    });
+    expect(idle.agents).toHaveLength(1);
+    expect(idle.agents[0]).toMatchObject({ id: childId, parentId: null, parentAway: true });
+    expect(build({ claudeParents, memo }).agents).toEqual([]);
+  });
+
+  it('honors SessionEnd unless a subsequent parent transcript line clears it', () => {
+    const at = parent.lastActivityAt;
+    const ended = build({
+      transcripts: [child],
+      claudeParents: [parent],
+      hooks: new Map([[parent.sessionId, { kind: 'end', at, cwd: null }]]),
+    });
+    expect(ended.agents).toHaveLength(1);
+    expect(ended.agents[0]).toMatchObject({ id: childId, parentId: null, parentAway: true });
+
+    const laterEvidence = build({
+      transcripts: [child],
+      claudeParents: [parent],
+      hooks: new Map([[parent.sessionId, { kind: 'end', at: at - MIN, cwd: null }]]),
+    });
+    expect(laterEvidence.agents.find((agent) => agent.id === parentId)?.state).toBe('idle');
+    expect(laterEvidence.agents.find((agent) => agent.id === childId)?.parentId).toBe(parentId);
+  });
+
+  it('uses an eligible expired Paseo parent or a live hook before the transcript context', () => {
+    const withPaseo = build({
+      paseo: [
+        {
+          id: 'paseo-main',
+          provider: 'claude',
+          sessionId: parent.sessionId,
+          title: 'Paseo parent',
+          updatedAt: NOW - 31 * MIN,
+        },
+      ],
+      transcripts: [child],
+      claudeParents: [parent],
+    });
+    expect(withPaseo.agents).toHaveLength(2);
+    expect(withPaseo.agents.find((agent) => agent.id === parentId)).toMatchObject({
+      title: 'Paseo parent',
+      state: 'idle',
+      seenBy: { paseo: true, transcript: false },
+    });
+    expect(withPaseo.agents.find((agent) => agent.id === childId)?.parentId).toBe(parentId);
+
+    const withHook = build({
+      transcripts: [child],
+      claudeParents: [parent],
+      hooks: new Map([[parent.sessionId, { kind: 'permission', at: NOW - 1_000, cwd: null }]]),
+    });
+    expect(withHook.agents).toHaveLength(2);
+    expect(withHook.agents.find((agent) => agent.id === parentId)).toMatchObject({
+      state: 'waiting',
+      waitReason: 'permission',
+      confidence: 'reported',
+    });
+    expect(withHook.agents.find((agent) => agent.id === childId)?.parentId).toBe(parentId);
+  });
+
+  it('keeps the context ahead of unrelated idle sessions within the existing cap', () => {
+    const transcripts = [
+      child,
+      ...Array.from({ length: ROSTER_CAP - 2 }, (_, i) => transcript({ sessionId: `filler-${i}` })),
+    ];
+    const last = transcript({ sessionId: 'other' });
+    const claudeParents = [parent];
+    const withRoom = build({
+      transcripts: [...transcripts, { ...last, state: 'idle', activity: 'none' }],
+      claudeParents,
+    });
+    expect(withRoom.truncated).toBe(true);
+    expect(withRoom.agents).toHaveLength(ROSTER_CAP);
+    expect(withRoom.agents.find((agent) => agent.id === childId)?.parentId).toBe(parentId);
+    expect(withRoom.agents.some((agent) => agent.id === keyId('claude:other'))).toBe(false);
+
+    const full = build({ transcripts: [...transcripts, last], claudeParents });
+    expect(full.truncated).toBe(true);
+    expect(full.agents).toHaveLength(ROSTER_CAP);
+    expect(full.agents.some((agent) => agent.id === parentId)).toBe(false);
+    expect(full.agents.find((agent) => agent.id === childId)).toMatchObject({
+      parentId: null,
+      parentBasis: 'native',
+      parentAway: true,
+    });
   });
 });
 
