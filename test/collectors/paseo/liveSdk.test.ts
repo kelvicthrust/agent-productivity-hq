@@ -49,7 +49,7 @@ function startFeed(
           },
         });
       } else if (frame.message?.type === 'fetch_agents_request') {
-        listed();
+        listed(frame.message);
         const response = reply(frame.message.requestId);
         if (response) this.receive(response);
       }
@@ -96,6 +96,24 @@ const emptyListing = (requestId: string) => ({
     entries: [],
     pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
   },
+});
+
+it('sends the attention-first sort through the pinned SDK', async () => {
+  const { feed, listed } = startFeed(emptyListing);
+  try {
+    await feed.ready();
+    expect(feed.status()).toBe('live');
+    expect(listed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sort: [
+          { key: 'status_priority', direction: 'asc' },
+          { key: 'updated_at', direction: 'desc' },
+        ],
+      }),
+    );
+  } finally {
+    await feed.stop();
+  }
 });
 
 it('does not log the raw error from a failed Paseo listing', async () => {

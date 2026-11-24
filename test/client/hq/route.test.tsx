@@ -353,11 +353,29 @@ describe('feed states', () => {
 });
 
 describe('the roster', () => {
-  it('lists four sessions as nested lists, the one that needs you first, with a summary and state words', async () => {
+  it('opens Recent idle on demand below the AFK scene when no session needs a room', async () => {
+    const roster = officeRoster(NOW);
+    roster.agents = roster.agents.filter((agent) => agent.state === 'idle');
+    mount(() => json(roster));
+
+    const disclosure = await screen.findByRole('button', { name: 'Recent idle (1)' });
+    expect(screen.getByTestId('hq-afk')).toBeTruthy();
+    expect(screen.queryByTestId('hq-scene')).toBeNull();
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('list', { name: 'Recent idle' })).toBeNull();
+
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('list', { name: 'Recent idle' }).textContent).toContain(
+      'Idle for 12 min',
+    );
+  });
+
+  it('lists three focused sessions as nested lists, the one that needs you first, with a summary and state words', async () => {
     mount(() => json(officeRoster(NOW)));
     const sessions = await screen.findByRole('list', { name: 'Sessions' });
     const cards = Array.from(sessions.children);
-    expect(cards).toHaveLength(4);
+    expect(cards).toHaveLength(3);
     // The waiting session leads and says what it needs.
     expect(cards[0]!.textContent).toContain('Sync shared instructions');
     expect(cards[0]!.textContent).toContain('Needs you: permission');
@@ -375,10 +393,13 @@ describe('the roster', () => {
     expect(build.textContent).toContain('Reading');
     expect(build.textContent).toContain('Running a command');
     expect(build.textContent).toContain('Thinking');
-    expect(sessions.textContent).toContain('No name recorded');
-    expect(sessions.textContent).toContain('Idle for 12 min');
+    const disclosure = screen.getByRole('button', { name: 'Recent idle (1)' });
+    fireEvent.click(disclosure);
+    const recent = screen.getByRole('list', { name: 'Recent idle' });
+    expect(recent.textContent).toContain('No name recorded');
+    expect(recent.textContent).toContain('Idle for 12 min');
     // One-line summary under the heading.
-    expect(screen.getByText('6 working · 1 needs you · 1 idle')).toBeTruthy();
+    expect(screen.getByText('6 working · 1 needs you')).toBeTruthy();
   });
 
   it('is plain content: decorative art, no focusable rows and no live region', async () => {
@@ -406,6 +427,6 @@ describe('the roster', () => {
     mount(() => json(roster));
     const sessions = await screen.findByRole('list', { name: 'Sessions' });
     expect(sessions.children[0]!.textContent).toContain('May be waiting for you');
-    expect(screen.getByText('6 working · 1 may need you · 1 idle')).toBeTruthy();
+    expect(screen.getByText('6 working · 1 may need you')).toBeTruthy();
   });
 });

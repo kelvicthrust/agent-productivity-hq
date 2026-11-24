@@ -3,7 +3,13 @@ import { z } from 'zod';
 import type { JsonValue, PaseoRead } from '../shared/native.ts';
 
 const agentOptions = z.object({
-  filter: z.object({ includeArchived: z.boolean() }),
+  filter: z.object({ includeArchived: z.boolean(), requiresAttention: z.literal(true).optional() }),
+  sort: z
+    .tuple([
+      z.object({ key: z.literal('status_priority'), direction: z.literal('asc') }),
+      z.object({ key: z.literal('updated_at'), direction: z.literal('desc') }),
+    ])
+    .optional(),
   page: z.object({ limit: z.number().int().positive().max(200), cursor: z.string().optional() }),
 });
 
@@ -35,9 +41,10 @@ export function paseoSource(paseo: PluginHandlerContext['paseo']): PaseoRead {
       });
     }
 
-    const { filter, page } = agentOptions.parse(request.options);
+    const { filter, sort, page } = agentOptions.parse(request.options);
     const result = await paseo.agents.list({
-      filter: { includeArchived: filter.includeArchived, includeBackground: true },
+      filter: { ...filter, includeBackground: true },
+      ...(sort && { sort }),
       page,
     });
     return json({
@@ -50,9 +57,12 @@ export function paseoSource(paseo: PluginHandlerContext['paseo']): PaseoRead {
           cwd: agent.cwd,
           labels: { [parentLabel]: agent.labels?.[parentLabel] },
           runtimeInfo: agent.runtimeInfo && { sessionId: agent.runtimeInfo.sessionId },
+          lastUserMessageAt: agent.lastUserMessageAt,
+          persistence: agent.persistence && { provider: agent.persistence.provider },
           archivedAt: agent.archivedAt,
           status: agent.status,
           activeTurn: agent.activeTurn && { startedAt: agent.activeTurn.startedAt },
+          backgroundWork: agent.backgroundWork && { count: agent.backgroundWork.count },
           pendingPermissions: agent.pendingPermissions?.slice(0, 1).map(({ kind }) => ({ kind })),
           requiresAttention: agent.requiresAttention,
           attentionReason: agent.attentionReason,

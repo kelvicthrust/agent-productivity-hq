@@ -1,5 +1,4 @@
 import { useState, type CSSProperties } from 'react';
-import type { HqAgent } from '../../../shared/contracts/hq';
 import { cx } from '../../lib/cx';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { SCENE_COPY } from './copy';
@@ -7,7 +6,7 @@ import { BOIL } from './motion';
 import { EmptyRoom, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Room } from './Room';
 import { layoutScene, type Scene } from './scene';
 import { sketchLine } from './sketch';
-import { buildSessions } from './sessions';
+import type { Session } from './sessions';
 import { captionsCollide, planStage } from './stage';
 import { SceneFilters, useSceneFilters } from './sceneFilters';
 
@@ -146,7 +145,7 @@ export function Heading() {
   );
 }
 
-export function HqScene({ agents, nowMs }: { agents: readonly HqAgent[]; nowMs: number }) {
+export function HqScene({ sessions, nowMs }: { sessions: readonly Session[]; nowMs: number }) {
   const wide = useMediaQuery('(min-width: 1280px)');
   const medium = useMediaQuery('(min-width: 720px)');
   const columns = wide ? 3 : medium ? 2 : 1;
@@ -154,7 +153,7 @@ export function HqScene({ agents, nowMs }: { agents: readonly HqAgent[]; nowMs: 
   // The previous scene is what keeps every room in its slot from poll to poll. It is state that is only replaced when a slot
   // changes (React's "adjust state during render" pattern), so laying out is a pure function of the roster and the last scene.
   const [previous, setPrevious] = useState<Scene | null>(null);
-  const scene = layoutScene(previous, buildSessions(agents), { columns, nowMs });
+  const scene = layoutScene(previous, sessions, { columns, nowMs });
   if (previous === null || !sameSlots(previous, scene)) setPrevious(scene);
 
   const width = WIDTH[columns];

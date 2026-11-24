@@ -26,11 +26,15 @@ export interface LiveAgent {
   sessionId: string | null;
   /** `initializing`, `idle`, `running`, `error` or `closed`; anything else is kept as given and read as idle. */
   status: string;
+  /** Paseo explicitly reports no prompt or saved session, with no work, attention or uncertain evidence. */
+  reportsEmptyThread: boolean;
+  hasActiveTurn: boolean;
   /** `activeTurn.startedAt`. */
   turnStartedAt: number | null;
+  backgroundWorkActive: boolean;
   /** The kind of the first pending permission request (`tool`, `plan`, `question`, ...), null when none is pending. */
   pendingPermissionKind: string | null;
-  requiresAttention: boolean;
+  requiresAttention: boolean | undefined;
   /** `finished`, `error` or `permission`. */
   attentionReason: string | null;
   attentionAt: number | null;
@@ -44,7 +48,11 @@ export interface LiveAgent {
 const PARENT_LABEL = 'paseo.parent-agent-id';
 
 const record = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const isAbsent = (value: unknown): boolean => value === undefined || value === null;
 
 /** A string that says something, trimmed; anything else is null. */
 function text(value: unknown): string | null {
@@ -72,6 +80,24 @@ export function readLiveAgent(entry: unknown, now: number): LiveAgent | null {
   const permissions = Array.isArray(agent.pendingPermissions) ? agent.pendingPermissions : [];
   const first = permissions.length > 0 ? record(permissions[0]) : null;
   const createdAt = time(agent.createdAt, now);
+  const runtimeSessionId = record(agent.runtimeInfo)?.sessionId;
+  const turn = record(agent.activeTurn);
+  const backgroundCount = record(agent.backgroundWork)?.count;
+  const status = clipped(text(agent.status), MAX_LIVE_TITLE_CHARS);
+  // Missing optional fields are valid on older daemons. A present but malformed value cannot prove a thread is empty.
+  const reportsEmptyThread =
+    (status === 'idle' || status === 'closed' || status === 'initializing') &&
+    agent.lastUserMessageAt === null &&
+    agent.persistence === null &&
+    (agent.runtimeInfo === undefined || runtimeSessionId === null) &&
+    isAbsent(agent.activeTurn) &&
+    (agent.backgroundWork === undefined || backgroundCount === 0) &&
+    (agent.pendingPermissions === undefined ||
+      (Array.isArray(agent.pendingPermissions) && permissions.length === 0)) &&
+    (agent.requiresAttention === undefined || agent.requiresAttention === false) &&
+    isAbsent(agent.attentionReason) &&
+    isAbsent(agent.attentionTimestamp) &&
+    (agent.providerUnavailable === undefined || agent.providerUnavailable === false);
   return {
     id,
     provider: clipped(text(agent.provider), MAX_LIVE_TITLE_CHARS) ?? '',
@@ -79,11 +105,18 @@ export function readLiveAgent(entry: unknown, now: number): LiveAgent | null {
     title: clipped(text(agent.title), MAX_LIVE_TITLE_CHARS),
     workspaceName: clipped(text(record(holder?.project)?.workspaceName), MAX_LIVE_TITLE_CHARS),
     parentAgentId: fits(text(labels?.[PARENT_LABEL]), MAX_LIVE_ID_CHARS),
-    sessionId: fits(text(record(agent.runtimeInfo)?.sessionId), MAX_LIVE_ID_CHARS),
-    status: clipped(text(agent.status), MAX_LIVE_TITLE_CHARS) ?? 'idle',
-    turnStartedAt: time(record(agent.activeTurn)?.startedAt, now),
+    sessionId: fits(text(runtimeSessionId), MAX_LIVE_ID_CHARS),
+    status: status ?? 'idle',
+    reportsEmptyThread,
+    hasActiveTurn: turn !== null,
+    turnStartedAt: time(turn?.startedAt, now),
+    backgroundWorkActive:
+      typeof backgroundCount === 'number' &&
+      Number.isInteger(backgroundCount) &&
+      backgroundCount > 0,
     pendingPermissionKind: permissions.length === 0 ? null : (text(first?.kind) ?? 'other'),
-    requiresAttention: agent.requiresAttention === true,
+    requiresAttention:
+      typeof agent.requiresAttention === 'boolean' ? agent.requiresAttention : undefined,
     attentionReason: text(agent.attentionReason),
     attentionAt: time(agent.attentionTimestamp, now),
     updatedAt: time(agent.updatedAt, now) ?? createdAt ?? now,

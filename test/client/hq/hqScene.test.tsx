@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AfkScene } from '../../../src/client/features/hq/AfkScene';
 import { HqScene } from '../../../src/client/features/hq/HqScene';
 import { HqRoute } from '../../../src/client/features/hq/route';
+import { buildSessions } from '../../../src/client/features/hq/sessions';
 import { createQueryClient } from '../../../src/client/lib/queryClient';
 import { HQ_HOOKS_PROMPT_KEY, markShown } from '../../../src/client/lib/shownOnce';
 import { agent, emptyRoster, officeAgents, officeRoster } from '../../fixtures/hq/scripted';
@@ -30,7 +31,7 @@ const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex], [conten
 
 describe('the scene', () => {
   it('draws one room per session with its sign, and is decorative', () => {
-    render(<HqScene agents={officeAgents(NOW)} nowMs={NOW} />);
+    render(<HqScene sessions={buildSessions(officeAgents(NOW))} nowMs={NOW} />);
     const scene = screen.getByTestId('hq-scene');
     expect(scene.getAttribute('aria-hidden')).toBe('true');
     // Not reachable: nothing focusable, nothing interactive, no live region, no title or description to read out.
@@ -59,7 +60,7 @@ describe('the scene', () => {
   });
 
   it('names a state under each character in a few words', () => {
-    render(<HqScene agents={officeAgents(NOW)} nowMs={NOW} />);
+    render(<HqScene sessions={buildSessions(officeAgents(NOW))} nowMs={NOW} />);
     const text = screen.getByTestId('hq-scene').textContent ?? '';
     for (const caption of ['needs you', 'reading', 'editing', 'running', 'thinking', 'idle']) {
       expect(text).toContain(caption);
@@ -69,8 +70,8 @@ describe('the scene', () => {
   it('gives every scene its own wobble filters, so two never share an id', () => {
     const { container } = render(
       <>
-        <HqScene agents={officeAgents(NOW)} nowMs={NOW} />
-        <HqScene agents={officeAgents(NOW)} nowMs={NOW} />
+        <HqScene sessions={buildSessions(officeAgents(NOW))} nowMs={NOW} />
+        <HqScene sessions={buildSessions(officeAgents(NOW))} nowMs={NOW} />
       </>,
     );
     const ids = [...container.querySelectorAll('filter')].map((filter) => filter.id);
@@ -82,7 +83,7 @@ describe('the scene', () => {
     const agents = ['first', 'middle', 'last'].map((id, index) =>
       agent(NOW, { id, provider: 'claude', startedMinutesAgo: 10 + index }),
     );
-    const { rerender } = render(<HqScene agents={agents} nowMs={NOW} />);
+    const { rerender } = render(<HqScene sessions={buildSessions(agents)} nowMs={NOW} />);
     const row = (id: string) => {
       const room = screen.getAllByTestId('hq-room').find((el) => el.dataset['session'] === id);
       if (!room?.parentElement) throw new Error(`Missing room for ${id}`);
@@ -91,7 +92,7 @@ describe('the scene', () => {
     const before = row('middle');
     expect(before).toBe(1);
 
-    rerender(<HqScene agents={agents.slice(1)} nowMs={NOW} />);
+    rerender(<HqScene sessions={buildSessions(agents.slice(1))} nowMs={NOW} />);
 
     expect(row('middle')).toBe(before);
   });
@@ -102,7 +103,7 @@ describe('the AFK room', () => {
     const { container } = render(
       <>
         <AfkScene />
-        <HqScene agents={officeAgents(NOW)} nowMs={NOW} />
+        <HqScene sessions={buildSessions(officeAgents(NOW))} nowMs={NOW} />
       </>,
     );
     const afk = screen.getByTestId('hq-afk');
@@ -154,7 +155,7 @@ describe('on the page', () => {
     const roster = await screen.findByRole('list', { name: 'Sessions' });
     const scene = screen.getByTestId('hq-scene');
     expect(scene.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getAllByTestId('hq-room')).toHaveLength(4);
+    expect(screen.getAllByTestId('hq-room')).toHaveLength(3);
   });
 
   it('is not drawn when there is nobody to draw', async () => {

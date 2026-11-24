@@ -1,11 +1,12 @@
+import { useId, useState } from 'react';
 import { Buddy, type BuddyKind, type BuddyMood } from '../../components/Buddy';
 import { statusAppearance, type StatusKind } from '../../components/StatusTag';
 import { Icon } from '../../components/Icon';
 import type { HqAgent } from '../../../shared/contracts/hq';
 import { SESSION_COPY } from '../../lib/copy';
 import { cx } from '../../lib/cx';
-import { HQ_COPY, agentMeta, stateWords } from './copy';
-import { buildSessions, type AgentNode, type Session } from './sessions';
+import { HQ_COPY, agentMeta, recentIdleLabel, stateWords } from './copy';
+import type { AgentNode, Session } from './sessions';
 
 // The roster: the accessible account of who is running, as real nested lists. One card per session; inside it the root first, its
 // spawned agents indented beneath it. Rows are not interactive, and nothing on the page is a live region: a roster that changes
@@ -60,7 +61,7 @@ function Row({ node, nowMs, depth = 0 }: { node: AgentNode; nowMs: number; depth
       <div className="flex min-w-0 items-start gap-3 py-2">
         <Buddy
           kind={BUDDY_KIND[agent.provider]}
-          mood={MOOD[agent.state]}
+          mood={agent.backgroundWorkActive && agent.state !== 'error' ? 'awake' : MOOD[agent.state]}
           size={28}
           className="mt-0.5"
         />
@@ -109,13 +110,43 @@ function SessionCard({ session, nowMs }: { session: Session; nowMs: number }) {
   );
 }
 
-export function Roster({ agents, nowMs }: { agents: readonly HqAgent[]; nowMs: number }) {
-  const sessions = buildSessions(agents);
+interface RosterProps {
+  sessions: readonly Session[];
+  nowMs: number;
+}
+
+export function Roster({
+  sessions,
+  nowMs,
+  label = HQ_COPY.sessions,
+}: RosterProps & { label?: string }) {
   return (
-    <ul aria-label={HQ_COPY.sessions} className="flex flex-col gap-3">
+    <ul aria-label={label} className="flex flex-col gap-3">
       {sessions.map((session) => (
         <SessionCard key={session.id} session={session} nowMs={nowMs} />
       ))}
     </ul>
+  );
+}
+
+export function RecentIdle({ sessions, nowMs }: RosterProps) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="min-w-0 rounded-md border border-border bg-surface shadow-card">
+      <button
+        type="button"
+        aria-controls={id}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-11 w-full items-center gap-2 rounded-md px-4 text-left text-copy font-semibold text-ink"
+      >
+        <Icon name={open ? 'chevronDown' : 'chevronRight'} className="text-ink-muted" />
+        {recentIdleLabel(sessions.length)}
+      </button>
+      <div id={id} hidden={!open} className="px-3 pb-3">
+        {open && <Roster sessions={sessions} nowMs={nowMs} label={HQ_COPY.recentIdle} />}
+      </div>
+    </div>
   );
 }

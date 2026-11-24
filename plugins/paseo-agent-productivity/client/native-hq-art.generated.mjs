@@ -1244,7 +1244,142 @@ var REFRESH_COPY = {
 	}
 };
 REFRESH_COPY.viewSource, REFRESH_COPY.retry, REFRESH_COPY.retrying;
+// src/client/features/hq/sessions.ts
+var isWorking = (agent) => agent.state === "working" || agent.state === "starting" && agent.confirmedEmpty !== true || agent.backgroundWorkActive === true;
+var isReadyToReview = (agent) => (agent.state === "finished" || agent.state === "idle") && agent.reviewPending === true;
+var hasActionableError = (agent) => agent.state === "error" && agent.reviewPending !== false;
+var time$1 = (instant) => instant === null ? 0 : Date.parse(instant);
+/** Oldest first, so a new agent joins the end and the order does not move between polls. */
+function byStart(a, b) {
+	return time$1(a.startedAt ?? a.since) - time$1(b.startedAt ?? b.since) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+function count(node) {
+	return 1 + node.children.reduce((sum, child) => sum + count(child), 0);
+}
+function hasWaiting(node) {
+	return node.agent.state === "waiting" || node.children.some(hasWaiting);
+}
+/**
+* Sessions in display order: those with a waiting agent first, then those with a working one, then the rest; newest root first
+* within each. An agent joins its parent only when the parent is on the roster; any other agent starts a session of its own
+* (`parentAway` says why). A parent cycle cannot hide anyone: the agents left over become roots.
+*/
+function buildSessions(agents) {
+	const byId = new Map(agents.map((agent) => [agent.id, agent]));
+	const childrenOf = /* @__PURE__ */ new Map();
+	const roots = [];
+	for (const agent of agents) {
+		const parent = agent.parentId !== null && agent.parentId !== agent.id ? agent.parentId : null;
+		if (parent !== null && byId.has(parent)) childrenOf.set(parent, [...childrenOf.get(parent) ?? [], agent]);
+		else roots.push(agent);
+	}
+	const seen = /* @__PURE__ */ new Set();
+	const grow = (agent) => {
+		seen.add(agent.id);
+		return {
+			agent,
+			children: (childrenOf.get(agent.id) ?? []).filter((child) => !seen.has(child.id)).sort(byStart).map(grow)
+		};
+	};
+	const sessions = roots.map(grow);
+	for (const agent of agents) if (!seen.has(agent.id)) sessions.push(grow(agent));
+	const rank = (session) => session.waiting ? 0 : containsState(session.root, "working") ? 1 : 2;
+	return sessions.map((root) => ({
+		id: root.agent.id,
+		root,
+		size: count(root),
+		waiting: hasWaiting(root)
+	})).sort((a, b) => rank(a) - rank(b) || time$1(b.root.agent.startedAt ?? b.root.agent.since) - time$1(a.root.agent.startedAt ?? a.root.agent.since) || (a.id < b.id ? -1 : 1));
+}
+function containsState(node, state) {
+	return node.agent.state === state || node.children.some((child) => containsState(child, state));
+}
+var RECENT_IDLE_RANK = 4;
+function focusRank(agent) {
+	if (agent.state === "waiting") return 0;
+	if (hasActionableError(agent)) return 1;
+	if (isWorking(agent)) return 2;
+	if (isReadyToReview(agent)) return 3;
+	return RECENT_IDLE_RANK;
+}
+function visibleNode(node) {
+	const children = node.children.map(visibleNode).filter((child) => child !== null);
+	if (node.agent.confirmedEmpty && children.length === 0 && focusRank(node.agent) === RECENT_IDLE_RANK) return null;
+	return {
+		agent: node.agent,
+		children
+	};
+}
+function crewRank(node) {
+	return Math.min(focusRank(node.agent), ...node.children.map(crewRank));
+}
+function crewActivity(node) {
+	return Math.max(time$1(node.agent.lastActivityAt ?? node.agent.since), ...node.children.map(crewActivity));
+}
+/** Focus is decided for the entire crew, and an inactive crew's recency includes its helpers. */
+function groupSessions(agents) {
+	const focus = [];
+	const recentIdle = [];
+	for (const session of buildSessions(agents)) {
+		const root = visibleNode(session.root);
+		if (root === null) continue;
+		const visible = {
+			...session,
+			root,
+			size: count(root)
+		};
+		const rank = crewRank(root);
+		if (rank === RECENT_IDLE_RANK) recentIdle.push({
+			session: visible,
+			activity: crewActivity(root)
+		});
+		else focus.push({
+			session: visible,
+			rank
+		});
+	}
+	return {
+		focus: focus.sort((a, b) => a.rank - b.rank).map(({ session }) => session),
+		recentIdle: recentIdle.sort((a, b) => b.activity - a.activity).map(({ session }) => session)
+	};
+}
 // src/client/features/hq/copy.ts
+var HQ_COPY = {
+	title: "HQ",
+	loading: "Loading HQ…",
+	sessions: "Sessions",
+	recentIdle: "Recent idle",
+	/** The accessible name of one session's list: its root's name, then how many agents it holds. */
+	sessionList: (name, agents) => `${name}: ${agents === 1 ? "1 agent" : `${int(agents)} agents`}`,
+	noName: "No name recorded",
+	otherProvider: "Other agent",
+	parentAway: "Started by an agent that isn’t listed",
+	truncated: "The roster was cut to fit, so some agents aren’t shown.",
+	unavailable: "Live agents aren’t available in this session.",
+	quiet: "A quiet one. No agents are running right now.",
+	noAgents: "No agents to show right now.",
+	setupIncomplete: {
+		before: "Live agents appear once setup is finished. ",
+		link: "Go to Setup"
+	},
+	requestError: {
+		title: "Couldn’t load HQ",
+		stale: "Couldn’t refresh HQ. The list below is the last one it received.",
+		body: "Nothing on this computer has changed. It will keep trying.",
+		retry: "Retry"
+	},
+	feed: {
+		starting: "Starting…",
+		notFound: "Not found",
+		denied: "Access denied",
+		failed: "Unavailable",
+		unavailable: "Not available in this session",
+		/** What to do about a Claude Code or Codex feed that cannot read its sessions (Paseo's own lines are in `FeedLine`). */
+		deniedDetail: (name) => `${name}’s data is here but couldn’t be read. Allow read access, then reload this page.`,
+		failedDetail: (name) => `${name}’s recent sessions couldn’t be read. It will keep trying.`
+	}
+};
+var recentIdleLabel = (count) => `${HQ_COPY.recentIdle} (${int(count)})`;
 var WORKING = {
 	thinking: "Thinking",
 	responding: "Responding",
@@ -1275,6 +1410,10 @@ function elapsed(sinceMs, nowMs) {
 * inferred from silence, not reported), "Idle for 12 min". `nowMs` is the clock the idle time is measured against.
 */
 function stateWords(agent, nowMs) {
+	if (agent.state === "idle" || agent.state === "finished") {
+		const followUp = dotJoin([isReadyToReview(agent) && "Ready to review", agent.backgroundWorkActive && "Background work running"]);
+		if (followUp) return followUp;
+	}
 	switch (agent.state) {
 		case "starting": return "Starting";
 		case "working": return WORKING[agent.activity];
@@ -1286,18 +1425,14 @@ function stateWords(agent, nowMs) {
 		case "finished": return "Finished";
 	}
 }
-/**
-* "3 working · 1 needs you": counts of what is happening, zeros left out. A waiting agent that was only inferred "may need you".
-* Empty when nobody is on the roster.
-*/
 function summaryLine(agents) {
 	const count = (predicate) => agents.filter(predicate).length;
 	return dotJoin([
-		[count((a) => a.state === "working" || a.state === "starting"), "working"],
+		[count(isWorking), "working"],
 		[count((a) => a.state === "waiting" && a.confidence === "reported"), "needs you"],
 		[count((a) => a.state === "waiting" && a.confidence === "inferred"), "may need you"],
-		[count((a) => a.state === "idle"), "idle"],
-		[count((a) => a.state === "error"), "with an error"]
+		[count(isReadyToReview), "ready to review"],
+		[count(hasActionableError), "with an error"]
 	].map(([n, label]) => n > 0 && `${int(n)} ${label}`));
 }
 /** What the quiet state's drawing says on its own sign and note (decorative: the footnote `HQ_COPY.quiet` is the statement). */
@@ -1332,6 +1467,8 @@ var SCENE_WORKING = {
 * inferred ends in a question mark, as the roster says it "may be waiting".
 */
 function sceneCaption(agent) {
+	if (isReadyToReview(agent)) return "review";
+	if ((agent.state === "idle" || agent.state === "finished") && agent.backgroundWorkActive) return "working";
 	switch (agent.state) {
 		case "starting": return "starting";
 		case "working": return SCENE_WORKING[agent.activity];
@@ -1938,6 +2075,8 @@ var POSE_OF_ACTIVITY = {
 	none: "working"
 };
 function poseOf(agent) {
+	if ((agent.state === "idle" || agent.state === "finished") && agent.backgroundWorkActive) return "working";
+	if (isReadyToReview(agent)) return "finished";
 	switch (agent.state) {
 		case "working": return POSE_OF_ACTIVITY[agent.activity];
 		case "waiting": return "waiting";
@@ -1951,8 +2090,8 @@ function poseOf(agent) {
 function inOrder(node) {
 	return [node.agent, ...node.children.flatMap(inOrder)];
 }
-var time$1 = (instant) => Date.parse(instant);
-var idle = (agent) => agent.state === "idle";
+var time = (instant) => Date.parse(instant);
+var idle = (agent) => agent.state === "idle" && poseOf(agent) === "idle";
 /** Where the session runs: the repository's name (without its owner), else the workspace. */
 function placeOf(root) {
 	return root.repo?.split("/").pop() || root.workspace || null;
@@ -1975,7 +2114,7 @@ function roomDetail(session, agents, nowMs) {
 	const helpers = session.size - 1;
 	if (helpers > 0) return SCENE_COPY.captain(helpers);
 	const napping = agents.every(idle);
-	return dotJoin([root.parentAway ? SCENE_COPY.parentAway : !napping && SCENE_COPY.solo, napping && SCENE_COPY.idle(elapsed(time$1(root.since), nowMs))]);
+	return dotJoin([root.parentAway ? SCENE_COPY.parentAway : !napping && SCENE_COPY.solo, napping && SCENE_COPY.idle(elapsed(time(root.since), nowMs))]);
 }
 function roomOf(session, slot, nowMs) {
 	const agents = inOrder(session.root);
@@ -1985,7 +2124,7 @@ function roomOf(session, slot, nowMs) {
 		slot,
 		...signNames(session.root.agent),
 		detail: roomDetail(session, agents, nowMs),
-		mood: agents.some((a) => a.state === "waiting") ? "needs" : agents.every((a) => a.state === "idle") ? "idle" : "normal",
+		mood: agents.some((a) => a.state === "waiting") ? "needs" : agents.every(idle) ? "idle" : "normal",
 		characters: drawn.map((agent, i) => ({
 			id: agent.id,
 			provider: agent.provider,
@@ -2024,53 +2163,6 @@ function layoutScene(prev, sessions, { columns, nowMs }) {
 		cols: columns,
 		cells: last === void 0 ? 0 : columns * Math.ceil((last + 1) / columns)
 	};
-}
-// src/client/features/hq/sessions.ts
-var time = (instant) => instant === null ? 0 : Date.parse(instant);
-/** Oldest first, so a new agent joins the end and the order does not move between polls. */
-function byStart(a, b) {
-	return time(a.startedAt ?? a.since) - time(b.startedAt ?? b.since) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-}
-function count(node) {
-	return 1 + node.children.reduce((sum, child) => sum + count(child), 0);
-}
-function hasWaiting(node) {
-	return node.agent.state === "waiting" || node.children.some(hasWaiting);
-}
-/**
-* Sessions in display order: those with a waiting agent first, then those with a working one, then the rest; newest root first
-* within each. An agent joins its parent only when the parent is on the roster; any other agent starts a session of its own
-* (`parentAway` says why). A parent cycle cannot hide anyone: the agents left over become roots.
-*/
-function buildSessions(agents) {
-	const byId = new Map(agents.map((agent) => [agent.id, agent]));
-	const childrenOf = /* @__PURE__ */ new Map();
-	const roots = [];
-	for (const agent of agents) {
-		const parent = agent.parentId !== null && agent.parentId !== agent.id ? agent.parentId : null;
-		if (parent !== null && byId.has(parent)) childrenOf.set(parent, [...childrenOf.get(parent) ?? [], agent]);
-		else roots.push(agent);
-	}
-	const seen = /* @__PURE__ */ new Set();
-	const grow = (agent) => {
-		seen.add(agent.id);
-		return {
-			agent,
-			children: (childrenOf.get(agent.id) ?? []).filter((child) => !seen.has(child.id)).sort(byStart).map(grow)
-		};
-	};
-	const sessions = roots.map(grow);
-	for (const agent of agents) if (!seen.has(agent.id)) sessions.push(grow(agent));
-	const rank = (session) => session.waiting ? 0 : containsState(session.root, "working") ? 1 : 2;
-	return sessions.map((root) => ({
-		id: root.agent.id,
-		root,
-		size: count(root),
-		waiting: hasWaiting(root)
-	})).sort((a, b) => rank(a) - rank(b) || time(b.root.agent.startedAt ?? b.root.agent.since) - time(a.root.agent.startedAt ?? a.root.agent.since) || (a.id < b.id ? -1 : 1));
-}
-function containsState(node, state) {
-	return node.agent.state === state || node.children.some((child) => containsState(child, state));
 }
 // src/client/features/hq/sceneFilters.tsx
 var LINE_BOIL_SEEDS = [
@@ -2869,4 +2961,4 @@ function CrewArt({ mood = "awake", className }) {
 		]
 	});
 }
-export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, buildSessions, captionsCollide, layoutScene, planStage, stateWords, summaryLine };
+export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, HQ_COPY, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, buildSessions, captionsCollide, groupSessions, layoutScene, planStage, recentIdleLabel, stateWords, summaryLine };

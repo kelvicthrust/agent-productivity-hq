@@ -81,9 +81,13 @@ export interface RosterAgent {
     | 'tool'
     | 'none';
   since: string;
+  lastActivityAt?: string;
   startedAt: string | null;
   waitReason: 'permission' | 'question' | 'plan_approval' | null;
   confidence: 'reported' | 'inferred';
+  reviewPending?: boolean;
+  backgroundWorkActive?: boolean;
+  confirmedEmpty?: boolean;
   seenBy: { paseo: boolean };
 }
 

@@ -48,7 +48,8 @@ export interface PaseoLiveFeed {
 
 export interface PaseoLiveListOptions {
   includeBackground: true;
-  filter: { includeBackground: true; includeArchived: false };
+  filter: { includeBackground: true; includeArchived: false; requiresAttention?: true };
+  sort: [{ key: 'status_priority'; direction: 'asc' }, { key: 'updated_at'; direction: 'desc' }];
   page: { limit: number };
 }
 
@@ -68,8 +69,10 @@ export interface PaseoLiveClientLike {
 
 // ---- timing ---------------------------------------------------------------------------------------------------------------
 
-/** One page is all the roster can show (it is cut to 60 agents anyway). The protocol allows at most 200. */
+/** Regular page size. The protocol allows at most 200. */
 export const LIVE_PAGE_LIMIT = 200;
+/** On a truncated directory, one extra page protects older unread results from newer idle agents. */
+const LIVE_ATTENTION_PAGE_LIMIT = 60;
 /** How often the listing is asked for while live (and so how often a dropped connection is looked for). */
 export const LIVE_POLL_MS = 2_000;
 /** How long a listing may go unanswered. The SDK leaves a call pending for ever when the socket drops, so HQ ends it itself. */
@@ -203,6 +206,7 @@ export function createPaseoLiveFeed(options: PaseoLiveFeedOptions): PaseoLiveFee
   async function listWithDeadline(
     client: PaseoLiveClientLike,
     signal: AbortSignal,
+    attentionOnly = false,
   ): Promise<PaseoLiveListResult> {
     const deadline = new AbortController();
     try {
@@ -211,8 +215,16 @@ export function createPaseoLiveFeed(options: PaseoLiveFeedOptions): PaseoLiveFee
           Promise.race([
             client.agents.list({
               includeBackground: true,
-              filter: { includeBackground: true, includeArchived: false },
-              page: { limit: LIVE_PAGE_LIMIT },
+              filter: {
+                includeBackground: true,
+                includeArchived: false,
+                ...(attentionOnly && { requiresAttention: true }),
+              },
+              sort: [
+                { key: 'status_priority', direction: 'asc' },
+                { key: 'updated_at', direction: 'desc' },
+              ],
+              page: { limit: attentionOnly ? LIVE_ATTENTION_PAGE_LIMIT : LIVE_PAGE_LIMIT },
             }),
             sleep(LIVE_LIST_TIMEOUT_MS, deadline.signal).then((): typeof TIMED_OUT => TIMED_OUT),
           ]),
@@ -257,13 +269,24 @@ export function createPaseoLiveFeed(options: PaseoLiveFeedOptions): PaseoLiveFee
       }
 
       const connected = client;
+      let canListAttention = true;
       for (;;) {
         // The check before the call finds a drop between two polls; the call's own deadline and the check after a failure find one
         // that happens while it is pending.
         if (connected.getConnectionState().status !== 'connected')
           return fail({ kind: 'failed', code: 'connection_lost' });
         try {
-          const listed = await listWithDeadline(connected, signal);
+          let listed = await listWithDeadline(connected, signal);
+          if (listed.pageInfo.hasMore && canListAttention) {
+            try {
+              const attention = await listWithDeadline(connected, signal, true);
+              listed = { ...listed, entries: [...listed.entries, ...attention.entries] };
+            } catch (error) {
+              if (error === ABORTED) throw error;
+              // A silent daemon can still answer the primary listing. Retain it and avoid accumulating timed-out requests.
+              if (error === TIMED_OUT) canListAttention = false;
+            }
+          }
           // The answer arrived in the turn the feed was stopped in: it is not kept (stop empties the roster, and a restart has its own).
           if (signal.aborted) return ended(null);
           replace(listed);

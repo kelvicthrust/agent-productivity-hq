@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Image, View } from 'react-native';
 import {
   AfkRoom,
-  buildSessions,
   captionsCollide,
   EmptyRoom,
   Ground,
@@ -14,13 +13,13 @@ import {
   Room,
   Vent,
   type Scene,
+  type Session,
 } from './native-hq-art.generated.mjs';
 import { inkFrames } from './native-hq-boil.generated.ts';
 import { playpenWidth } from './native-hq-letter-metrics.ts';
 import { hqColors } from './native-hq-palette.generated.ts';
 import { useHqMotion } from './native-hq-motion.tsx';
 import { Drawing } from './native-hq-drawing.tsx';
-import type { RosterAgent } from './native-types.ts';
 
 const roomWidth = { 1: 290, 2: 420, 3: 360 } as const;
 const roofHeight = 48;
@@ -83,13 +82,13 @@ function MovingInk({
 }
 
 function Building({
-  agents,
+  sessions,
   quiet,
   width,
   columns,
   nowMs,
 }: {
-  agents: readonly RosterAgent[];
+  sessions: readonly Session[];
   quiet: boolean;
   width: number;
   columns: 1 | 2 | 3;
@@ -97,7 +96,7 @@ function Building({
 }) {
   const animate = useHqMotion();
   const [previous, setPrevious] = useState<Scene | null>(null);
-  const scene = layoutScene(previous, buildSessions(agents), { columns, nowMs });
+  const scene = layoutScene(previous, sessions, { columns, nowMs });
   if (!previous || !sameSlots(previous, scene)) setPrevious(scene);
   const sourceWidth = quiet ? quietWidth : roomWidth[columns];
   const rooms = new Map(
@@ -190,17 +189,17 @@ function Building({
 }
 
 export function IllustratedHq({
-  agents,
+  sessions,
   quiet,
   nowMs,
 }: {
-  agents: readonly RosterAgent[];
+  sessions: readonly Session[];
   quiet: boolean;
   nowMs?: number;
 }) {
   const [mountedAt] = useState(Date.now);
   const [paper, setPaper] = useState({ width: 0, height: 0 });
-  if (!quiet && agents.length === 0) return null;
+  if (!quiet && sessions.length === 0) return null;
   const columns = paper.width >= 940 ? 3 : paper.width >= 620 ? 2 : 1;
   const wide = paper.width >= 620;
   const left = wide ? 52 : 24;
@@ -276,7 +275,7 @@ export function IllustratedHq({
       />
       {width > 0 ? (
         <Building
-          agents={agents}
+          sessions={sessions}
           quiet={quiet}
           width={width}
           columns={columns}

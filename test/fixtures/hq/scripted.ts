@@ -182,6 +182,57 @@ export function emptyRoster(nowMs: number): HqRoster {
   return { generatedAt: iso(nowMs), feeds: liveFeeds(), agents: [], truncated: false };
 }
 
+/** The same focused and recent sessions for the browser and Paseo views. */
+export function idleReviewRoster(nowMs: number): HqRoster {
+  return {
+    ...emptyRoster(nowMs),
+    agents: [
+      agent(nowMs, {
+        id: 'review',
+        provider: 'codex',
+        title: 'Review shipped work',
+        state: 'finished',
+        activity: 'none',
+        sinceMinutesAgo: 45,
+        lastActivityAt: iso(nowMs - 45 * MIN),
+        reviewPending: true,
+      }),
+      agent(nowMs, {
+        id: 'background',
+        provider: 'claude',
+        title: 'Background checks',
+        state: 'idle',
+        activity: 'none',
+        backgroundWorkActive: true,
+      }),
+      agent(nowMs, {
+        id: 'older',
+        provider: 'codex',
+        title: 'Older imported thread',
+        state: 'idle',
+        activity: 'none',
+        lastActivityAt: iso(nowMs - 12 * MIN),
+      }),
+      agent(nowMs, {
+        id: 'recent',
+        provider: 'claude',
+        title: 'Recently acknowledged',
+        state: 'idle',
+        activity: 'none',
+        lastActivityAt: iso(nowMs - 3 * MIN),
+      }),
+      agent(nowMs, {
+        id: 'empty',
+        provider: 'codex',
+        title: 'Opened by accident',
+        state: 'idle',
+        activity: 'none',
+        confirmedEmpty: true,
+      }),
+    ],
+  };
+}
+
 /** Paseo not running; the transcript feeds still see one agent. */
 export function paseoDownRoster(nowMs: number): HqRoster {
   return {
@@ -205,13 +256,18 @@ export function paseoDownRoster(nowMs: number): HqRoster {
   };
 }
 
-export type HqScenario = 'office' | 'empty' | 'paseo-down';
+export type HqScenario = 'office' | 'empty' | 'paseo-down' | 'idle-review';
 
 /** The example roster named by an e2e world's `hq` option. */
 export function rosterFor(scenario: HqScenario, nowMs: number): HqRoster {
-  return scenario === 'office'
-    ? officeRoster(nowMs)
-    : scenario === 'empty'
-      ? emptyRoster(nowMs)
-      : paseoDownRoster(nowMs);
+  switch (scenario) {
+    case 'office':
+      return officeRoster(nowMs);
+    case 'empty':
+      return emptyRoster(nowMs);
+    case 'paseo-down':
+      return paseoDownRoster(nowMs);
+    case 'idle-review':
+      return idleReviewRoster(nowMs);
+  }
 }

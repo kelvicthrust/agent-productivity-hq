@@ -137,9 +137,85 @@ describe('mapLiveState', () => {
       60_000, 600_000, 1_800_000,
     ]);
   });
+
+  it('keeps an unread completion and error past the idle window', () => {
+    const old = { id: 'a', updatedAt: NOW - IDLE_VISIBLE_MS - MIN, requiresAttention: true };
+    expect(at({ ...old, attentionReason: 'finished' })?.state).toBe('finished');
+    expect(at({ ...old, status: 'closed', attentionReason: 'finished' })?.state).toBe('finished');
+    expect(at({ ...old, attentionReason: 'error' })?.state).toBe('error');
+    expect(at({ ...old, attentionReason: 'finished', requiresAttention: false })).toBeNull();
+    expect(at({ ...old, attentionReason: 'error', requiresAttention: false })).toBeNull();
+  });
+
+  it('keeps a quiet agent on the roster while its background work is running', () => {
+    const old = { id: 'a', updatedAt: NOW - IDLE_VISIBLE_MS - MIN };
+    expect(at({ ...old, backgroundWorkActive: true })?.state).toBe('idle');
+    expect(at({ ...old, backgroundWorkActive: false })).toBeNull();
+  });
+
+  it('uses an active turn even if its timestamp is missing', () => {
+    expect(at({ id: 'a', status: 'idle', hasActiveTurn: true })?.state).toBe('working');
+    expect(
+      at({ id: 'a', status: 'idle', hasActiveTurn: true, pendingPermissionKind: 'plan' })?.state,
+    ).toBe('waiting');
+  });
 });
 
 describe('readLiveAgent', () => {
+  it('requires explicit absence of a prompt and saved session to mark empty history', () => {
+    const read = (data: Record<string, unknown>) =>
+      readLiveAgent({ agent: { id: 'a', ...data } }, NOW);
+    const empty = { status: 'idle', lastUserMessageAt: null, persistence: null };
+    expect(read(empty)?.reportsEmptyThread).toBe(true);
+    expect(read({ lastUserMessageAt: null })?.reportsEmptyThread).toBe(false);
+    expect(read({ persistence: null })?.reportsEmptyThread).toBe(false);
+    expect(read({ ...empty, lastUserMessageAt: 'unusable' })?.reportsEmptyThread).toBe(false);
+    expect(read({ ...empty, persistence: { provider: 'codex' } })?.reportsEmptyThread).toBe(false);
+    expect(read({ ...empty, runtimeInfo: { sessionId: 'imported' } })?.reportsEmptyThread).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    { backgroundWork: { count: '1' } },
+    { activeTurn: false },
+    { activeTurn: [] },
+    { attentionTimestamp: 'unusable' },
+    { requiresAttention: 'false' },
+    { attentionReason: 22 },
+    { pendingPermissions: 'unknown' },
+  ])('keeps incomplete evidence uncertain for %j', (work) => {
+    const kept = readLiveAgent(
+      {
+        agent: { id: 'a', status: 'idle', lastUserMessageAt: null, persistence: null, ...work },
+      },
+      NOW,
+    );
+    expect(kept?.reportsEmptyThread).toBe(false);
+  });
+
+  it('keeps attention presence, work count and active-turn presence as coarse flags', () => {
+    const active = readLiveAgent(
+      {
+        agent: {
+          id: 'a',
+          activeTurn: { turnId: 'private-key', startedAt: null },
+          backgroundWork: { count: 2, detail: 'private-work' },
+          requiresAttention: false,
+        },
+      },
+      NOW,
+    );
+    expect(active).toMatchObject({
+      hasActiveTurn: true,
+      turnStartedAt: null,
+      backgroundWorkActive: true,
+      requiresAttention: false,
+    });
+    expect(JSON.stringify(active)).not.toContain('private-');
+    expect(readLiveAgent({ agent: { id: 'a' } }, NOW)?.requiresAttention).toBeUndefined();
+  });
+
   it('keeps exactly the allowed fields, so nothing else can leak', () => {
     const kept = readLiveAgent(
       entry({
@@ -167,7 +243,10 @@ describe('readLiveAgent', () => {
       parentAgentId: 'a-0',
       sessionId: 'sess-1',
       status: 'idle',
+      reportsEmptyThread: false,
+      hasActiveTurn: true,
       turnStartedAt: Date.parse('2026-11-04T19:55:00Z'),
+      backgroundWorkActive: false,
       pendingPermissionKind: 'question',
       requiresAttention: true,
       attentionReason: 'permission',

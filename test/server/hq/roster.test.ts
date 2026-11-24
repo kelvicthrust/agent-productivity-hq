@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { HqAgent } from '../../../src/shared/contracts/hq.ts';
-import { ROSTER_CAP, buildRoster, rosterId } from '../../../src/server/services/hq/roster.ts';
+import {
+  ROSTER_CAP,
+  buildRoster,
+  createKeyMemo,
+  rosterId,
+} from '../../../src/server/services/hq/roster.ts';
 import { NOW, liveAgent } from '../../collectors/paseo/liveHelpers.ts';
 
 const MIN = 60_000;
@@ -106,6 +111,112 @@ describe('buildRoster', () => {
     expect(roster.agents.map((agent) => agent.title)).toEqual(['shown']);
   });
 
+  it('omits a confirmed-empty crew, then shows the thread with the same id on its first turn', () => {
+    const memo = createKeyMemo();
+    const blank = { id: 'blank', title: 'blank', reportsEmptyThread: true };
+    expect(
+      build([blank, { ...blank, id: 'child', parentAgentId: 'blank' }], { memo }).agents,
+    ).toEqual([]);
+    const running = build(
+      [{ ...blank, status: 'running', sessionId: 'provider-session', reportsEmptyThread: false }],
+      { memo },
+    );
+    expect(byTitle(running, 'blank')).toMatchObject({ id: rosterId('blank'), state: 'working' });
+  });
+
+  it('keeps the parent of an active child and excludes unrelated empty threads before applying the cap', () => {
+    const filler = Array.from({ length: ROSTER_CAP + 4 }, (_, i) => ({
+      id: `blank-${i}`,
+      reportsEmptyThread: true,
+    }));
+    const roster = build([
+      ...filler,
+      { id: 'parent', title: 'parent', reportsEmptyThread: true },
+      { id: 'child', title: 'child', parentAgentId: 'parent', status: 'running' },
+    ]);
+    expect(roster.truncated).toBe(false);
+    expect(roster.agents).toHaveLength(2);
+    expect(byTitle(roster, 'child').parentId).toBe(byTitle(roster, 'parent').id);
+  });
+
+  it('keeps an expired parent linked while its crew has work, then drops it without reviving other idle rows', () => {
+    const memo = createKeyMemo();
+    const parent = { id: 'parent', title: 'parent', updatedAt: NOW - 29 * MIN };
+    const orphan = { id: 'unrelated', updatedAt: NOW - 33 * MIN };
+    const child = { id: 'child', title: 'child', status: 'running', parentAgentId: 'parent' };
+    const first = build([parent, orphan, child], { memo });
+    const later = build([parent, orphan, child], { memo, now: NOW + 2 * MIN });
+    expect(later.agents).toHaveLength(2);
+    expect(byTitle(later, 'parent').id).toBe(byTitle(first, 'parent').id);
+    expect(byTitle(later, 'child').parentId).toBe(byTitle(first, 'parent').id);
+
+    const ended = build([parent, orphan, { ...child, status: 'idle' }], {
+      memo,
+      now: NOW + 2 * MIN,
+    });
+    expect(ended.agents).toHaveLength(1);
+    expect(byTitle(ended, 'child')).toMatchObject({ parentId: null, parentAway: true });
+  });
+
+  it('prioritizes work and unread results over newer recent agents, keeping available parents', () => {
+    const filler = Array.from({ length: ROSTER_CAP }, (_, i) => ({
+      id: `idle-${i}`,
+      updatedAt: NOW,
+    }));
+    const roster = build([
+      ...filler,
+      { id: 'parent', title: 'parent', reportsEmptyThread: true },
+      { id: 'child', title: 'child', parentAgentId: 'parent', status: 'running' },
+      {
+        id: 'review',
+        title: 'review',
+        requiresAttention: true,
+        attentionReason: 'finished',
+        updatedAt: NOW - 45 * MIN,
+      },
+      {
+        id: 'error',
+        title: 'error',
+        requiresAttention: true,
+        attentionReason: 'error',
+        updatedAt: NOW - 45 * MIN,
+      },
+      {
+        id: 'background',
+        title: 'background',
+        backgroundWorkActive: true,
+        updatedAt: NOW - 45 * MIN,
+      },
+    ]);
+    expect(roster.truncated).toBe(true);
+    expect(byTitle(roster, 'child').parentId).toBe(byTitle(roster, 'parent').id);
+    expect(byTitle(roster, 'review')).toMatchObject({ state: 'finished', reviewPending: true });
+    expect(byTitle(roster, 'error')).toMatchObject({ state: 'error', reviewPending: true });
+    expect(byTitle(roster, 'background')).toMatchObject({
+      state: 'idle',
+      backgroundWorkActive: true,
+    });
+  });
+
+  it('reports an acknowledged error distinctly from legacy errors and later unread completions', () => {
+    const completion = { id: 'done', title: 'done', attentionReason: 'finished' };
+    expect(byTitle(build([{ ...completion, requiresAttention: true }]), 'done').reviewPending).toBe(
+      true,
+    );
+    expect(
+      byTitle(build([{ ...completion, requiresAttention: false, attentionReason: null }]), 'done')
+        .reviewPending,
+    ).toBeUndefined();
+    expect(byTitle(build([{ ...completion, requiresAttention: true }]), 'done').reviewPending).toBe(
+      true,
+    );
+    const acknowledged = { id: 'error', title: 'error', status: 'error' };
+    expect(
+      byTitle(build([{ ...acknowledged, requiresAttention: false }]), 'error').reviewPending,
+    ).toBe(false);
+    expect(byTitle(build([acknowledged]), 'error').reviewPending).toBeUndefined();
+  });
+
   describe('parents', () => {
     it('links a child to its parent when the parent is on the roster', () => {
       const roster = build([
@@ -187,7 +298,7 @@ describe('buildRoster', () => {
   });
 
   describe('order and cap', () => {
-    it('lists waiting, then error, then working, then the rest, most recent first within each', () => {
+    it('lists waiting, then error, then working or starting, then the rest', () => {
       const roster = build([
         { id: 'idle', title: 'idle', status: 'idle' },
         { id: 'work-old', title: 'work-old', status: 'running', updatedAt: NOW - 5 * MIN },
@@ -199,11 +310,10 @@ describe('buildRoster', () => {
       expect(roster.agents.map((agent) => agent.title)).toEqual([
         'wait',
         'err',
+        'start',
         'work-new',
         'work-old',
-        // the rest: most recently updated first, ties by id
         'idle',
-        'start',
       ]);
     });
 

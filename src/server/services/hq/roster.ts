@@ -28,7 +28,7 @@ import { liveSessionKey, type LiveSessionKey, type LiveSessionLabel } from '../.
 //      `kind: 'child'`, `parentId: null`, `parentAway: true`; another claimant is never substituted. A Paseo parent label resolves to
 //      the labelled agent's entry, or is away in the same way. A cycle is refused.
 
-/** The roster shows at most this many agents: waiting first, then error, then working, then the rest. */
+/** The roster shows at most this many agents, with actionable agents before recent idle ones. */
 export const ROSTER_CAP = 60;
 /** An id (or an owner) remembered for a key that has not been seen for this long is forgotten. */
 const MEMO_KEEP_MS = 30 * 60_000;
@@ -85,8 +85,16 @@ function lastSegment(path: string | null): string | null {
   return clipped(parts.at(-1) ?? null, MAX_LIVE_TITLE_CHARS);
 }
 
-const RANK: Record<string, number> = { waiting: 0, error: 1, working: 2 };
-const rankOf = (state: string): number => RANK[state] ?? 3;
+const RECENT_RANK = 5;
+
+function rankOf(shown: Shown): number {
+  if (shown.state === 'waiting') return 0;
+  if (shown.state === 'error' && shown.reviewPending !== false) return 1;
+  if (shown.state === 'working' || shown.state === 'starting' || shown.backgroundWorkActive)
+    return 2;
+  if (shown.reviewPending) return 3;
+  return RECENT_RANK;
+}
 
 /** What an entity (one agent, seen by Paseo, a transcript or both) is doing, and how sure that is. */
 interface Shown {
@@ -96,6 +104,9 @@ interface Shown {
   confidence: HqAgent['confidence'];
   since: number;
   lastActivityAt: number;
+  reviewPending?: boolean | undefined;
+  backgroundWorkActive?: boolean;
+  confirmedEmpty?: boolean;
 }
 
 /** What Claude Code's hooks said about a session, with the session's id (the key the hook store holds it under). */
@@ -117,6 +128,8 @@ interface Entity {
   /** What orders the entity among equals: the Paseo id when there is one, else the transcript key. */
   sortKey: string;
   shown: Shown;
+  /** An expired Paseo row that can still link a crew with actionable work. */
+  ancestorOnly?: true;
 }
 
 export interface RosterInput {
@@ -159,6 +172,10 @@ function mergeShown(paseo: LiveAgent, live: LiveState, transcript: TranscriptAge
     live.state === 'working' && transcript !== null && transcript.state === 'working'
       ? transcript.activity
       : live.activity;
+  const unreadResult =
+    live.state === 'finished' &&
+    paseo.attentionReason === 'finished' &&
+    paseo.requiresAttention === true;
   return {
     state: live.state,
     activity,
@@ -166,6 +183,9 @@ function mergeShown(paseo: LiveAgent, live: LiveState, transcript: TranscriptAge
     confidence: 'reported',
     since: live.since,
     lastActivityAt: Math.max(paseo.updatedAt, transcript?.lastActivityAt ?? 0),
+    reviewPending: live.state === 'error' ? paseo.requiresAttention : unreadResult || undefined,
+    backgroundWorkActive: paseo.backgroundWorkActive,
+    confirmedEmpty: paseo.reportsEmptyThread && transcript === null,
   };
 }
 
@@ -305,15 +325,19 @@ export function buildRoster(input: RosterInput): Roster {
     sessionKey: string | null;
   }
   const visible: Visible[] = [];
+  const expired: Array<{ agent: LiveAgent; sessionKey: string | null }> = [];
   const groups = new Map<string, Visible[]>();
   for (const agent of paseoAgents) {
-    const live = mapLiveState(agent, now);
-    if (live === null) continue;
     const provider = normaliseProvider(agent.provider);
     const sessionKey =
       agent.sessionId !== null && provider !== 'other'
         ? liveSessionKey(provider, agent.sessionId)
         : null;
+    const live = mapLiveState(agent, now);
+    if (live === null) {
+      if (!agent.archived) expired.push({ agent, sessionKey });
+      continue;
+    }
     const claimant: Visible = { agent, live, sessionKey };
     visible.push(claimant);
     if (sessionKey !== null) groups.set(sessionKey, [...(groups.get(sessionKey) ?? []), claimant]);
@@ -402,6 +426,90 @@ export function buildRoster(input: RosterInput): Roster {
     });
   }
 
+  // An expired Paseo parent can link a crew, but cannot take a provider session away from another source.
+  const activeSessions = new Set(entities.map((entity) => entity.session));
+  const contextualSessions = new Set<string>();
+  expired.sort((a, b) => b.agent.updatedAt - a.agent.updatedAt || byText(a.agent.id, b.agent.id));
+  for (const { agent, sessionKey } of expired) {
+    const session =
+      sessionKey !== null && !activeSessions.has(sessionKey) && !contextualSessions.has(sessionKey)
+        ? sessionKey
+        : null;
+    if (session !== null) contextualSessions.add(session);
+    const identity = `paseo:${agent.id}`;
+    entities.push({
+      paseo: agent,
+      transcript: null,
+      hook: null,
+      identity,
+      session,
+      keys: [identity, ...(session === null ? [] : [session])],
+      sortKey: agent.id,
+      shown: {
+        state: 'idle',
+        activity: 'none',
+        waitReason: null,
+        confidence: 'reported',
+        since: agent.updatedAt,
+        lastActivityAt: agent.updatedAt,
+      },
+      ancestorOnly: true,
+    });
+  }
+
+  // Resolve parent claims before filtering out empty threads and capping the roster.
+  const bySession = new Map<string, Entity>();
+  const byPaseo = new Map<string, Entity>();
+  for (const entity of entities) {
+    if (entity.session !== null) bySession.set(entity.session, entity);
+    if (entity.paseo !== null) byPaseo.set(entity.paseo.id, entity);
+  }
+  interface Claim {
+    /** The entity the provider or Paseo names as the parent, when it is eligible for the roster. */
+    target: Entity | undefined;
+    basis: 'native' | 'paseo';
+  }
+  /**
+   * A parent claim: the provider's own record wins (a Claude subagent's folder, a Codex thread's spawner), Paseo's label fills a gap.
+   * No edge is ever invented from anything else. A claim whose parent is not on the roster is still a claim ("away").
+   */
+  const claimOf = (entity: Entity): Claim | null => {
+    const native = entity.transcript?.parentSessionId ?? null;
+    if (native !== null && entity.transcript !== null) {
+      return {
+        target: bySession.get(liveSessionKey(entity.transcript.provider, native)),
+        basis: 'native',
+      };
+    }
+    const label = entity.paseo?.parentAgentId ?? null;
+    if (label !== null) {
+      return {
+        target: byPaseo.get(label),
+        basis: 'paseo',
+      };
+    }
+    return null;
+  };
+  const claims = new Map<Entity, Claim>();
+  for (const entity of entities) {
+    const claim = claimOf(entity);
+    if (claim !== null) claims.set(entity, claim);
+  }
+
+  // Empty threads only stay when they connect a visible descendant. Prefer the ancestors of actionable agents over independent
+  // idle sessions when there is space. Every step improves the parent's rank, so even a cycle stops the walk.
+  const nonempty = entities.filter(
+    (entity) => !entity.shown.confirmedEmpty && !entity.ancestorOnly,
+  );
+  const displayRanks = new Map(nonempty.map((entity) => [entity, rankOf(entity.shown)] as const));
+  for (const entity of nonempty) {
+    const ancestorRank = rankOf(entity.shown) === RECENT_RANK ? RECENT_RANK : RECENT_RANK - 1;
+    for (let parent = claims.get(entity)?.target; parent; parent = claims.get(parent)?.target) {
+      if (parent.ancestorOnly && ancestorRank === RECENT_RANK) break;
+      if ((displayRanks.get(parent) ?? Infinity) <= ancestorRank) break;
+      displayRanks.set(parent, ancestorRank);
+    }
+  }
   // Ids (rule 1), for ALL the entities, before the cap. An entity looks its keys up in the memo, its own first; an id that is taken
   // (by an entity decided earlier in this poll) is not given twice. Who is decided first: an entity that held its own key's id in the
   // previous poll (continuously visible) before one that held it longer ago, before one that only has the session's id, before a new
@@ -414,9 +522,14 @@ export function buildRoster(input: RosterInput): Roster {
   };
   const idOf = new Map<Entity, string>();
   const taken = new Set<string>();
-  const ranks = new Map(entities.map((entity) => [entity, claimRank(entity)] as const));
-  const decided = [...entities].sort(
+  const knownEntities = entities.filter(
+    (entity) => !entity.ancestorOnly || displayRanks.has(entity),
+  );
+  const ranks = new Map(knownEntities.map((entity) => [entity, claimRank(entity)] as const));
+  const decided = [...knownEntities].sort(
     (a, b) =>
+      Number(Boolean(a.ancestorOnly && a.session === null)) -
+        Number(Boolean(b.ancestorOnly && b.session === null)) ||
       (ranks.get(a) ?? 3) - (ranks.get(b) ?? 3) ||
       (a.paseo === null ? 1 : 0) - (b.paseo === null ? 1 : 0) ||
       byText(a.identity, b.identity),
@@ -442,7 +555,7 @@ export function buildRoster(input: RosterInput): Roster {
     taken.add(chosen);
     idOf.set(entity, chosen);
   }
-  for (const entity of entities) {
+  for (const entity of knownEntities) {
     const id = idOf.get(entity);
     if (id !== undefined)
       for (const key of entity.keys) memo.ids.set(key, { id, seenAt: now, poll });
@@ -456,60 +569,21 @@ export function buildRoster(input: RosterInput): Roster {
     for (const [key] of old.slice(0, table.size - MEMO_MAX)) table.delete(key);
   }
 
-  // Most urgent first; within a rank the most recently active, then the key, so the order never flickers between polls.
-  entities.sort(
-    (a, b) =>
-      rankOf(a.shown.state) - rankOf(b.shown.state) ||
-      b.shown.lastActivityAt - a.shown.lastActivityAt ||
-      byText(a.sortKey, b.sortKey),
-  );
-  const kept = entities.slice(0, ROSTER_CAP);
+  const eligible = entities.filter((entity) => displayRanks.has(entity));
+  const kept = eligible
+    .sort(
+      (a, b) =>
+        (displayRanks.get(a) ?? RECENT_RANK) - (displayRanks.get(b) ?? RECENT_RANK) ||
+        b.shown.lastActivityAt - a.shown.lastActivityAt ||
+        byText(a.sortKey, b.sortKey),
+    )
+    .slice(0, ROSTER_CAP);
   const onRoster = new Set(kept);
-
-  // Parents (rule 4). A claim is resolved over ALL the entities, to the owner of the parent session, and is then on the roster or away:
-  // one cut by the cap, or not shown at all, is "away", and no other claimant of the session stands in for it.
-  const bySession = new Map<string, Entity>();
-  const byPaseo = new Map<string, Entity>();
-  for (const entity of entities) {
-    if (entity.session !== null) bySession.set(entity.session, entity);
-    if (entity.paseo !== null) byPaseo.set(entity.paseo.id, entity);
-  }
-  interface Claim {
-    /** The entity the provider or Paseo names as the parent, when it is on the roster (the agent itself and loops are refused below). */
-    target: Entity | undefined;
-    basis: 'native' | 'paseo';
-  }
-  /**
-   * A parent claim: the provider's own record wins (a Claude subagent's folder, a Codex thread's spawner), Paseo's label fills a gap.
-   * No edge is ever invented from anything else. A claim whose parent is not on the roster is still a claim ("away").
-   */
-  const claimOf = (entity: Entity): Claim | null => {
-    const native = entity.transcript?.parentSessionId ?? null;
-    if (native !== null && entity.transcript !== null) {
-      const target = bySession.get(liveSessionKey(entity.transcript.provider, native));
-      return {
-        target: target !== undefined && onRoster.has(target) ? target : undefined,
-        basis: 'native',
-      };
-    }
-    const label = entity.paseo?.parentAgentId ?? null;
-    if (label !== null) {
-      const target = byPaseo.get(label);
-      return {
-        target: target !== undefined && onRoster.has(target) ? target : undefined,
-        basis: 'paseo',
-      };
-    }
-    return null;
-  };
-  const claims = new Map<Entity, Claim>();
-  for (const entity of kept) {
-    const claim = claimOf(entity);
-    if (claim !== null) claims.set(entity, claim);
-  }
   const parentOf = new Map<Entity, Entity>();
-  for (const [entity, claim] of claims)
-    if (claim.target !== undefined) parentOf.set(entity, claim.target);
+  for (const entity of kept) {
+    const parent = claims.get(entity)?.target;
+    if (parent !== undefined && onRoster.has(parent)) parentOf.set(entity, parent);
+  }
   /** An agent whose ancestor chain enters any cycle, its own or another one (a -> b -> c -> b): its edge is refused, not drawn in a circle. */
   const inCycle = (start: Entity): boolean => {
     const seen = new Set<Entity>([start]);
@@ -563,7 +637,7 @@ export function buildRoster(input: RosterInput): Roster {
 
   return {
     agents: conformed.agents,
-    truncated: input.pageTruncated === true || entities.length > ROSTER_CAP,
+    truncated: input.pageTruncated === true || eligible.length > ROSTER_CAP,
     repaired,
   };
 
@@ -593,11 +667,16 @@ export function buildRoster(input: RosterInput): Roster {
     return {
       id: idOf.get(entity) ?? keyId(entity.sortKey),
       ...(input.includePaseoAgentIds && paseo ? { paseoAgentId: paseo.id } : {}),
+      ...(entity.shown.reviewPending !== undefined && {
+        reviewPending: entity.shown.reviewPending,
+      }),
+      ...(entity.shown.backgroundWorkActive && { backgroundWorkActive: true }),
+      ...(entity.shown.confirmedEmpty && { confirmedEmpty: true }),
       provider,
       kind: hasClaim ? 'child' : 'root',
       parentId: linked ? (idOf.get(parent) ?? null) : null,
       parentBasis: hasClaim ? claim.basis : null,
-      parentAway: claim !== undefined && claim.target === undefined,
+      parentAway: claim !== undefined && parent === undefined,
       title: paseo?.title ?? label?.title ?? null,
       repo: label?.repo ?? repoFor(cwd),
       workspace: paseo?.workspaceName ?? lastSegment(cwd) ?? label?.workspace ?? null,

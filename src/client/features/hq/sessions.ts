@@ -18,6 +18,22 @@ export interface Session {
   waiting: boolean;
 }
 
+type AttentionAgent = Pick<
+  HqAgent,
+  'state' | 'reviewPending' | 'backgroundWorkActive' | 'confirmedEmpty'
+>;
+
+export const isWorking = (agent: AttentionAgent): boolean =>
+  agent.state === 'working' ||
+  (agent.state === 'starting' && agent.confirmedEmpty !== true) ||
+  agent.backgroundWorkActive === true;
+
+export const isReadyToReview = (agent: AttentionAgent): boolean =>
+  (agent.state === 'finished' || agent.state === 'idle') && agent.reviewPending === true;
+
+export const hasActionableError = (agent: AttentionAgent): boolean =>
+  agent.state === 'error' && agent.reviewPending !== false;
+
 const time = (instant: string | null) => (instant === null ? 0 : Date.parse(instant));
 
 /** Oldest first, so a new agent joins the end and the order does not move between polls. */
@@ -87,4 +103,60 @@ export function buildSessions(agents: readonly HqAgent[]): Session[] {
 
 function containsState(node: AgentNode, state: HqAgent['state']): boolean {
   return node.agent.state === state || node.children.some((child) => containsState(child, state));
+}
+
+const RECENT_IDLE_RANK = 4;
+
+function focusRank(agent: HqAgent): number {
+  if (agent.state === 'waiting') return 0;
+  if (hasActionableError(agent)) return 1;
+  if (isWorking(agent)) return 2;
+  if (isReadyToReview(agent)) return 3;
+  return RECENT_IDLE_RANK;
+}
+
+function visibleNode(node: AgentNode): AgentNode | null {
+  const children = node.children.map(visibleNode).filter((child) => child !== null);
+  // An otherwise empty ancestor can still be the context for a crew that's doing work.
+  if (
+    node.agent.confirmedEmpty &&
+    children.length === 0 &&
+    focusRank(node.agent) === RECENT_IDLE_RANK
+  ) {
+    return null;
+  }
+  return { agent: node.agent, children };
+}
+
+function crewRank(node: AgentNode): number {
+  return Math.min(focusRank(node.agent), ...node.children.map(crewRank));
+}
+
+function crewActivity(node: AgentNode): number {
+  return Math.max(
+    time(node.agent.lastActivityAt ?? node.agent.since),
+    ...node.children.map(crewActivity),
+  );
+}
+
+/** Focus is decided for the entire crew, and an inactive crew's recency includes its helpers. */
+export function groupSessions(agents: readonly HqAgent[]): {
+  focus: Session[];
+  recentIdle: Session[];
+} {
+  const focus: { session: Session; rank: number }[] = [];
+  const recentIdle: { session: Session; activity: number }[] = [];
+  for (const session of buildSessions(agents)) {
+    const root = visibleNode(session.root);
+    if (root === null) continue;
+    const visible = { ...session, root, size: count(root) };
+    const rank = crewRank(root);
+    if (rank === RECENT_IDLE_RANK)
+      recentIdle.push({ session: visible, activity: crewActivity(root) });
+    else focus.push({ session: visible, rank });
+  }
+  return {
+    focus: focus.sort((a, b) => a.rank - b.rank).map(({ session }) => session),
+    recentIdle: recentIdle.sort((a, b) => b.activity - a.activity).map(({ session }) => session),
+  };
 }

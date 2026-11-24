@@ -473,6 +473,9 @@ components:
       properties:
         id: { type: string, description: opaque and stable while the agent is on the roster }
         paseoAgentId: { type: string, description: same-host Paseo navigation target when known in a managed installation }
+        reviewPending: { type: boolean, description: true for an unread Paseo completion or error and false for an acknowledged Paseo error }
+        backgroundWorkActive: { type: boolean, description: Paseo reports work that continues outside the foreground turn }
+        confirmedEmpty: { type: boolean, description: empty thread retained to link its descendants }
         provider: { type: string, enum: [codex, claude, other] }
         kind: { type: string, enum: [root, child] }
         parentId: { type: [string, "null"] }
