@@ -529,7 +529,7 @@ function QuotaRow({
         {quota?.usedPercent != null ? (
           <NativeText
             announce
-            size={24}
+            size={21}
             style={{ maxWidth: '100%', fontWeight: '700', fontVariant: ['tabular-nums'] }}
           >
             {quota.usedPercent}%{' '}

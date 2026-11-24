@@ -114,7 +114,7 @@ export function PaseoQuotaCard({
                           General weekly quota unavailable.
                         </p>
                       ) : (
-                        <p className="font-display text-metric tabular-nums text-ink">
+                        <p className="font-display text-title-page tabular-nums text-ink">
                           {PERCENT.format(row.usedPercent)}%{' '}
                           <span className="font-sans text-label tracking-normal text-ink-muted">
                             of general weekly limit used
