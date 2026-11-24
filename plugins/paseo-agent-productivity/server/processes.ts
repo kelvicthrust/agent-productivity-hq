@@ -9,6 +9,7 @@ import {
   type NativeResult,
   type PaseoRead,
 } from '../shared/native.ts';
+import { browserTicket } from '../shared/rpc.ts';
 import { dashboardUnavailable, LaunchError, tailscaleUnavailable } from './errors.ts';
 import { nodeEnvironment, resolveNodeExecutable } from './node-runtime.ts';
 import { dashboardHttpsPort, type TailnetHost } from './tailscale.ts';
@@ -35,7 +36,19 @@ const remoteResult = z.discriminatedUnion('ok', [
   }),
   z.strictObject({ type: z.literal('remote-result'), id, ok: z.literal(false) }),
 ]);
-const commandReply = z.object({ type: z.enum(['native-result', 'remote-result']), id });
+const browserTicketResult = z.discriminatedUnion('ok', [
+  z.strictObject({
+    type: z.literal('browser-ticket-result'),
+    id,
+    ok: z.literal(true),
+    ...browserTicket.shape,
+  }),
+  z.strictObject({ type: z.literal('browser-ticket-result'), id, ok: z.literal(false) }),
+]);
+const commandReply = z.object({
+  type: z.enum(['native-result', 'remote-result', 'browser-ticket-result']),
+  id,
+});
 const paseoRead = z.strictObject({
   type: z.literal('paseo-read'),
   id,
@@ -121,6 +134,7 @@ export interface DashboardProcess extends OwnedProcess {
   port: number;
   attachRemote(host: TailnetHost): Promise<number>;
   detachRemote(): Promise<void>;
+  issueBrowserTicket(): Promise<z.infer<typeof browserTicket>>;
   native(request: NativeRequest): Promise<NativeResult>;
 }
 
@@ -256,7 +270,7 @@ function dashboardCommands(
   owned: OwnedProcess,
   localPort: number,
   readPaseo?: PaseoRead,
-): Pick<DashboardProcess, 'attachRemote' | 'detachRemote' | 'native'> {
+): Pick<DashboardProcess, 'attachRemote' | 'detachRemote' | 'issueBrowserTicket' | 'native'> {
   let nextRequestId = 0;
   const pending = new Map<number, (message?: unknown) => void>();
   function cancel() {
@@ -342,6 +356,14 @@ function dashboardCommands(
     async detachRemote() {
       const result = remoteResult.parse(await call({ type: 'detach-remote' }, 'remote-result'));
       if (!result.ok || result.port !== undefined) throw dashboardUnavailable();
+    },
+    async issueBrowserTicket() {
+      const result = browserTicketResult.safeParse(
+        await call({ type: 'issue-browser-ticket' }, 'browser-ticket-result'),
+      );
+      if (!result.success || !result.data.ok) throw dashboardUnavailable();
+      const { ticket, expiresAt } = result.data;
+      return { ticket, expiresAt };
     },
     async native(request) {
       // Paseo's usage providers can take 20 seconds on a cold read.

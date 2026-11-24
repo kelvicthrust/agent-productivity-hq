@@ -10,6 +10,7 @@ import { startDashboard } from '../server/processes.ts';
 
 const authority = 'mini.example-tailnet.ts.net:4317';
 const ownerLogin = 'owner@example.com';
+const browserTicket = { ticket: 'A'.repeat(43), expiresAt: 2_000_000_000_000 };
 const serveSession = fileURLToPath(new URL('../server/serve-session.mjs', import.meta.url));
 
 async function scratch(t: TestContext) {
@@ -26,6 +27,7 @@ test('receives the matching IPC handshake from a live child and rejects a differ
     `
     let read;
     let first;
+    let attached = false;
     process.on('message', ({ type, id, ownerLogin, remoteHost, version, request, ...response }) => {
       if (type === 'start') {
         if (ownerLogin !== undefined || remoteHost !== undefined) process.exit(2);
@@ -52,9 +54,20 @@ test('receives the matching IPC handshake from a live child and rejects a differ
       }
       if (type === 'attach-remote') {
         if (ownerLogin !== ${JSON.stringify(ownerLogin)} || remoteHost !== ${JSON.stringify(authority)}) process.exit(2);
+        attached = true;
         process.send({ type: 'remote-result', id, ok: true, port: 53270 });
       }
-      if (type === 'detach-remote') process.send({ type: 'remote-result', id, ok: true });
+      if (type === 'detach-remote') {
+        attached = false;
+        process.send({ type: 'remote-result', id, ok: true });
+      }
+      if (type === 'issue-browser-ticket') {
+        if (ownerLogin !== undefined || remoteHost !== undefined || Object.keys(response).length) process.exit(2);
+        process.send({ type: 'remote-result', id, ok: false });
+        process.send(attached
+          ? { type: 'browser-ticket-result', id, ok: true, ...${JSON.stringify(browserTicket)} }
+          : { type: 'browser-ticket-result', id, ok: false });
+      }
     });
   `,
   );
@@ -72,8 +85,11 @@ test('receives the matching IPC handshake from a live child and rejects a differ
       data: { request, read: { ok: true, value: { kind: 'usage' } } },
     })),
   );
+  await assert.rejects(child.issueBrowserTicket());
   assert.equal(await child.attachRemote(host), 53270);
+  assert.deepEqual(await child.issueBrowserTicket(), browserTicket);
   await child.detachRemote();
+  await assert.rejects(child.issueBrowserTicket());
   await child.stop();
   assert.equal(child.alive(), false);
   await assert.rejects(startDashboard({ ...paths, version: '1.2.4' }, 4317, signal));

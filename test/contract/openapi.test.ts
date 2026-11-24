@@ -11,6 +11,8 @@ import {
   type RouteContract,
 } from '../../src/shared/contracts/index.ts';
 import { servedRoutes } from '../../src/server/http/app.ts';
+import { createBrowserHandoff } from '../../src/server/http/browser-handoff.ts';
+import { PASEO_HANDOFF_PATH } from '../../src/shared/contracts/browser-handoff.ts';
 import { resolveScope } from '../../src/shared/domain/scope.ts';
 import { claudePlanProfile } from '../../src/server/integrations/claudePlan/credentials.ts';
 import { createClaudeCapture } from '../../src/server/integrations/claudeCapture/index.ts';
@@ -155,6 +157,22 @@ describe('what the server serves against the document', () => {
   const hookIngest = { store: createHookStore({ now: () => NOW }), token: hookToken };
   const { app } = testApp({ hookIngest });
   const served = servedRoutes(app);
+  const host = 'hq.example.ts.net:4317';
+  const browser = testApp({
+    remote: {
+      host,
+      ownerLogin: 'owner@example.test',
+      handoff: createBrowserHandoff(`https://${host}`, () => NOW),
+    },
+  }).app;
+  const browserServed = servedRoutes(browser);
+  const servedAcrossListeners = [...new Set([...served, ...browserServed])];
+
+  it('serves the browser exchange on the managed browser listener only', () => {
+    const exchange = `POST ${PASEO_HANDOFF_PATH}`;
+    expect(served).not.toContain(exchange);
+    expect(browserServed.filter((key) => !served.includes(key))).toEqual([exchange]);
+  });
   const managed = testApp({
     paseoQuota: createPaseoQuotaService({
       listUsage: async () => ({ providers: [] }),
@@ -165,11 +183,13 @@ describe('what the server serves against the document', () => {
   }).app;
 
   it('serves only routes the contracts describe', () => {
-    for (const key of served) expect(all, key).toContain(key);
+    for (const key of servedAcrossListeners) expect(all, key).toContain(key);
   });
 
   it('PENDING_ROUTES is exactly the described routes the server does not serve', () => {
-    expect(sort([...PENDING_ROUTES])).toEqual(sort(all.filter((key) => !served.includes(key))));
+    expect(sort([...PENDING_ROUTES])).toEqual(
+      sort(all.filter((key) => !servedAcrossListeners.includes(key))),
+    );
     expect(new Set(PENDING_ROUTES).size).toBe(PENDING_ROUTES.length);
   });
 

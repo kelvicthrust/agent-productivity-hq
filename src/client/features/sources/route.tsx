@@ -1,8 +1,11 @@
 import { Button } from '@astryxdesign/core/Button';
 import { Icon } from '../../components/Icon';
 import { PageHeader } from '../../components/PageHeader';
+import { PaseoQuotaCard } from '../../components/PaseoQuotaCard';
 import { useRefresh } from '../../components/RefreshBanner';
+import { useBootstrap } from '../../lib/bootstrap';
 import { REFRESH_COPY, SOURCES_COPY } from '../../lib/copy';
+import { isPaseoBrowser } from '../../lib/paseoBrowser';
 import { AccountsSection } from './accounts';
 import { DataKept } from './DataKept';
 import { HqHooks } from './HqHooks';
@@ -16,6 +19,8 @@ import { TrackedRepos } from './repos/TrackedRepos';
 
 export function SourcesRoute() {
   const { refresh, isBusy: busy, description } = useRefresh();
+  const { data: bootstrap } = useBootstrap();
+  const paseoBrowser = isPaseoBrowser();
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -38,11 +43,23 @@ export function SourcesRoute() {
       />
       <SourceCoverage />
       <LocalSources />
-      <HqHooks />
+      {!paseoBrowser && <HqHooks />}
       <AccountsSection />
+      {paseoBrowser && bootstrap && (
+        <PaseoQuotaCard provider="claude" timeZone={bootstrap.timezone} today={bootstrap.today} />
+      )}
       <TrackedRepos />
       <DataKept />
-      <ResetApp />
+      {paseoBrowser ? (
+        <a
+          href="/sources"
+          className="inline-flex w-fit items-center text-copy text-action underline max-[719px]:min-h-11"
+        >
+          Open owner settings
+        </a>
+      ) : (
+        <ResetApp />
+      )}
     </div>
   );
 }

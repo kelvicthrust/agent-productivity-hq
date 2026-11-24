@@ -1,4 +1,5 @@
 import { Hono, type MiddlewareHandler } from 'hono';
+import { PASEO_HANDOFF_PATH } from '../../shared/contracts/browser-handoff.ts';
 import type { DiscoveryInput } from '../collectors/discovery.ts';
 import type { GithubAccounts } from '../collectors/github/ports.ts';
 import type { PaseoAdapterOptions } from '../collectors/paseo/index.ts';
@@ -11,6 +12,7 @@ import type { ClaudeHooks } from '../integrations/claudeHooks/index.ts';
 import type { HqService } from '../services/hq/service.ts';
 import type { PaseoQuotaService } from '../services/paseo-quota.ts';
 import { createResetService, RESET_PATH, type ResetService } from '../services/reset.ts';
+import type { createBrowserHandoff } from './browser-handoff.ts';
 import { apiNotFound, correlation, errorHandler, type HttpEnv } from './errors.ts';
 import {
   csrfGuard,
@@ -60,8 +62,11 @@ export interface AppDeps {
   refreshNeedsSetup?: () => boolean;
   /** The port the server listens on; the Host allowlist is built from it. */
   port: number;
-  /** The Tailscale listener also requires an authenticated owner browser session. */
-  remote?: TailscaleAccess & { session: MiddlewareHandler<HttpEnv> };
+  /** The Tailscale listener authenticates owner and Paseo browser sessions separately. */
+  remote?: TailscaleAccess & {
+    session: MiddlewareHandler<HttpEnv>;
+    handoff?: ReturnType<typeof createBrowserHandoff>;
+  };
   /** Injected clock (epoch ms): a fixed clock in the seeded preview and tests. */
   now: () => number;
   /** The report timezone (IANA). */
@@ -122,7 +127,13 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.use('*', securityHeaders());
   if (deps.remote) app.use('*', tailscaleOwnerGuard(deps.remote.ownerLogin));
   app.use('*', hostGuard(deps.port, deps.logger, deps.remote?.host));
-  if (deps.remote) app.use('*', deps.remote.session);
+  if (deps.remote?.handoff) {
+    const { handoff, session } = deps.remote;
+    app.post(PASEO_HANDOFF_PATH, csrfGuard(deps.logger), handoff.limitBody, handoff.exchange);
+    app.use('*', handoff.authorize(session));
+  } else if (deps.remote) {
+    app.use('*', deps.remote.session);
+  }
   app.use('*', csrfGuard(deps.logger));
   app.onError(errorHandler(deps.logger));
 

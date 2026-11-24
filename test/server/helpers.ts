@@ -13,7 +13,7 @@ import type { HqService } from '../../src/server/services/hq/service.ts';
 import type { PaseoQuotaService } from '../../src/server/services/paseo-quota.ts';
 import { createRunner } from '../../src/server/collectors/runner.ts';
 import { migrate } from '../../src/server/db/migrate.ts';
-import { createApp } from '../../src/server/http/app.ts';
+import { createApp, type AppDeps } from '../../src/server/http/app.ts';
 import { TAILSCALE_LOGIN_HEADER, type TailscaleAccess } from '../../src/server/http/guards.ts';
 import { loadConfig, type ServerConfig } from '../../src/server/lib/config.ts';
 import { createLogger, type Logger } from '../../src/server/lib/logger.ts';
@@ -82,7 +82,7 @@ export function testApp(
     claudeHooks?: ClaudeHooks;
     hookIngest?: HookIngest;
     /** Route tests can simulate a verified browser session while exercising the proxy guard. */
-    remote?: { host: string; ownerLogin: string };
+    remote?: Omit<NonNullable<AppDeps['remote']>, 'session'>;
   } = {},
 ) {
   const db = overrides.db ?? memoryDb();

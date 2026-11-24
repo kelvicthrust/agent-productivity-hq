@@ -1,3 +1,8 @@
+import {
+  BrowserHandoffResponse,
+  PASEO_BROWSER_SESSION_HEADER,
+  PASEO_HANDOFF_PATH,
+} from '../src/shared/contracts/browser-handoff.ts';
 import assert from 'node:assert/strict';
 import { execFileSync, fork } from 'node:child_process';
 import { once } from 'node:events';
@@ -250,6 +255,8 @@ async function checkPackagedService(plugin: string, scratch: string) {
       return answer as {
         ok?: boolean;
         port?: number;
+        ticket?: string;
+        expiresAt?: number;
         result?: { ok: boolean; data: { setupComplete?: boolean } };
       };
     }
@@ -290,6 +297,7 @@ async function checkPackagedService(plugin: string, scratch: string) {
     assert.equal(quota.result.ok, true);
     assert.equal(quota.result.data.providers[0].source, 'paseo');
     assert.equal(quota.result.data.providers[0].usedPercent, 36);
+    assert.equal((await call({ type: 'issue-browser-ticket' })).ok, false);
     const share = await call({ type: 'attach-remote', ownerLogin, remoteHost });
     assert.equal(share.ok, true);
     const remotePort = share.port;
@@ -315,6 +323,7 @@ async function checkPackagedService(plugin: string, scratch: string) {
     }
     for (const [method, path] of [
       ['POST', '/api/setup/reset'],
+      ['POST', PASEO_HANDOFF_PATH],
       ['PUT', hookSettingsPath],
     ] as const) {
       assert.equal(
@@ -359,6 +368,23 @@ async function checkPackagedService(plugin: string, scratch: string) {
         probe.end(payload);
       });
     const tailscaleHeaders = { 'Tailscale-User-Login': ownerLogin };
+    const launch = await call({ type: 'issue-browser-ticket' });
+    assert.equal(launch.ok, true);
+    assert.ok(launch.ticket && launch.expiresAt && launch.expiresAt > Date.now());
+    assert.equal((await protectedProbe('/paseo/', { headers: tailscaleHeaders })).status, 200);
+    const redeem = () =>
+      protectedProbe(PASEO_HANDOFF_PATH, {
+        method: 'POST',
+        headers: { ...tailscaleHeaders, ...writeHeaders, origin: `https://${remoteHost}` },
+        body: JSON.stringify({ ticket: launch.ticket }),
+      });
+    const redeemed = await redeem();
+    assert.equal(redeemed.status, 200);
+    const { credential } = BrowserHandoffResponse.parse(await redeemed.json());
+    assert.equal((await redeem()).status, 401);
+    const handoffHeaders = { ...tailscaleHeaders, [PASEO_BROWSER_SESSION_HEADER]: credential };
+    assert.equal((await protectedProbe('/api/bootstrap', { headers: handoffHeaders })).status, 200);
+    assert.equal((await protectedProbe(hookSettingsPath, { headers: handoffHeaders })).status, 403);
     assert.equal((await protectedProbe('/api/health')).status, 403);
     assert.equal((await protectedProbe('/api/health', { headers: tailscaleHeaders })).status, 401);
     assert.equal(
@@ -402,8 +428,9 @@ async function checkPackagedService(plugin: string, scratch: string) {
     const html = await page.text();
     const asset = html.match(/<script[^>]*\bsrc="(\/assets\/[^"]+\.js)"/)?.[1];
     assert.ok(asset, 'Missing a production JavaScript bundle in the packaged dashboard');
-    assert.equal((await protectedProbe(asset, { headers: tailscaleHeaders })).status, 401);
-    const javascript = await protectedProbe(asset, { headers: ownerHeaders });
+    // The scoped entry needs the built application before it can exchange a browser ticket.
+    assert.equal((await protectedProbe(asset)).status, 403);
+    const javascript = await protectedProbe(asset, { headers: tailscaleHeaders });
     assert.equal(javascript.status, 200);
     assert.match(javascript.headers.get('content-type') ?? '', /^text\/javascript/);
     await javascript.arrayBuffer();
@@ -508,7 +535,7 @@ try {
   checkArchiveNotices(unpacked);
   await checkPackagedService(unpacked, scratch);
   console.log(
-    `${name}@${version} installed offline, served the protected browser dashboard and kept native data behind IPC.`,
+    `${name}@${version} installed offline, served both protected browser flows and kept native data behind IPC.`,
   );
 } finally {
   rmSync(scratch, { recursive: true, force: true });

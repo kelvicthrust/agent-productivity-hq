@@ -8,13 +8,20 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { isTailnetHttpsOrigin } from '../shared/dashboard.ts';
-import { launchDashboard, runtimeInstall } from '../shared/rpc.ts';
+import {
+  browserHandoff,
+  browserHandoffTicket,
+  launchDashboard,
+  runtimeInstall,
+} from '../shared/rpc.ts';
 import type { DashboardDestination, LaunchRequests } from './launch.ts';
 
 interface LauncherScreenProps extends paseoClient.PluginScreenProps {
   requests: LaunchRequests;
   destination?: DashboardDestination;
 }
+
+const expiredHandoff = 'This browser handoff expired. Retry to open the dashboard.';
 
 export function LauncherScreen({
   host,
@@ -26,7 +33,9 @@ export function LauncherScreen({
   theme,
 }: LauncherScreenProps) {
   const launch = paseoClient.useRpc(launchDashboard);
+  const handoff = paseoClient.useRpc(browserHandoff);
   const install = paseoClient.useRpc(runtimeInstall);
+  const ownerSettings = destination === 'sources';
   const externalOpen =
     typeof paseoClient.openExternalUrl === 'function' ? paseoClient.openExternalUrl : undefined;
   // Paseo Desktop also reports `web`. Only Desktop supplies workspace browser navigation.
@@ -34,6 +43,8 @@ export function LauncherScreen({
     layout.platform === 'web' && typeof navigation?.openBrowser !== 'function';
   const [status, setStatus] = useState<string>();
   const [privateUrl, setPrivateUrl] = useState<string>();
+  const [handoffExpiry, setHandoffExpiry] = useState<number>();
+  const preparedHandoff = useRef<{ url: string; expiresAt: number } | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [installNeeded, setInstallNeeded] = useState(false);
   const inFlight = useRef(false);
@@ -46,23 +57,42 @@ export function LauncherScreen({
     };
   }, []);
 
+  useEffect(() => {
+    if (handoffExpiry === undefined) return;
+    const timer = setTimeout(() => {
+      if (preparedHandoff.current?.expiresAt !== handoffExpiry) return;
+      preparedHandoff.current = undefined;
+      setHandoffExpiry(undefined);
+      setStatus(expiredHandoff);
+    }, handoffExpiry - performance.now());
+    return () => clearTimeout(timer);
+  }, [handoffExpiry]);
+
   const openInBrowser = useCallback(
-    async (url: string) => {
+    async (url: string, expiresAt?: number) => {
+      if (expiresAt !== undefined && expiresAt <= performance.now()) {
+        setStatus(expiredHandoff);
+        return;
+      }
       try {
         if (externalOpen) {
           await externalOpen(url);
-          if (active.current && !browserNeedsClick) {
+          if (active.current && (expiresAt !== undefined || !browserNeedsClick)) {
             setPrivateUrl(undefined);
             setStatus('The dashboard is open in your browser.');
           }
           return;
         }
       } catch {
-        // Keep the validated address available for copying if the client cannot open it.
+        // The owner settings link can be copied if the client cannot open it.
       }
       if (active.current) {
-        setPrivateUrl(url);
-        setStatus('Copy the private address and open it in your browser.');
+        if (expiresAt === undefined) {
+          setPrivateUrl(url);
+          setStatus('Copy the private address and open it in your browser.');
+        } else {
+          setStatus('Could not open the dashboard in your browser. Try again.');
+        }
       }
     },
     [externalOpen, browserNeedsClick],
@@ -99,9 +129,14 @@ export function LauncherScreen({
           : 'Starting the dashboard and checking private access…',
       );
       try {
-        let result = installRuntime ? await waitForRuntime('start') : await launch({});
+        const request = () => (ownerSettings ? launch({}) : handoff({}));
+        const finishInstall = async (action: 'start' | 'status') => {
+          const result = await waitForRuntime(action);
+          return result?.ok && active.current && !ownerSettings ? request() : result;
+        };
+        let result = installRuntime ? await finishInstall('start') : await request();
         if (active.current && result?.ok === false && result.reason === 'runtime-installing') {
-          result = await waitForRuntime('status');
+          result = await finishInstall('status');
         }
         if (!active.current || !result) return;
         if (!result.ok) {
@@ -118,14 +153,32 @@ export function LauncherScreen({
           );
           return;
         }
-        const target =
-          destination === 'sources' ? new URL('/sources', result.url).href : result.url;
+        if (ownerSettings) {
+          const target = new URL('/sources', result.url).href;
+          if (browserNeedsClick && externalOpen) {
+            setPrivateUrl(target);
+            setStatus('Open the dashboard in your browser or copy the private address.');
+          } else {
+            await openInBrowser(target);
+          }
+          return;
+        }
+        const parsed = browserHandoffTicket.safeParse(result);
+        if (!parsed.success) {
+          setStatus('The host could not prepare a browser handoff. Try again.');
+          return;
+        }
+        const { ticket, validForMs } = parsed.data;
+        const expiresAt = performance.now() + validForMs;
+        const target = new URL('/paseo/', result.url);
+        target.hash = `ticket=${ticket}`;
         if (browserNeedsClick && externalOpen) {
           // The RPC can outlive a browser's user activation. Offer a fresh click to open it.
-          setPrivateUrl(target);
-          setStatus('Open the dashboard in your browser or copy the private address.');
+          preparedHandoff.current = { url: target.href, expiresAt };
+          setHandoffExpiry(expiresAt);
+          setStatus('The dashboard is ready to open in your browser.');
         } else {
-          await openInBrowser(target);
+          await openInBrowser(target.href, expiresAt);
         }
       } catch {
         if (active.current)
@@ -135,8 +188,31 @@ export function LauncherScreen({
         if (active.current) setBusy(false);
       }
     },
-    [launch, browserNeedsClick, destination, externalOpen, openInBrowser, waitForRuntime],
+    [
+      launch,
+      handoff,
+      browserNeedsClick,
+      ownerSettings,
+      externalOpen,
+      openInBrowser,
+      waitForRuntime,
+    ],
   );
+
+  async function openPreparedHandoff() {
+    const target = preparedHandoff.current;
+    if (!target || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    preparedHandoff.current = undefined;
+    setHandoffExpiry(undefined);
+    try {
+      await openInBrowser(target.url, target.expiresAt);
+    } finally {
+      inFlight.current = false;
+      if (active.current) setBusy(false);
+    }
+  }
 
   // Only an explicit browser action issues a launch ID.
   useEffect(() => {
@@ -152,6 +228,16 @@ export function LauncherScreen({
   }, [destination, params.launch, host.id, requests, open]);
 
   const textStyle = { color: theme.colors.foreground, paddingHorizontal: 16, paddingVertical: 12 };
+  const handoffReady = handoffExpiry !== undefined;
+  const launchLabel = installNeeded
+    ? busy
+      ? 'Installing…'
+      : 'Install runtime'
+    : busy
+      ? 'Opening…'
+      : status
+        ? 'Retry'
+        : 'Open dashboard';
   return (
     <ScrollView contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 12 }}>
       <SettingsSection title="Agent HQ">
@@ -177,19 +263,11 @@ export function LauncherScreen({
           )}
           <SettingsAction
             label="Dashboard"
-            actionLabel={
-              installNeeded
-                ? busy
-                  ? 'Installing…'
-                  : 'Install runtime'
-                : busy
-                  ? 'Opening…'
-                  : status
-                    ? 'Retry'
-                    : 'Open dashboard'
-            }
+            actionLabel={handoffReady ? 'Open in browser' : launchLabel}
             disabled={busy}
-            onPress={() => void open(installNeeded)}
+            onPress={
+              handoffReady ? () => void openPreparedHandoff() : () => void open(installNeeded)
+            }
           />
         </SettingsCard>
       </SettingsSection>

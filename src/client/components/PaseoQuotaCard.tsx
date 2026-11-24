@@ -1,13 +1,13 @@
 import { Button } from '@astryxdesign/core/Button';
 import { useToast } from '@astryxdesign/core/Toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Provider, ProviderFilter } from '../../../shared/contracts/common';
-import { PaseoQuotaResponse } from '../../../shared/contracts/paseo-quota';
-import { apiGet, apiSend } from '../../lib/api';
-import { PROVIDER_NAMES } from '../../lib/copy';
-import { formatWhen } from '../../lib/format';
-import { queryKeys } from '../../lib/queryClient';
-import { WRAPPING_LABEL } from '../../lib/wrapLabel';
+import type { Provider, ProviderFilter } from '../../shared/contracts/common';
+import { PaseoQuotaResponse } from '../../shared/contracts/paseo-quota';
+import { apiGet, apiSend } from '../lib/api';
+import { PROVIDER_NAMES } from '../lib/copy';
+import { formatWhen } from '../lib/format';
+import { queryKeys } from '../lib/queryClient';
+import { WRAPPING_LABEL } from '../lib/wrapLabel';
 
 const PATH = '/api/paseo-quota';
 const PERCENT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });

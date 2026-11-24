@@ -1,5 +1,6 @@
 import { SOURCES_COPY } from '../../../lib/copy';
 import { useBootstrap } from '../../../lib/bootstrap';
+import { isPaseoBrowser } from '../../../lib/paseoBrowser';
 import { GithubConnection } from '../github/GithubConnection';
 import { useGithub } from '../github/data';
 import { ChatgptRow } from './ChatgptRow';
@@ -43,9 +44,12 @@ export function AccountsSection() {
         <ul className="m-0 flex list-none flex-col p-0">
           <GithubConnection />
           {chatgpt && <ChatgptRow card={chatgpt} />}
-          {claude && bootstrap && (!bootstrap.paseoManaged || claude.captureHealth?.recorded) && (
-            <ClaudeRow card={claude} removalOnly={bootstrap.paseoManaged === true} />
-          )}
+          {claude &&
+            !isPaseoBrowser() &&
+            bootstrap &&
+            (!bootstrap.paseoManaged || claude.captureHealth?.recorded) && (
+              <ClaudeRow card={claude} removalOnly={bootstrap.paseoManaged === true} />
+            )}
         </ul>
       )}
       <p className="text-caption text-ink-muted">{SOURCES_COPY.accounts.footnote}</p>
