@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import type { DiscoveryInput } from '../collectors/discovery.ts';
 import type { GithubAccounts } from '../collectors/github/ports.ts';
 import type { PaseoAdapterOptions } from '../collectors/paseo/index.ts';
@@ -23,7 +23,7 @@ import { accountRoutes } from './routes/accounts.ts';
 import { bootstrapRoutes } from './routes/bootstrap.ts';
 import { healthRoutes } from './routes/health.ts';
 import { hqRoutes } from './routes/hq.ts';
-import { hqHooksRoutes, type HookIngest } from './routes/hqHooks.ts';
+import { hqHookIngestRoutes, hqHooksRoutes, type HookIngest } from './routes/hqHooks.ts';
 import { linksRoutes } from './routes/links.ts';
 import { modelsRoutes } from './routes/models.ts';
 import { overviewRoutes } from './routes/overview.ts';
@@ -60,8 +60,8 @@ export interface AppDeps {
   refreshNeedsSetup?: () => boolean;
   /** The port the server listens on; the Host allowlist is built from it. */
   port: number;
-  /** The managed Tailscale Serve listener accepts only this authority and owner identity. */
-  remote?: TailscaleAccess;
+  /** The Tailscale listener also requires an authenticated owner browser session. */
+  remote?: TailscaleAccess & { session: MiddlewareHandler<HttpEnv> };
   /** Injected clock (epoch ms): a fixed clock in the seeded preview and tests. */
   now: () => number;
   /** The report timezone (IANA). */
@@ -122,6 +122,7 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.use('*', securityHeaders());
   if (deps.remote) app.use('*', tailscaleOwnerGuard(deps.remote.ownerLogin));
   app.use('*', hostGuard(deps.port, deps.logger, deps.remote?.host));
+  if (deps.remote) app.use('*', deps.remote.session);
   app.use('*', csrfGuard(deps.logger));
   app.onError(errorHandler(deps.logger));
 
@@ -213,6 +214,22 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   if (deps.staticDir) {
     app.get('*', staticHandler(deps.staticDir, { previewLabel: deps.previewLabel }));
   }
+  app.notFound(apiNotFound);
+  return app;
+}
+
+/** The managed loopback listener is solely for authenticated Claude Code hook events. */
+export function createHookIngestApp(
+  deps: Pick<AppDeps, 'port' | 'logger'>,
+  ingest: HookIngest,
+): Hono<HttpEnv> {
+  const app = new Hono<HttpEnv>();
+  app.use('*', correlation());
+  app.use('*', securityHeaders());
+  app.use('*', hostGuard(deps.port, deps.logger));
+  app.use('*', csrfGuard(deps.logger));
+  app.onError(errorHandler(deps.logger));
+  app.route('/', hqHookIngestRoutes(ingest));
   app.notFound(apiNotFound);
   return app;
 }

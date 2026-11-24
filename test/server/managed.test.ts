@@ -1,6 +1,6 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
@@ -16,6 +16,13 @@ const { version } = JSON.parse(
 ) as { version: string };
 const start = { type: 'start', ownerLogin, remoteHost, version };
 const remoteHeaders = { host: remoteHost, 'Tailscale-User-Login': ownerLogin };
+const writeHeaders = {
+  'X-Agent-Productivity-Request': '1',
+  'content-type': 'application/json',
+};
+const browserCode = (dataDir: string) => join(dataDir, 'paseo-browser-code.txt');
+const hookPath = '/api/hq/hooks/claude';
+const hookSettingsPath = '/api/hq/claude-hooks';
 
 async function freePort(): Promise<number> {
   const listener = createServer().listen(0, '127.0.0.1');
@@ -95,7 +102,8 @@ function request(
           for (const [name, values] of Object.entries(response.headersDistinct)) {
             for (const value of values ?? []) headers.append(name, value);
           }
-          resolve(new Response(content, { status: response.statusCode!, headers }));
+          const status = response.statusCode!;
+          resolve(new Response(status === 204 ? null : content, { status, headers }));
         });
       },
     );
@@ -110,21 +118,106 @@ async function send(child: ChildProcess, message: object): Promise<unknown> {
   return (await response)[0];
 }
 
+function unlockRequest(code: string, next = '/') {
+  return {
+    method: 'POST',
+    headers: {
+      ...remoteHeaders,
+      origin: `https://${remoteHost}`,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ code, next }).toString(),
+  };
+}
+
+async function ownerSession(port: number, dataDir: string, next = '/') {
+  const path = browserCode(dataDir);
+  expect(statSync(path).mode & 0o777).toBe(0o600);
+  expect(statSync(path).uid).toBe(process.getuid!());
+  const response = await request(
+    port,
+    '/unlock',
+    unlockRequest(readFileSync(path, 'utf8').trim(), next),
+  );
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe(next);
+  const setCookie = response.headers.get('set-cookie');
+  expect(setCookie).toMatch(/^__Host-agent-hq-owner=[^;]+;/);
+  for (const attribute of ['Secure', 'HttpOnly', 'SameSite=Strict', 'Path=/']) {
+    expect(setCookie).toContain(attribute);
+  }
+  expect(setCookie).not.toMatch(/(?:^|;\s*)domain=/i);
+  return { ...remoteHeaders, cookie: setCookie!.split(';')[0]! };
+}
+
 it.skipIf(!loopbackAvailable)(
-  'starts separate loopback listeners, denies remote requests without the exact owner and host, and releases the lock on parent disconnect',
+  'separates hook ingestion from authenticated reporting and releases both listeners on parent disconnect',
   async () => {
     const port = await freePort();
     const { dataDir, remotePort } = await runManaged(port, async (child, dir) => {
       expect(existsSync(dir)).toBe(false);
+      mkdirSync(join(dir, '..', '.claude'));
       const ready = (await send(child, start)) as { remotePort: number };
       expect(ready).toEqual({ type: 'ready', version, port, remotePort: expect.any(Number) });
       const { remotePort } = ready;
       expect(remotePort).not.toBe(port);
 
-      const health = await request(port);
-      expect(await health.json()).toMatchObject({ status: 'ok', version });
+      for (const path of [
+        '/',
+        '/assets/app.js',
+        '/api/health',
+        '/api/hq',
+        '/api/paseo-quota',
+        '/api/overview',
+        hookSettingsPath,
+      ]) {
+        expect((await request(port, path)).status, path).toBe(404);
+      }
+      for (const [method, path] of [
+        ['POST', '/api/setup/reset'],
+        ['PUT', hookSettingsPath],
+      ] as const) {
+        expect(
+          (await request(port, path, { method, headers: writeHeaders, body: '{}' })).status,
+        ).toBe(404);
+      }
       expect((await request(port, '/api/health', { headers: remoteHeaders })).status).toBe(421);
-      const remoteHealth = await request(remotePort, '/api/health', { headers: remoteHeaders });
+
+      const gate = await request(remotePort, '/sources', { headers: remoteHeaders });
+      expect(await gate.text()).toContain('name="code"');
+      const ownerHeaders = await ownerSession(remotePort, dir, '/sources');
+      const preview = (await (
+        await request(remotePort, hookSettingsPath, { headers: ownerHeaders })
+      ).json()) as { preview: string };
+      const enableHooks = JSON.stringify({ enabled: true, preview: preview.preview });
+      for (const path of [
+        '/assets/app.js',
+        '/api/health',
+        '/api/hq',
+        '/api/paseo-quota',
+        '/api/overview',
+        hookSettingsPath,
+      ]) {
+        expect((await request(remotePort, path, { headers: remoteHeaders })).status, path).toBe(
+          401,
+        );
+      }
+      for (const [method, path, body] of [
+        ['POST', '/api/setup/reset', JSON.stringify({ confirmed: true })],
+        ['PUT', hookSettingsPath, enableHooks],
+      ] as const) {
+        expect(
+          (
+            await request(remotePort, path, {
+              method,
+              headers: { ...remoteHeaders, ...writeHeaders },
+              body,
+            })
+          ).status,
+        ).toBe(401);
+      }
+
+      const remoteHealth = await request(remotePort, '/api/health', { headers: ownerHeaders });
       expect(await remoteHealth.json()).toMatchObject({ status: 'ok', version });
 
       for (const path of ['/', '/assets/app.js', '/api/health', '/api/bootstrap', '/api/unknown']) {
@@ -169,7 +262,7 @@ it.skipIf(!loopbackAvailable)(
         (
           await request(remotePort, '/api/unknown', {
             method: 'POST',
-            headers: { ...remoteHeaders, 'content-type': 'application/json' },
+            headers: { ...ownerHeaders, 'content-type': 'application/json' },
             body: '{}',
           })
         ).status,
@@ -178,18 +271,48 @@ it.skipIf(!loopbackAvailable)(
         (
           await request(remotePort, '/api/unknown', {
             method: 'POST',
-            headers: {
-              ...remoteHeaders,
-              'X-Agent-Productivity-Request': '1',
-              'content-type': 'application/json',
-            },
+            headers: { ...ownerHeaders, ...writeHeaders },
             body: '{}',
+          })
+        ).status,
+      ).toBe(404);
+
+      const enabled = await request(remotePort, hookSettingsPath, {
+        method: 'PUT',
+        headers: { ...ownerHeaders, ...writeHeaders },
+        body: enableHooks,
+      });
+      expect(enabled.status).toBe(200);
+      const { token } = JSON.parse(
+        readFileSync(join(dir, 'claude-hooks', 'registry.json'), 'utf8'),
+      ) as { token: string };
+      const hook = {
+        method: 'POST',
+        headers: { ...writeHeaders, authorization: `Bearer ${token}` },
+        body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'fixture-session' }),
+      };
+      expect(
+        (
+          await request(port, hookPath, {
+            ...hook,
+            headers: { ...writeHeaders, authorization: 'Bearer invalid' },
+          })
+        ).status,
+      ).toBe(401);
+      expect((await request(port, hookPath, hook)).status).toBe(204);
+      expect((await request(port, '/api/hq', { headers: hook.headers })).status).toBe(404);
+      expect(
+        (
+          await request(remotePort, hookPath, {
+            ...hook,
+            headers: { ...ownerHeaders, ...hook.headers },
           })
         ).status,
       ).toBe(404);
       return { dataDir: dir, remotePort };
     });
     expect(existsSync(join(dataDir, 'agent-productivity.lock'))).toBe(false);
+    expect(existsSync(browserCode(dataDir))).toBe(false);
     await expect(request(port)).rejects.toThrow();
     await expect(request(remotePort)).rejects.toThrow();
   },
@@ -218,8 +341,11 @@ it.skipIf(!loopbackAvailable)(
         version,
         port,
       });
+      expect(existsSync(browserCode(dataDir))).toBe(false);
+      expect((await request(port, '/api/bootstrap')).status).toBe(404);
       const lock = join(dataDir, 'agent-productivity.lock');
       const lease = readFileSync(lock, 'utf8');
+      expect(JSON.parse(lease)).toMatchObject({ pid: child.pid, managed: true, port });
       expect(
         await send(child, {
           type: 'attach-remote',
@@ -251,14 +377,23 @@ it.skipIf(!loopbackAvailable)(
       expect(
         (await request(attached.port, '/api/health', { headers: { host: remoteHost } })).status,
       ).toBe(403);
+      expect((await request(attached.port, '/api/health', { headers: remoteHeaders })).status).toBe(
+        401,
+      );
+      const firstCode = readFileSync(browserCode(dataDir), 'utf8').trim();
+      const firstOwner = await ownerSession(attached.port, dataDir);
       expect(
-        await (await request(attached.port, '/api/health', { headers: remoteHeaders })).json(),
-      ).toEqual(await (await request(port)).json());
+        await (await request(attached.port, '/api/health', { headers: firstOwner })).json(),
+      ).toMatchObject({
+        status: 'ok',
+        version,
+      });
       expect(await send(child, { type: 'detach-remote', id: 4 })).toEqual({
         type: 'remote-result',
         id: 4,
         ok: true,
       });
+      expect(existsSync(browserCode(dataDir))).toBe(false);
       await expect(request(attached.port)).rejects.toThrow();
       expect(
         await send(child, {
@@ -268,7 +403,17 @@ it.skipIf(!loopbackAvailable)(
         }),
       ).toMatchObject({ type: 'native-result', id: 5, result: { ok: true } });
       expect(readFileSync(lock, 'utf8')).toBe(lease);
-      expect((await request(port)).ok).toBe(true);
+      expect((await request(port)).status).toBe(404);
+
+      const again = (await send(child, {
+        type: 'attach-remote',
+        id: 6,
+        remoteHost,
+        ownerLogin,
+      })) as { port: number };
+      expect(readFileSync(browserCode(dataDir), 'utf8').trim() === firstCode).toBe(false);
+      expect((await request(again.port, '/api/health', { headers: firstOwner })).status).toBe(401);
+      expect((await request(again.port, '/unlock', unlockRequest(firstCode))).status).toBe(401);
     });
   },
 );
@@ -324,7 +469,7 @@ it.skipIf(!loopbackAvailable)(
   },
 );
 
-it('uses the same guarded routes and shared data on separate loopback listeners', async () => {
+it('binds the hook integration and browser on separate loopback listeners', async () => {
   const config = tempConfig();
   const options: Parameters<ListenFn>[0][] = [];
   const closed: number[] = [];
@@ -342,6 +487,7 @@ it('uses the same guarded routes and shared data on separate loopback listeners'
   const server = await boot(config, {
     listen,
     logger: memoryLogger().logger,
+    claude: { env: {}, home: tempDir() },
     remote: { host: remoteHost, ownerLogin },
     version,
   });
@@ -354,9 +500,20 @@ it('uses the same guarded routes and shared data on separate loopback listeners'
     const [local, remote] = options;
     const get = (headers: Record<string, string>, path = '/api/health') =>
       new Request(`http://localhost${path}`, { headers });
-    const localHealth = await local!.fetch(get({ host: `127.0.0.1:${config.port}` }));
-    const remoteHealth = await remote!.fetch(get(remoteHeaders));
-    expect(await localHealth.json()).toEqual(await remoteHealth.json());
+    expect((await local!.fetch(get({ host: `127.0.0.1:${config.port}` }))).status).toBe(404);
+    expect((await remote!.fetch(get(remoteHeaders))).status).toBe(401);
+    const unlock = await remote!.fetch(
+      new Request(
+        'http://localhost/unlock',
+        unlockRequest(readFileSync(browserCode(config.dataDir), 'utf8').trim()),
+      ),
+    );
+    expect(unlock.status).toBe(303);
+    const cookie = unlock.headers.get('set-cookie')!.split(';')[0]!;
+    expect(await (await remote!.fetch(get({ ...remoteHeaders, cookie }))).json()).toMatchObject({
+      status: 'ok',
+      version,
+    });
     expect((await remote!.fetch(get({ host: remoteHost }, '/api/bootstrap'))).status).toBe(403);
     expect(
       (await remote!.fetch(get({ ...remoteHeaders, host: `127.0.0.1:${listenerPort}` }))).status,
@@ -366,6 +523,7 @@ it('uses the same guarded routes and shared data on separate loopback listeners'
     await server.shutdown();
   }
   expect(closed).toEqual([config.port, 0]);
+  expect(existsSync(browserCode(config.dataDir))).toBe(false);
   expect(existsSync(config.lockPath)).toBe(false);
 });
 
@@ -385,14 +543,16 @@ it('closes the local listener and releases the database when the managed listene
     boot(config, {
       listen,
       logger: memoryLogger().logger,
+      claude: { env: {}, home: tempDir() },
       remote: { host: remoteHost, ownerLogin },
     }),
   ).rejects.toThrow('remote bind failed');
   expect(closed).toEqual([config.port]);
+  expect(existsSync(browserCode(config.dataDir))).toBe(false);
   expect(existsSync(config.lockPath)).toBe(false);
 });
 
-it('keeps managed data available while retrying and detaching an optional browser listener', async () => {
+it('keeps managed data available with no local listener while retrying an optional browser listener', async () => {
   const config = tempConfig();
   const closed: number[] = [];
   const bound: Parameters<ListenFn>[0][] = [];
@@ -412,28 +572,30 @@ it('keeps managed data available while retrying and detaching an optional browse
   const server = await boot(config, { listen, logger: memoryLogger().logger, managed: true });
   try {
     const lease = readFileSync(config.lockPath, 'utf8');
-    expect(bound.map(({ port }) => port)).toEqual([config.port]);
+    expect(bound).toEqual([]);
     const access = { host: remoteHost, ownerLogin };
     await expect(server.attachRemote!(access)).rejects.toThrow('remote bind failed');
     expect(closed).toEqual([]);
+    expect(existsSync(browserCode(config.dataDir))).toBe(false);
     expect(server.db?.prepare('SELECT 1 AS value').get()).toEqual({ value: 1 });
 
     failRemote = false;
     const browser = await server.attachRemote!(access);
     expect(browser.port).toBe(remotePort);
-    const { fetch, host } = bound[1]!;
+    const { fetch, host } = bound[0]!;
     expect(host).toBe('127.0.0.1');
     const health = (headers: Record<string, string>) =>
       fetch(new Request(`http://${host}:${remotePort}/api/health`, { headers }));
     expect((await health({ host: remoteHost })).status).toBe(403);
-    expect((await health(remoteHeaders)).ok).toBe(true);
+    expect((await health(remoteHeaders)).status).toBe(401);
     await Promise.all([browser.close(), browser.close()]);
     expect(closed).toEqual([0]);
+    expect(existsSync(browserCode(config.dataDir))).toBe(false);
     expect(readFileSync(config.lockPath, 'utf8')).toBe(lease);
     expect(server.db?.prepare('SELECT 1 AS value').get()).toEqual({ value: 1 });
   } finally {
     await server.shutdown();
   }
-  expect(closed).toEqual([0, config.port]);
+  expect(closed).toEqual([0]);
   expect(existsSync(config.lockPath)).toBe(false);
 });

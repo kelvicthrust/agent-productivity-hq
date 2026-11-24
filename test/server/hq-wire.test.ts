@@ -5,7 +5,16 @@ import { TAILSCALE_LOGIN_HEADER } from '../../src/server/http/guards.ts';
 import { HqResponse } from '../../src/shared/contracts/hq.ts';
 import { connectErrors } from '../collectors/paseo/helpers.ts';
 import { entry, fakeLiveDaemon, type FakeLiveDaemon } from '../collectors/paseo/liveHelpers.ts';
-import { HOST, NOW, TZ, call, memoryLogger, tempConfig, tempDir } from './helpers.ts';
+import {
+  HOST,
+  NOW,
+  TZ,
+  call,
+  memoryLogger,
+  tempConfig,
+  tempDir,
+  unlockBrowser,
+} from './helpers.ts';
 
 // The live HQ roster through the real boot: the process is given a fake Paseo (the batch opener and the live one) and no socket is
 // opened. What is checked is the demand: nothing connects until /api/hq is asked for, the connection closes when nobody asks for
@@ -203,7 +212,8 @@ describe('HQ through boot', () => {
     const listeners: { fetch: (request: Request) => Response | Promise<Response>; port: number }[] =
       [];
     const live = fakeLiveDaemon([entry({ id: 'a-1', title: 'Only', status: 'running' })]);
-    const server = await boot(tempConfig(), {
+    const config = tempConfig();
+    const server = await boot(config, {
       logger: memoryLogger().logger,
       listen: async (option) => {
         listeners.push(option);
@@ -217,19 +227,24 @@ describe('HQ through boot', () => {
       remote: { host: remoteHost, ownerLogin },
     });
     servers.push(server);
-    const [local, remote] = listeners;
+    expect(listeners).toHaveLength(1);
+    const [remote] = listeners;
     const get = (headers: Record<string, string>) =>
       new Request('http://localhost/api/hq', { headers });
 
-    const viaRemote = await remote!.fetch(
-      get({ host: remoteHost, [TAILSCALE_LOGIN_HEADER]: ownerLogin }),
-    );
+    expect(
+      (await remote!.fetch(get({ host: remoteHost, [TAILSCALE_LOGIN_HEADER]: ownerLogin }))).status,
+    ).toBe(401);
+    const owner = await unlockBrowser(remote!.fetch, config.dataDir, {
+      host: remoteHost,
+      ownerLogin,
+    });
+    const viaRemote = await remote!.fetch(get(owner));
     expect(viaRemote.status).toBe(200);
     expect(HqResponse.parse(await viaRemote.json()).agents).toHaveLength(1);
     // A request without the owner's login is refused, and a different Host too.
     expect((await remote!.fetch(get({ host: remoteHost }))).status).toBe(403);
-    const viaLocal = await local!.fetch(get({ host: `127.0.0.1:${server.url.split(':').at(-1)}` }));
-    expect(viaLocal.status).toBe(200);
+    expect((await hq(server)).agents).toHaveLength(1);
     expect(live.opened).toHaveLength(1);
   });
 });

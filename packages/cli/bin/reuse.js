@@ -15,16 +15,17 @@ async function filesHeldBy(pid, args) {
   return stdout.split('\n').filter((line) => line.startsWith('n'));
 }
 
-// A Paseo or source install has no CLI control socket. Confirm its process has both the
-// selected data directory's SQLite lease file open and the advertised loopback listener.
+// A source install has no CLI control socket. Confirm its process holds the selected
+// data directory's SQLite lease and serves the advertised standalone browser listener.
 async function dashboardFromDirectory(dataDir) {
   try {
     const lock = join(dataDir, 'agent-productivity.lock');
     const stat = await lstat(lock);
     if (!stat.isFile() || stat.uid !== process.getuid()) return null;
     const record = await readFile(lock, 'utf8');
-    const { pid, port, version } = JSON.parse(record);
+    const { pid, port, version, managed } = JSON.parse(record);
     if (
+      managed === true ||
       version !== 2 ||
       !Number.isSafeInteger(pid) ||
       pid <= 0 ||

@@ -10,6 +10,7 @@ export interface LockInfo {
   port: number;
   startedAt: string;
   version?: 2;
+  managed?: true;
 }
 
 export interface InstanceLease {
@@ -33,7 +34,7 @@ function readLock(path: string): LockInfo | null {
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
     if (parsed && typeof parsed === 'object') {
       const item = parsed as Partial<LockInfo>;
-      const { pid, port, startedAt, version } = item;
+      const { pid, port, startedAt, version, managed } = item;
       if (
         typeof pid === 'number' &&
         Number.isSafeInteger(pid) &&
@@ -44,7 +45,12 @@ function readLock(path: string): LockInfo | null {
         port <= 65_535 &&
         typeof startedAt === 'string'
       ) {
-        return { pid, port, startedAt, ...(version === 2 ? { version } : {}) };
+        return {
+          pid,
+          port,
+          startedAt,
+          ...(version === 2 ? { version, ...(managed === true ? { managed } : {}) } : {}),
+        };
       }
     }
   } catch {
@@ -94,7 +100,7 @@ function publish(
 
 export function acquireInstanceLock(
   path: string,
-  info: { port: number; now?: () => number },
+  info: { port: number; now?: () => number; managed?: boolean },
 ): LockResult {
   const lease = tryDirectoryLock(join(dirname(path), 'agent-productivity-lock.sqlite'));
   if (lease === null) {
@@ -108,6 +114,7 @@ export function acquireInstanceLock(
       port: info.port,
       startedAt: new Date((info.now ?? Date.now)()).toISOString(),
       version: 2,
+      ...(info.managed ? { managed: true } : {}),
     });
     if (!result.published) {
       lease.close();

@@ -20,9 +20,9 @@ checks to that action.
 
 ### Native Paseo reports
 
-The Paseo plugin calls `dashboard.native` on the selected host. The managed process validates
-each operation's parameters and calls the existing guarded app in process. Query fields use the
-same names and filter values as HTTP, with integers sent as JSON numbers and `repos` as a
+The Paseo plugin calls `dashboard.native` on the selected host with daemon management permission.
+The managed process validates each operation's parameters and calls the guarded app in process.
+Query fields use the same names and filter values as HTTP, with integers sent as JSON numbers and `repos` as a
 comma-separated string. Read operations use the same scope, coverage and cursor semantics.
 
 | Native operation | HTTP route |
@@ -81,8 +81,8 @@ Finish calls `POST /api/setup/complete`, remains on Repositories while pending, 
 - **Transport and security:**
   - For the standalone listener, requests whose `Host` header isn't `127.0.0.1:<port>` or `localhost:<port>` get `421` (DNS-rebinding guard).
   - No CORS headers are ever sent.
-  - Every non-GET request must carry `Content-Type: application/json` and `X-Agent-Productivity-Request: 1`, otherwise `403`. Browsers can't send that header cross-site without a CORS preflight this server never approves.
-  - Both listeners bind to loopback. Standalone requests use the local Host allowlist. The managed plugin routes Tailscale Serve to a separate listener which verifies the configured HTTPS authority and the host owner's Serve identity before handling any page or API request. Both listeners enforce the same JSON and request-header checks on writes. See [Paseo setup](../delivery/setup.md#open-agent-hq-from-paseo-desktop).
+  - Every non-GET API request must carry `Content-Type: application/json` and `X-Agent-Productivity-Request: 1`, otherwise `403`. Browsers can't send that header cross-site without a CORS preflight this server never approves.
+  - All HTTP listeners bind to loopback. A managed backend exposes only token-authenticated Claude Code hook ingestion on its local listener when that integration is available. The explicit browser actions start a separate Tailscale Serve listener for the same managed backend. It verifies the configured HTTPS authority, the host owner's Serve identity and a browser session. The unlock form uses a same-origin POST to exchange the code in the owner's private data directory for an eight-hour browser cookie. An unauthenticated browser can only reach the unlock flow. See [Paseo setup](../delivery/setup.md#open-agent-hq-from-paseo-desktop).
 - **Dates:**
   - `YYYY-MM-DD` values are calendar dates in the **report timezone**, the machine's IANA zone recorded in `app_meta.report_timezone`.
   - Instants are ISO-8601 UTC strings.

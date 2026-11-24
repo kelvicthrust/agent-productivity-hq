@@ -162,21 +162,28 @@ require('node:module').syncBuiltinESMExports();`,
   managedClosed = once(managed, 'close');
   const deadline = AbortSignal.timeout(15_000);
   const ready = once(managed, 'message', { signal: deadline });
-  managed.send({
-    type: 'start',
-    ownerLogin: 'owner@example.test',
-    remoteHost: 'machine.tailnet.ts.net',
-    version,
-  });
+  managed.send({ type: 'start', version });
   assert.equal((await ready)[0].type, 'ready');
-  await getHealth(url);
-  assert.equal((await npx('--no-open')).stdout.trim(), url);
+  assert.equal(
+    JSON.parse(await readFile(join(data, 'agent-productivity.lock'), 'utf8')).managed,
+    true,
+  );
+  await assert.rejects(npx('--no-open'), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /Paseo/i);
+    assert.match(error.message, /stop/i);
+    assert.ok(!error.message.includes(url));
+    return true;
+  });
   await assert.rejects(stop(), /No running instance started by this command/);
-  await getHealth(url);
+  assert.equal(managed.exitCode, null);
   managed.send({ type: 'stop' });
   await managedClosed;
   await assertStopped(url);
-  print('npx reuses the verified Paseo-managed listener without taking ownership');
+  assert.equal((await npx('--no-open')).stdout.trim(), url);
+  await getHealth(url);
+  await stop();
+  print('npx respects the Paseo lease and serves the standalone dashboard after Paseo stops');
 } finally {
   if (portOccupier) await releasePort(portOccupier);
   if (managed?.connected) managed.send({ type: 'stop' });

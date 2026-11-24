@@ -220,7 +220,11 @@ describe('the live ports belong to the standalone and Paseo-managed entry points
     ]);
     expect(
       files.filter(([, text]) => /from 'node:child_process'/.test(text)).map(([p]) => p),
-    ).toEqual(['src/server/collectors/chatgpt/live.ts', 'src/server/collectors/github/live.ts']);
+    ).toEqual([
+      'src/server/collectors/chatgpt/live.ts',
+      'src/server/collectors/github/live.ts',
+      'src/server/http/owner-browser.ts',
+    ]);
   });
 
   it('starts `codex` only in the ChatGPT live launcher', () => {

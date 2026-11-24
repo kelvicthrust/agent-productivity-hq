@@ -4,7 +4,7 @@ Open Agent HQ in Paseo to see the illustrated building fill with live coding age
 
 Click **Agent HQ** in Paseo 0.16.1 or later. A fresh installation opens Setup. Use **Overview**, **Trends**, **Delivery**, and **Usage** to explore reports, merged pull requests, and token history. Use **Sources & repos** to manage accounts and choose repositories. HQ runs on the Paseo daemon's Apple Silicon Mac, and clients with daemon management permission can read and manage its HQ data.
 
-**Open owner settings** opens the private browser dashboard at Sources & repos to reset HQ or change Claude Code settings. This action uses Tailscale HTTPS Serve and requires the daemon owner's Tailscale identity.
+**Open owner settings** opens the private browser dashboard at Sources & repos to reset HQ or change Claude Code settings. It uses Tailscale HTTPS Serve and requires the daemon owner's Tailscale identity and an unlock code from the owner's account on the Mac. **Open full dashboard** uses the same access checks.
 
 The launcher uses an installed compatible Node runtime. If it cannot find one, **Install runtime** downloads the official ARM64 archive from nodejs.org after you choose that action. The launcher verifies the pinned SHA-256 before installing a private copy.
 
