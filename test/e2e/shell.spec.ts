@@ -1,4 +1,6 @@
+import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
+import manifest from '../../package.json' with { type: 'json' };
 import { expect, test } from './fixtures';
 import { ORIGIN } from './helpers/virtualOrigin';
 import { openWorld } from './helpers/world';
@@ -12,6 +14,58 @@ async function open(page: Page, path: string, width: number, height = 800) {
   await page.goto(`${ORIGIN}${path}`);
 }
 const visibleNav = (page: Page) => page.getByRole('navigation', { name: 'Sections' });
+
+for (const width of [1280, 320]) {
+  test(
+    `About is an icon button at ${width}px and opens a focused dialog`,
+    {
+      tag: ['@a11y', '@responsive'],
+    },
+    async ({ page }) => {
+      await open(page, '/', width);
+      const banner = page.getByRole('banner');
+      const trigger = banner.getByRole('button', { name: 'About Agent Productivity HQ' });
+      const dialog = page.getByRole('dialog', { name: 'About Agent Productivity HQ' });
+      await expect(trigger).toBeVisible();
+      await expect(trigger).toHaveText('');
+      await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      await expect(page.getByText(/Made with ❤️ by/)).toHaveCount(0);
+      if (width === 320) {
+        const box = (await trigger.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        await trigger.click();
+      } else {
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(
+        dialog.getByRole('heading', { name: 'About Agent Productivity HQ' }),
+      ).toBeFocused();
+      await expect(dialog.getByText(manifest.version, { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('link', { name: 'GitHub repository' })).toHaveAttribute(
+        'href',
+        'https://github.com/kelvicthrust/agent-productivity-hq',
+      );
+      await expect(dialog.getByRole('link', { name: 'Release notes' })).toBeVisible();
+      await expect(dialog.getByRole('link', { name: 'Setup and troubleshooting' })).toBeVisible();
+      await expect(dialog.getByText(/Made with ❤️ by/)).toBeVisible();
+      await expect(dialog.getByRole('link', { name: 'kelvicthrust' })).toBeVisible();
+      // Scan the settled dialog so its fade-in does not affect the contrast measurement.
+      await expect.poll(() => dialog.evaluate((el) => el.getAnimations().length)).toBe(0);
+      expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual(
+        [],
+      );
+      const { x, width: dialogWidth } = (await dialog.boundingBox())!;
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x + dialogWidth).toBeLessThanOrEqual(width);
+      if (width === 320) await dialog.getByRole('button', { name: 'Close' }).click();
+      else await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    },
+  );
+}
 
 for (const width of [1280, 1024, 800, 719, 390, 320]) {
   test(

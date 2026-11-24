@@ -2,11 +2,10 @@ import { useState } from 'react';
 import { Navigate, Outlet } from 'react-router';
 import { isPaseoBrowser } from '../lib/paseoBrowser';
 import { AppBar } from './AppBar';
-import { ProjectCredit } from './ProjectCredit';
 
 /** Setup: app bar and content only, with no navigation or filters. */
 export function SetupLayout() {
-  // The app bar's right side belongs to the screen on Setup ("Step N of 3"): the layout hands the slot down through the outlet.
+  // Setup draws its step caption in the app bar via the slot passed through the outlet.
   const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
   if (isPaseoBrowser()) return <Navigate to="/" replace />;
   return (
@@ -26,7 +25,6 @@ export function SetupLayout() {
         {/* D7's .setup: 760px wide with 24px of padding (712px of content), 24px above on a desktop and 16px on a phone. */}
         <div className="mx-auto max-w-[44.5rem]">
           <Outlet context={barSlot} />
-          <ProjectCredit />
         </div>
       </main>
     </div>
