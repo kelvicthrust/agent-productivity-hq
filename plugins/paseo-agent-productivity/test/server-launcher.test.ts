@@ -155,6 +155,7 @@ function testLauncher(
   let serveStarts = 0;
   let tailscaleChecks = 0;
   let installs = 0;
+  let tickets = 0;
   const cleanup: string[] = [];
   const launcher = createDashboardLauncher({
     runtimePaths: async (_directory, signal, install) => {
@@ -193,6 +194,12 @@ function testLauncher(
         async detachRemote() {
           cleanup.push('listener');
         },
+        async issueBrowserTicket() {
+          assert.equal(share?.alive(), true);
+          assert.deepEqual(serveConfig, { Foreground: { active: route } });
+          tickets++;
+          return { ticket: String(tickets).padStart(43, 'A'), expiresAt: 2_000_000_000_000 };
+        },
         async native({ operation }) {
           return { ok: true, data: { operation, paseo: await reader!({ kind: 'usage' }) } };
         },
@@ -226,12 +233,16 @@ function testLauncher(
     counts: () => [serviceStarts, serveStarts],
     tailscaleChecks: () => tailscaleChecks,
     installs: () => installs,
+    tickets: () => tickets,
   };
 }
 
 test('a concurrent normal launch cannot suppress an explicit install and install requests share one launch', async (t) => {
   const install = deferred();
-  const { launcher, inputs, counts, installs } = testLauncher(false, () => install.promise);
+  const { launcher, inputs, counts, installs, tickets } = testLauncher(
+    false,
+    () => install.promise,
+  );
   t.after(() => install.resolve());
   t.after(() => launcher.stop());
   assert.deepEqual(launcher.runtimeInstallStatus(), { state: 'idle' });
@@ -252,6 +263,35 @@ test('a concurrent normal launch cannot suppress an explicit install and install
     result: { ok: true, url },
   });
   assert.equal(installs(), 1);
+  assert.deepEqual(counts(), [1, 1]);
+  assert.equal(tickets(), 0);
+  assert.equal((await launcher.browserHandoff(inputs)).ok, true);
+  assert.equal(tickets(), 1);
+});
+
+test('issues one distinct browser ticket per handoff after the private route is ready', async (t) => {
+  const { launcher, inputs, counts, tickets, configure } = testLauncher();
+  t.after(() => launcher.stop());
+  configure(route);
+  const conflict = await launcher.browserHandoff(inputs);
+  assert.equal(!conflict.ok && conflict.reason, 'route-conflict');
+  assert.equal(tickets(), 0);
+  configure({});
+  assert.deepEqual(await launcher.launch(inputs), { ok: true, url });
+  assert.equal(tickets(), 0);
+  const results = await Promise.all([
+    launcher.browserHandoff(inputs),
+    launcher.browserHandoff(inputs),
+  ]);
+  assert.deepEqual(
+    results.map((result) => result.ok && result.url),
+    [url, url],
+  );
+  assert.deepEqual(
+    results.map((result) => result.ok && result.ticket),
+    ['1'.padStart(43, 'A'), '2'.padStart(43, 'A')],
+  );
+  assert.equal(tickets(), 2);
   assert.deepEqual(counts(), [1, 1]);
 });
 

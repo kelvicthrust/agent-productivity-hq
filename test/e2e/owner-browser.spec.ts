@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { getRequestListener } from '@hono/node-server';
+import type { Page } from '@playwright/test';
 import { boot, type ListenFn } from '../../src/server/boot.ts';
 import { completeSetup } from '../../src/server/db/queries/setup.ts';
 import { TAILSCALE_LOGIN_HEADER } from '../../src/server/http/guards.ts';
@@ -14,10 +15,15 @@ import { loadConfig } from '../../src/server/lib/config.ts';
 import { FIXED_NOW, FIXED_TIMEZONE } from '../fixtures/seed.ts';
 import { expect, test } from './fixtures';
 
-test('unlocking the owner browser returns to Sources & repos and expires @a11y @responsive', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+async function withPrivateShare(
+  page: Page,
+  run: (options: {
+    origin: string;
+    dataDir: string;
+    share: Awaited<ReturnType<NonNullable<Awaited<ReturnType<typeof boot>>['attachRemote']>>>;
+    advance: (milliseconds: number) => void;
+  }) => Promise<void>,
+) {
   const dataDir = await mkdtemp(join(tmpdir(), 'agent-hq-owner-browser-'));
   const ownerLogin = 'owner@example.test';
   let now = FIXED_NOW;
@@ -67,6 +73,7 @@ test('unlocking the owner browser returns to Sources & repos and expires @a11y @
     const config = loadConfig({ AGENT_PRODUCTIVITY_DATA_DIR: dataDir });
     const server = await boot(config, {
       managed: true,
+      paseoUsage: async () => ({ providers: [] }),
       scheduler: false,
       timezone: FIXED_TIMEZONE,
       now: () => now,
@@ -77,31 +84,15 @@ test('unlocking the owner browser returns to Sources & repos and expires @a11y @
     });
     try {
       completeSetup(server.db!, { at: now, timezone: FIXED_TIMEZONE });
-      await server.attachRemote!({ host, ownerLogin });
-
-      await page.goto(`${origin}/sources`);
-      await expect(page.getByRole('heading', { name: 'Unlock Agent HQ' })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-        390,
-      );
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-
-      const field = page.getByLabel('Browser unlock code');
-      await field.fill('A'.repeat(43));
-      await field.press('Enter');
-      await expect(page.getByRole('alert')).toContainText('That code did not match');
-      const currentCode = (await readFile(join(dataDir, OWNER_BROWSER_CODE_FILE), 'utf8')).trim();
-      await field.fill(currentCode);
-      await field.press('Enter');
-      await expect(page).toHaveURL(`${origin}/sources`);
-      await expect(
-        page.getByRole('heading', { name: 'Sources & repos', exact: true }),
-      ).toBeVisible();
-      expect(await page.evaluate(() => document.cookie)).not.toContain('__Host-agent-hq-owner');
-
-      now += 8 * 60 * 60 * 1_000;
-      await page.reload();
-      await expect(page.getByRole('heading', { name: 'Unlock Agent HQ' })).toBeVisible();
+      const share = await server.attachRemote!({ host, ownerLogin });
+      await run({
+        origin,
+        dataDir,
+        share,
+        advance: (milliseconds) => {
+          now += milliseconds;
+        },
+      });
     } finally {
       await server.shutdown();
     }
@@ -115,4 +106,71 @@ test('unlocking the owner browser returns to Sources & repos and expires @a11y @
     }
     await rm(dataDir, { force: true, recursive: true });
   }
+}
+
+test('unlocking the owner browser returns to Sources & repos and expires @a11y @responsive', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await withPrivateShare(page, async ({ origin, dataDir, advance }) => {
+    await page.goto(`${origin}/sources`);
+    await expect(page.getByRole('heading', { name: 'Unlock Agent HQ' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+    const field = page.getByLabel('Browser unlock code');
+    await field.fill('A'.repeat(43));
+    await field.press('Enter');
+    await expect(page.getByRole('alert')).toContainText('That code did not match');
+    const currentCode = (await readFile(join(dataDir, OWNER_BROWSER_CODE_FILE), 'utf8')).trim();
+    await field.fill(currentCode);
+    await field.press('Enter');
+    await expect(page).toHaveURL(`${origin}/sources`);
+    await expect(page.getByRole('heading', { name: 'Sources & repos', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.cookie)).not.toContain('__Host-agent-hq-owner');
+
+    advance(8 * 60 * 60 * 1_000);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Unlock Agent HQ' })).toBeVisible();
+  });
+});
+
+test('Open full dashboard enters a fresh browser without the owner code @a11y @responsive', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await withPrivateShare(page, async ({ origin, share, advance }) => {
+    const { ticket } = share.issueBrowserTicket()!;
+    const exchange = page.waitForRequest(`${origin}/api/paseo-handoff`);
+    await page.goto(`${origin}/paseo/#ticket=${ticket}`);
+    const headers = await (await exchange).allHeaders();
+    expect(headers).not.toHaveProperty('x-agent-productivity-browser-session');
+    expect(headers).not.toHaveProperty('cookie');
+    expect(headers.origin).toBe(origin);
+    await expect(page.getByRole('heading', { name: /^Overview:/ })).toBeVisible();
+    await expect(page).toHaveURL(`${origin}/paseo/`);
+    expect(await page.context().cookies()).toEqual([]);
+
+    await page.reload();
+    await expect(page.getByRole('heading', { name: /^Overview:/ })).toBeVisible();
+    await page.getByRole('link', { name: 'Delivery' }).click();
+    await expect(page.getByRole('heading', { name: 'Delivery', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Sources & repos' }).click();
+    await expect(page.getByRole('heading', { name: 'Sources & repos', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open owner settings' })).toHaveAttribute(
+      'href',
+      '/sources',
+    );
+    await expect(page.getByRole('heading', { name: 'Reset Agent HQ', exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+    advance(8 * 60 * 60 * 1_000);
+    await page.reload();
+    await expect(page.getByText(/reopen.*Paseo/i)).toBeVisible();
+  });
 });

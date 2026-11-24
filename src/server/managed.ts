@@ -100,6 +100,7 @@ const operation = z.discriminatedUnion('type', [
     remoteHost: z.string(),
   }),
   z.strictObject({ type: z.literal('detach-remote'), id }),
+  z.strictObject({ type: z.literal('issue-browser-ticket'), id }),
 ]);
 
 const stop = new AbortController();
@@ -174,7 +175,9 @@ try {
     const respond = (
       value:
         | { type: 'native-result'; result: NativeResult }
-        | { type: 'remote-result'; ok: boolean; port?: number },
+        | { type: 'remote-result'; ok: boolean; port?: number }
+        | { type: 'browser-ticket-result'; ok: false }
+        | { type: 'browser-ticket-result'; ok: true; ticket: string; expiresAt: number },
     ) => reply({ id: command.id, ...value }).catch(() => undefined);
     async function run() {
       if (command.type === 'native') {
@@ -190,6 +193,15 @@ try {
             },
           });
         }
+        return;
+      }
+      if (command.type === 'issue-browser-ticket') {
+        const issued = stop.signal.aborted ? null : remote?.issueBrowserTicket();
+        await respond(
+          issued
+            ? { type: 'browser-ticket-result', ok: true, ...issued }
+            : { type: 'browser-ticket-result', ok: false },
+        );
         return;
       }
       try {

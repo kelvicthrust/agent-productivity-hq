@@ -44,6 +44,7 @@ import { readLiveSessionLabels } from './db/queries/hq.ts';
 import { joinPaseoSessions } from './db/queries/paseo.ts';
 import { isResetSetupPending, readSetupState } from './db/queries/setup.ts';
 import { markRunningRunsInterrupted } from './db/queries/runs.ts';
+import { createBrowserHandoff, type BrowserTicket } from './http/browser-handoff.ts';
 import { createApp, createHookIngestApp, type AppDeps, type SetupMachine } from './http/app.ts';
 import type { HttpEnv } from './http/errors.ts';
 import type { TailscaleAccess } from './http/guards.ts';
@@ -253,7 +254,11 @@ export interface RunningServer {
   app: Hono<HttpEnv>;
   db: Db | null;
   remotePort?: number;
-  attachRemote?(access: TailscaleAccess): Promise<{ port: number; close(): Promise<void> }>;
+  attachRemote?(access: TailscaleAccess): Promise<{
+    port: number;
+    issueBrowserTicket(): BrowserTicket | null;
+    close(): Promise<void>;
+  }>;
   trackManagedOperation?(operation: Promise<void>): void;
   /**
    * Stops accepting, waits at most the shutdown timeout for requests, closes HQ (awaited to its end, before the database is closed),
@@ -830,9 +835,11 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       if (revokeBrowserAccess)
         throw new Error('The Agent Productivity HQ browser share is already open.');
       const owner = createOwnerBrowserAccess({ access, dataDir: config.dataDir, now });
+      const handoff = createBrowserHandoff(new URL(`https://${access.host}`).origin, now);
       const revoke = () => {
         if (revokeBrowserAccess !== revoke) return;
         revokeBrowserAccess = undefined;
+        handoff.close();
         try {
           owner.close();
         } catch {
@@ -844,7 +851,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       try {
         const remoteApp = createApp({
           ...appDeps,
-          remote: { ...access, session: owner.middleware },
+          remote: { ...access, session: owner.middleware, handoff },
         });
         listener = await bind(remoteApp, 0);
       } catch (error) {
@@ -869,7 +876,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
           'Agent Productivity HQ could not bind a loopback port for Tailscale Serve.',
         );
       }
-      return { port: address.port, close };
+      return { port: address.port, issueBrowserTicket: handoff.issueTicket, close };
     };
     if (
       managed &&

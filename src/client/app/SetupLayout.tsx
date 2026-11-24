@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router';
+import { Navigate, Outlet } from 'react-router';
+import { isPaseoBrowser } from '../lib/paseoBrowser';
 import { AppBar } from './AppBar';
 import { ProjectCredit } from './ProjectCredit';
 
@@ -7,6 +8,7 @@ import { ProjectCredit } from './ProjectCredit';
 export function SetupLayout() {
   // The app bar's right side belongs to the screen on Setup ("Step N of 3"): the layout hands the slot down through the outlet.
   const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
+  if (isPaseoBrowser()) return <Navigate to="/" replace />;
   return (
     <div className="grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[var(--appbar-h)_1fr]">
       <a

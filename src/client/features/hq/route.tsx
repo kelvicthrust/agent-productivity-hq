@@ -1,6 +1,7 @@
 import type { HqFeed } from '../../../shared/contracts/hq';
 import { PageHeader } from '../../components/PageHeader';
 import { useHq } from '../../lib/hq';
+import { isPaseoBrowser } from '../../lib/paseoBrowser';
 import { useNow } from '../../lib/useNow';
 import { HQ_COPY, summaryLine } from './copy';
 import { FeedLine, SetupLine } from './FeedLine';
@@ -48,10 +49,12 @@ export function HqRoute() {
       <PageHeader title={HQ_COPY.title} subtitle={summaryLine(agents) || undefined} />
       {/* The hooks switch lives on Sources; the first time HQ is opened with it off, it is offered once, in a dialog. It means something
           only where a feeder exists (where none does, the page already says so), and never on a roster that failed to load or in setup. */}
-      <HooksFirstRun
-        state={data?.exactPrompts ?? 'unavailable'}
-        ready={data !== undefined && !isError && !nothingLive && !setupIncomplete}
-      />
+      {!isPaseoBrowser() && (
+        <HooksFirstRun
+          state={data?.exactPrompts ?? 'unavailable'}
+          ready={data !== undefined && !isError && !nothingLive && !setupIncomplete}
+        />
+      )}
       {isError && <HqRequestError stale={data !== undefined} onRetry={() => void refetch()} />}
       {data === undefined ? (
         !isError && <HqLoading />

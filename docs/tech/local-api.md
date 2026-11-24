@@ -36,9 +36,23 @@ comma-separated string. Read operations use the same scope, coverage and cursor 
 The plugin supplies raw PR and group IDs. The bridge URL-encodes them, parses the public report
 responses with their API codecs and translates public errors to `reason`, `message` and
 `retryable`. A refresh in progress also returns `details.runId` so the screen can follow it.
-The native allowlist keeps the existing setup, account, repo and quota operations, including
-the explicit managed quota fallback. Reset and Claude settings and legacy capture actions are
-available through their existing web flows.
+The native allowlist includes setup, account, repo and quota operations, including the explicit
+managed quota fallback.
+
+### Paseo browser handoff
+
+`dashboard.browser-handoff` uses daemon management permission and returns a Serve origin and a
+single-use ticket after the managed share is ready. The two-minute ticket belongs to that share.
+The browser loads the existing application at `/paseo/`, clears the fragment, and submits the
+ticket to `POST /api/paseo-handoff`. The exact HTTPS origin, Serve identity and request headers
+are checked before exchange. Send the returned credential in `X-Agent-Productivity-Browser-Session` on same-origin report and
+management requests. It lasts eight hours and is revoked when the
+share ends. The browser stores it in its tab's session storage.
+
+The session authorizes the native report and management operations shown above, plus bootstrap,
+roster, sources, the GitHub and ChatGPT connections, repo operations and managed quota. Setup
+runs in Paseo. Reset and Claude Code settings, including legacy capture previews, use the Mac
+owner's browser session. The Tailscale owner check applies to both browser sessions.
 
 **Product follow-up:** `RefreshRun.linkRebuild` is `null` when the run reaches the link stage and
 the stored computation is already fresh. That skip preserves the last successful rebuild time.
@@ -82,7 +96,7 @@ Finish calls `POST /api/setup/complete`, remains on Repositories while pending, 
   - For the standalone listener, requests whose `Host` header isn't `127.0.0.1:<port>` or `localhost:<port>` get `421` (DNS-rebinding guard).
   - No CORS headers are ever sent.
   - Every non-GET API request must carry `Content-Type: application/json` and `X-Agent-Productivity-Request: 1`, otherwise `403`. Browsers can't send that header cross-site without a CORS preflight this server never approves.
-  - All HTTP listeners bind to loopback. A managed backend exposes only token-authenticated Claude Code hook ingestion on its local listener when that integration is available. The explicit browser actions start a separate Tailscale Serve listener for the same managed backend. It verifies the configured HTTPS authority, the host owner's Serve identity and a browser session. The unlock form uses a same-origin POST to exchange the code in the owner's private data directory for an eight-hour browser cookie. An unauthenticated browser can only reach the unlock flow. See [Paseo setup](../delivery/setup.md#open-agent-hq-from-paseo-desktop).
+  - All HTTP listeners bind to loopback. A managed backend exposes only token-authenticated Claude Code hook ingestion on its local listener when that integration is available. The explicit browser actions start a separate Tailscale Serve listener for the same managed backend. It verifies the configured HTTPS authority and the host owner's Serve identity. Report data requires a [Paseo browser session](#paseo-browser-handoff) or the owner's browser cookie. The unlock form exchanges the code in the owner's private data directory for the eight-hour owner cookie. See [Paseo setup](../delivery/setup.md#open-agent-hq-from-paseo-desktop).
 - **Dates:**
   - `YYYY-MM-DD` values are calendar dates in the **report timezone**, the machine's IANA zone recorded in `app_meta.report_timezone`.
   - Instants are ISO-8601 UTC strings.
@@ -601,6 +615,39 @@ components:
         files: { type: array, items: { $ref: "#/components/schemas/ClaudeHooksFile" } }
         ownFiles: { type: array, items: { type: string, enum: [script, registry] } }
 paths:
+  /api/paseo-handoff:
+    post:
+      description: Managed Tailscale listener only. Exchanges a single-use Paseo launch ticket for a report and management credential.
+      parameters:
+        - { name: X-Agent-Productivity-Request, in: header, required: true, schema: { const: "1" } }
+        - { name: Origin, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ticket]
+              properties:
+                ticket: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+      responses:
+        "200":
+          description: Scoped browser credential
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [credential]
+                properties:
+                  credential: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "421": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/health:
     get:
       responses:

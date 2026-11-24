@@ -1,4 +1,10 @@
 import type { ZodType } from 'zod';
+import {
+  BrowserHandoffResponse,
+  BrowserHandoffToken,
+  PASEO_BROWSER_SESSION_HEADER,
+  PASEO_HANDOFF_PATH,
+} from '../../shared/contracts/browser-handoff';
 import { ErrorEnvelope, type ErrorCode } from '../../shared/contracts/errors';
 
 // The one place the browser talks to the server (ESLint fences `fetch` to this file). Every response is parsed with the
@@ -32,6 +38,74 @@ export class ApiRequestError extends Error {
 }
 
 export type Query = Record<string, string | number | boolean | undefined | null>;
+
+const PASEO_SESSION_KEY = 'agent-productivity-hq:paseo-browser';
+
+interface PaseoBrowser {
+  location: { origin: string; pathname: string; search: string; hash: string };
+  history: { state: unknown; replaceState(state: unknown, unused: string, url: string): void };
+  sessionStorage: {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+    removeItem(key: string): void;
+  };
+}
+
+interface PaseoSession {
+  browser: PaseoBrowser;
+  onExpired: () => void;
+  credential: string | null;
+}
+
+let paseoSession: PaseoSession | undefined;
+
+function rememberPaseoCredential(session: PaseoSession, credential: string | null): void {
+  session.credential = credential;
+  try {
+    if (credential === null) session.browser.sessionStorage.removeItem(PASEO_SESSION_KEY);
+    else session.browser.sessionStorage.setItem(PASEO_SESSION_KEY, credential);
+  } catch {
+    // If storage is blocked, the credential still works until this document reloads.
+  }
+}
+
+export async function openPaseoSession(
+  browser: PaseoBrowser,
+  onExpired: () => void,
+): Promise<boolean> {
+  const session: PaseoSession = { browser, onExpired, credential: null };
+  paseoSession = session;
+  const { hash, pathname, search } = browser.location;
+  if (!hash.startsWith('#ticket=')) {
+    try {
+      const saved = BrowserHandoffToken.safeParse(
+        browser.sessionStorage.getItem(PASEO_SESSION_KEY),
+      );
+      session.credential = saved.success ? saved.data : null;
+    } catch {
+      return false;
+    }
+    return session.credential !== null;
+  }
+
+  // Remove the one-time ticket before sending it or starting the dashboard router.
+  browser.history.replaceState(browser.history.state, '', pathname + search);
+  rememberPaseoCredential(session, null);
+  const ticket = hash.slice('#ticket='.length);
+  if (!BrowserHandoffToken.safeParse(ticket).success) return false;
+  try {
+    const { credential } = await apiSend('POST', PASEO_HANDOFF_PATH, BrowserHandoffResponse, {
+      ticket,
+    });
+    rememberPaseoCredential(session, credential);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const expiredPaseoSession = () =>
+  new ApiRequestError('network', 'Reopen Agent Productivity HQ from Paseo.', { status: 401 });
 
 /** `?a=1&b=2` for the defined values, in key order; an empty string when there are none. */
 export function queryString(query: Query | undefined): string {
@@ -72,6 +146,25 @@ async function request<T>(
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const init: RequestInit = { method, headers };
+  let url = `${path}${queryString(options.query)}`;
+  const session = paseoSession;
+  let credential: string | null = null;
+  if (session) {
+    const origin = session.browser.location.origin;
+    const target = new URL(url, origin);
+    if (target.origin !== origin || !target.pathname.startsWith('/api/')) {
+      throw new ApiRequestError('network', 'This request is outside the dashboard API.');
+    }
+    url = target.href;
+    init.credentials = 'omit';
+    init.mode = 'same-origin';
+    init.redirect = 'error';
+    if (target.pathname !== PASEO_HANDOFF_PATH) {
+      credential = session.credential;
+      if (!credential) throw expiredPaseoSession();
+      headers[PASEO_BROWSER_SESSION_HEADER] = credential;
+    }
+  }
   if (options.signal) init.signal = options.signal;
   if (method !== 'GET') {
     headers['Content-Type'] = 'application/json';
@@ -80,12 +173,20 @@ async function request<T>(
   }
   let response: Response;
   try {
-    response = await fetch(`${path}${queryString(options.query)}`, init);
+    response = await fetch(url, init);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiRequestError('network', 'Agent Productivity HQ could not be reached.', {
       retryable: true,
     });
+  }
+  if (session && credential !== null) {
+    if (credential !== session.credential) throw expiredPaseoSession();
+    if (response.status === 401) {
+      rememberPaseoCredential(session, null);
+      session.onExpired();
+      throw expiredPaseoSession();
+    }
   }
   if (!response.ok) throw await failure(response);
   if (schema === null || response.status === 204) return undefined as T;
@@ -97,6 +198,7 @@ async function request<T>(
       status: response.status,
     });
   }
+  if (credential !== null && credential !== session?.credential) throw expiredPaseoSession();
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
     throw new ApiRequestError('unreadable', 'The app answered with something unexpected.', {

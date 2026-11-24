@@ -3,7 +3,7 @@ import { createDashboardLauncher } from './server/launcher.ts';
 import { paseoSource } from './server/paseo-source.ts';
 import { dashboardSettings } from './shared/dashboard.ts';
 import { nativeDashboard, nativeRuntimeInstall } from './shared/native.ts';
-import { launchDashboard, runtimeInstall } from './shared/rpc.ts';
+import { browserHandoff, launchDashboard, runtimeInstall } from './shared/rpc.ts';
 
 export default function contribute(server: PluginServerContext) {
   const settings = server.registerSettings(dashboardSettings);
@@ -30,6 +30,9 @@ export default function contribute(server: PluginServerContext) {
   );
   server.handle(launchDashboard, (_, { paseo }) =>
     launcher.launch(() => readLaunchInputs(paseo), paseoSource(paseo)),
+  );
+  server.handle(browserHandoff, (_, { paseo }) =>
+    launcher.browserHandoff(() => readLaunchInputs(paseo), paseoSource(paseo)),
   );
   server.handle(runtimeInstall, ({ action }, { paseo }) =>
     action === 'start'

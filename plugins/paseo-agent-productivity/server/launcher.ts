@@ -4,7 +4,11 @@ import type {
   NativeRuntimeInstallStatus,
   PaseoRead,
 } from '../shared/native.ts';
-import type { DashboardLaunchResult, RuntimeInstallStatus } from '../shared/rpc.ts';
+import type {
+  BrowserHandoffResult,
+  DashboardLaunchResult,
+  RuntimeInstallStatus,
+} from '../shared/rpc.ts';
 import { dashboardUnavailable, LaunchError, routeConflict, runtimeInstalling } from './errors.ts';
 import {
   runtimePaths,
@@ -71,6 +75,14 @@ interface RunningDashboard {
   routeCleanup?: Promise<void>;
 }
 
+type BrowserStart =
+  | Extract<DashboardLaunchResult, { ok: false }>
+  | { ok: true; url: string; running: RunningDashboard; route: BrowserRoute };
+
+function launchResult(result: BrowserStart): DashboardLaunchResult {
+  return result.ok ? { ok: true, url: result.url } : result;
+}
+
 const failure = (error: unknown) =>
   (error instanceof LaunchError ? error : dashboardUnavailable()).result();
 
@@ -90,7 +102,8 @@ export function createDashboardLauncher(deps: typeof host = host) {
   let active: RunningDashboard | undefined;
   let serviceCleanup: Promise<void> | undefined;
   let pendingService: Promise<RunningDashboard> | undefined;
-  let pendingBrowser: Promise<DashboardLaunchResult> | undefined;
+  let pendingBrowser:
+    { ready: Promise<BrowserStart>; response: Promise<DashboardLaunchResult> } | undefined;
   let pendingInstall: Promise<void> | undefined;
   let installStatus: RuntimeInstallStatus = { state: 'idle' };
   let nativeInstallStatus: NativeRuntimeInstallStatus = { state: 'idle' };
@@ -175,6 +188,7 @@ export function createDashboardLauncher(deps: typeof host = host) {
       void serve.closed.then(() => {
         if (running.route === route) return releaseRoute(running);
       });
+      return route;
     } catch (error) {
       try {
         await serve?.stop();
@@ -189,7 +203,7 @@ export function createDashboardLauncher(deps: typeof host = host) {
     input: () => Promise<LaunchInputs>,
     install: boolean,
     readPaseo?: PaseoRead,
-  ): Promise<DashboardLaunchResult> {
+  ): Promise<BrowserStart> {
     try {
       if (signal.aborted) throw dashboardUnavailable();
       const inputs = await input();
@@ -201,7 +215,7 @@ export function createDashboardLauncher(deps: typeof host = host) {
       const tailnet = readTailnetHost(status);
       const port = deps.localPort();
       const check = { authority: tailnet.authority, localPort: port, legacyUrl: inputs.legacyUrl };
-      const success = { ok: true, url: `https://${tailnet.authority}` } as const;
+      const url = `https://${tailnet.authority}`;
       const route = active?.route;
       if (
         active &&
@@ -211,26 +225,36 @@ export function createDashboardLauncher(deps: typeof host = host) {
         route.tailnet.authority === tailnet.authority &&
         route.tailnet.ownerLogin === tailnet.ownerLogin
       ) {
-        const { service } = active;
+        const running = active;
         const session = checkRoutes(await readConfig(), {
           ...check,
           remotePort: route.remotePort,
           ownSession: route.session,
         });
         if (signal.aborted) throw dashboardUnavailable();
-        if (session && service.alive() && route.serve.alive()) return success;
+        if (session && running.service.alive() && route.serve.alive()) {
+          return { ok: true, url, running, route };
+        }
       }
 
       await releaseRoute(active);
       checkRoutes(await readConfig(), check);
       await deps.requireFreeTailnetPort(tailnet.addresses);
       const running = await ensureService(runtime, port, readPaseo);
-      await startRoute(running, binary, tailnet, check, readConfig);
-      return success;
+      const startedRoute = await startRoute(running, binary, tailnet, check, readConfig);
+      return { ok: true, url, running, route: startedRoute };
     } catch (error) {
       await releaseRoute(active);
       return failure(error);
     }
+  }
+
+  function prepareBrowser(input: () => Promise<LaunchInputs>, readPaseo?: PaseoRead) {
+    if (pendingBrowser) return pendingBrowser;
+    const ready = attemptBrowser(input, false, readPaseo).finally(() => {
+      pendingBrowser = undefined;
+    });
+    return (pendingBrowser = { ready, response: ready.then(launchResult) });
   }
 
   async function nativeService(
@@ -289,9 +313,30 @@ export function createDashboardLauncher(deps: typeof host = host) {
       readPaseo?: PaseoRead,
     ): Promise<DashboardLaunchResult> {
       if (pendingInstall) return Promise.resolve(runtimeInstalling().result());
-      return (pendingBrowser ??= attemptBrowser(input, false, readPaseo).finally(() => {
-        pendingBrowser = undefined;
-      }));
+      return prepareBrowser(input, readPaseo).response;
+    },
+    async browserHandoff(
+      input: () => Promise<LaunchInputs>,
+      readPaseo?: PaseoRead,
+    ): Promise<BrowserHandoffResult> {
+      if (pendingInstall) return runtimeInstalling().result();
+      try {
+        const result = await prepareBrowser(input, readPaseo).ready;
+        if (!result.ok) return result;
+        const { running, route, url } = result;
+        const stillReady = () =>
+          active === running &&
+          running.route === route &&
+          running.service.alive() &&
+          route.serve.alive();
+        if (!stillReady()) throw dashboardUnavailable();
+        const { ticket, expiresAt } = await running.service.issueBrowserTicket();
+        const validForMs = Math.min(120_000, expiresAt - Date.now());
+        if (!stillReady() || validForMs <= 0) throw dashboardUnavailable();
+        return { ok: true, url, ticket, validForMs };
+      } catch (error) {
+        return failure(error);
+      }
     },
     startRuntimeInstall(
       input: () => Promise<LaunchInputs>,
@@ -300,14 +345,14 @@ export function createDashboardLauncher(deps: typeof host = host) {
       if (signal.aborted) return { state: 'finished', result: dashboardUnavailable().result() };
       if (installStatus.state === 'installing') return installStatus;
       installStatus = { state: 'installing' };
-      const previous = pendingBrowser;
+      const previous = pendingBrowser?.response;
       const finish = (result: DashboardLaunchResult) => {
         installStatus = { state: 'finished', result };
       };
       install(
         async () => {
           const result = await previous;
-          return result?.ok ? result : attemptBrowser(input, true, readPaseo);
+          return result?.ok ? result : launchResult(await attemptBrowser(input, true, readPaseo));
         },
         finish,
         (error) => finish(failure(error)),
@@ -343,7 +388,12 @@ export function createDashboardLauncher(deps: typeof host = host) {
     },
     async stop(): Promise<void> {
       lifetime.abort();
-      await Promise.allSettled([releaseService(), pendingService, pendingBrowser, pendingInstall]);
+      await Promise.allSettled([
+        releaseService(),
+        pendingService,
+        pendingBrowser?.response,
+        pendingInstall,
+      ]);
     },
   };
 }

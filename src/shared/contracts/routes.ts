@@ -13,6 +13,11 @@ import {
   UsageCaptureResponse,
 } from './accounts.ts';
 import { BootstrapResponse, HealthResponse } from './bootstrap.ts';
+import {
+  BrowserHandoffRequest,
+  BrowserHandoffResponse,
+  PASEO_HANDOFF_PATH,
+} from './browser-handoff.ts';
 import { Int, Provider } from './common.ts';
 import { ErrorEnvelope } from './errors.ts';
 import { FilterQuery, LimitQuery } from './filters.ts';
@@ -94,6 +99,21 @@ const repoPath = { owner: z.string(), name: z.string() };
 export const ROUTES: readonly RouteContract[] = [
   get('/api/health', HealthResponse),
   get('/api/bootstrap', BootstrapResponse),
+  {
+    method: 'post',
+    path: PASEO_HANDOFF_PATH,
+    csrf: true,
+    body: { schema: BrowserHandoffRequest, required: true },
+    responses: {
+      '200': BrowserHandoffResponse,
+      '400': E,
+      '401': E,
+      '403': E,
+      '413': E,
+      '421': E,
+      '503': E,
+    },
+  },
   get('/api/overview', OverviewResponse, {
     query: filters('start', 'end', 'repos', 'provider', 'author'),
     errors: ['400'],

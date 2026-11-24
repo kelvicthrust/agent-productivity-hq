@@ -85,11 +85,13 @@ Weekly limits come from the selected host's Paseo usage reports. When a provider
 weekly report, **Check provider directly** makes an explicit check using the provider's existing
 sign-in on the Mac. Quota percentages and recorded local token counts describe different things.
 
-Under **Sources & repos**, choose **Open owner settings** to reset HQ or review changes to Claude Code
-settings. The action opens the private browser dashboard at Sources & repos using the owner check
-described below. After a reset finishes, returning to HQ opens Setup again. The optional
-**Open full dashboard** action opens the browser version. In Paseo web, choose **Open in browser**
-when the private address is ready, or copy that address.
+Choose **Open full dashboard** to open HQ in your default browser with the same report and
+management actions as in Paseo. In Paseo web, choose **Open in browser** once it is ready.
+If your browser asks you to reopen HQ from Paseo, return to the sidebar for a fresh launch.
+
+Under **Sources & repos**, choose **Open owner settings** and enter the Mac owner's unlock code
+to reset HQ or change Claude Code settings. After a reset finishes, returning to HQ in Paseo opens
+Setup again.
 
 ### Install from the release archive
 
@@ -116,13 +118,18 @@ on the daemon Mac. It contains the executable and its license. After disabling t
 that directory to reclaim space. The dashboard database and provider sign-ins are stored separately.
 
 The browser actions need the Tailscale CLI, HTTPS certificates, and Serve permission on the
-daemon Mac. Use the daemon's private HTTPS name on port 4317 from an untagged client device signed
-into the host owner's Tailscale account. The browser also asks for an unlock code. As the macOS
-account running Paseo on the daemon host, open `paseo-browser-code.txt` in the
-[HQ data directory](#data-directory) and enter the code in the form. The default file is
-`~/Library/Application Support/agent-productivity/paseo-browser-code.txt`. The browser session
-lasts up to eight hours. Closing the managed share removes its code file and ends its sessions.
-Use an owner-only HQ data directory without macOS access-control list entries for browser sharing.
+daemon Mac. Launch from an untagged device signed into the host owner's Tailscale account.
+HQ serves the private HTTPS dashboard on port 4317.
+
+**Open full dashboard** uses your existing Paseo access to authorize the browser automatically.
+The launch expires after two minutes if you leave it unopened. A dashboard tab can be reloaded
+for up to eight hours or until the share closes. Launch a fresh browser session from Paseo.
+
+For **Open owner settings**, open `paseo-browser-code.txt` as the macOS account running Paseo.
+The default location is `~/Library/Application Support/agent-productivity/paseo-browser-code.txt`.
+Enter its current code in the unlock form. Use an owner-only HQ data directory without macOS
+access-control list entries for browser sharing. Closing the share removes the code file and
+ends the browser sessions.
 [How Tailscale Serve supplies identity](https://tailscale.com/docs/features/tailscale-serve#identity-headers)
 
 ### Upgrade a launcher or recover

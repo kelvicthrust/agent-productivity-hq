@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { OverviewRoute } from '../features/overview/route';
 import { SetupRoute } from '../features/setup/route';
+import { isPaseoBrowser, PASEO_BROWSER_BASENAME } from '../lib/paseoBrowser';
 import { NotFoundRoute } from './NotFoundRoute';
 import { RootLayout } from './RootLayout';
 import { RouteLoadError, RouteLoading } from './RouteState';
@@ -53,4 +54,8 @@ export const appRoutes: RouteObject[] = [
   },
 ];
 
-export const createAppRouter = () => createBrowserRouter(appRoutes);
+export const createAppRouter = () =>
+  createBrowserRouter(
+    appRoutes,
+    isPaseoBrowser() ? { basename: PASEO_BROWSER_BASENAME } : undefined,
+  );

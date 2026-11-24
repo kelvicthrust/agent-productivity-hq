@@ -14,6 +14,7 @@ import contribute from '../index.client.tsx';
 const {
   useSettings,
   launch,
+  handoff,
   installRuntime,
   native,
   installNativeRuntime,
@@ -23,6 +24,7 @@ const {
 } = vi.hoisted(() => ({
   useSettings: vi.fn(),
   launch: vi.fn(),
+  handoff: vi.fn(),
   installRuntime: vi.fn(),
   native: vi.fn(),
   installNativeRuntime: vi.fn(),
@@ -36,6 +38,8 @@ vi.mock('@getpaseo/plugin/client', () => ({
     switch (name) {
       case 'dashboard.launch':
         return launch;
+      case 'dashboard.browser-handoff':
+        return handoff;
       case 'dashboard.runtime-install':
         return installRuntime;
       case 'dashboard.native':
@@ -169,6 +173,9 @@ vi.mock('../client/native-hq-crew.tsx', () => ({
 const host = { id: 'srv_mini', label: 'Mac mini' };
 const workspaceId = 'dashboard-service';
 const privateUrl = 'https://mini.example-tailnet.ts.net:8443';
+const ticket = 'A'.repeat(43);
+const handoffUrl = `${privateUrl}/paseo/#ticket=${ticket}`;
+const readyHandoff = () => ({ ok: true, url: privateUrl, ticket, validForMs: 120_000 });
 const theme = { colors: {} } as PluginScreenProps['theme'];
 const layout = { compact: false, platform: 'web' } as const;
 
@@ -290,6 +297,7 @@ beforeEach(() => {
   });
   installNativeRuntime.mockReset();
   launch.mockReset().mockResolvedValue({ ok: true, url: privateUrl });
+  handoff.mockReset().mockImplementation(async () => readyHandoff());
   installRuntime.mockReset();
   externalBrowser.open = undefined;
   listWorkspaces.mockReset().mockResolvedValue(workspacePage([workspaceId]));
@@ -317,8 +325,9 @@ it.each([
   renderLauncher(openBrowser);
 
   openDashboard();
-  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
-  expect(launch).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl));
+  expect(handoff).toHaveBeenCalledExactlyOnceWith({});
+  expect(launch).not.toHaveBeenCalled();
   expect(openBrowser).not.toHaveBeenCalled();
   expect(useSettings).not.toHaveBeenCalled();
   expect(listWorkspaces).not.toHaveBeenCalled();
@@ -326,14 +335,14 @@ it.each([
 
   fireEvent.click(screen.getByRole('button', { name: 'Leave launcher' }));
   fireEvent.click(screen.getByRole('button', { name: 'Back to launcher' }));
-  expect(launch).toHaveBeenCalledTimes(1);
+  expect(handoff).toHaveBeenCalledTimes(1);
   expect(openExternal).toHaveBeenCalledTimes(1);
 });
 
 it('offers a private Node.js install only after a launch discovers it is needed', async () => {
   const openExternal = vi.fn(async () => {});
   externalBrowser.open = openExternal;
-  launch.mockResolvedValueOnce({
+  handoff.mockResolvedValueOnce({
     ok: false,
     reason: 'runtime-required',
     message: 'Node.js needed.',
@@ -352,7 +361,7 @@ it('offers a private Node.js install only after a launch discovers it is needed'
 
   openDashboard();
   const install = await screen.findByRole('button', { name: 'Install runtime' });
-  expect(launch.mock.calls).toEqual([[{}]]);
+  expect(handoff.mock.calls).toEqual([[{}]]);
   expect(installRuntime).not.toHaveBeenCalled();
   expect(openExternal).not.toHaveBeenCalled();
 
@@ -360,9 +369,11 @@ it('offers a private Node.js install only after a launch discovers it is needed'
   await screen.findByText('The download could not be verified.');
   expect(installRuntime.mock.calls).toEqual([[{ action: 'start' }]]);
   expect(openExternal).not.toHaveBeenCalled();
+  expect(handoff).toHaveBeenCalledTimes(1);
 
   fireEvent.click(screen.getByRole('button', { name: 'Install runtime' }));
-  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl));
+  expect(handoff.mock.calls).toEqual([[{}], [{}]]);
   expect(installRuntime.mock.calls).toEqual([[{ action: 'start' }], [{ action: 'start' }]]);
 });
 
@@ -371,7 +382,11 @@ it('polls an acknowledged runtime install beyond the invocation deadline without
   try {
     const openExternal = vi.fn(async () => {});
     externalBrowser.open = openExternal;
-    launch.mockResolvedValue({ ok: false, reason: 'runtime-required', message: 'Node.js needed.' });
+    handoff.mockResolvedValueOnce({
+      ok: false,
+      reason: 'runtime-required',
+      message: 'Node.js needed.',
+    });
     installRuntime.mockResolvedValue({ state: 'installing' });
     renderLauncher(vi.fn());
 
@@ -389,10 +404,12 @@ it('polls an acknowledged runtime install beyond the invocation deadline without
       31,
     );
     expect(openExternal).not.toHaveBeenCalled();
+    expect(handoff).toHaveBeenCalledTimes(1);
 
     installRuntime.mockResolvedValue({ state: 'finished', result: { ok: true, url: privateUrl } });
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl);
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl);
+    expect(handoff).toHaveBeenCalledTimes(2);
   } finally {
     vi.useRealTimers();
   }
@@ -406,8 +423,8 @@ it('opens the private dashboard on iOS without the entity state provider', async
   renderLauncher(openBrowser, phoneLayout);
 
   openDashboard();
-  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
-  expect(launch).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl));
+  expect(handoff).toHaveBeenCalledTimes(1);
   expect(openBrowser).not.toHaveBeenCalled();
   expect(useSettings).not.toHaveBeenCalled();
   expect(usePaseo).not.toHaveBeenCalled();
@@ -415,7 +432,7 @@ it('opens the private dashboard on iOS without the entity state provider', async
   fireEvent.click(screen.getByRole('button', { name: 'Leave launcher' }));
   fireEvent.click(screen.getByRole('button', { name: 'Back to launcher' }));
   expect(screen.getByRole('button', { name: 'Open full dashboard' })).toBeTruthy();
-  expect(launch).toHaveBeenCalledTimes(1);
+  expect(handoff).toHaveBeenCalledTimes(1);
 
   render(<ConfigureLauncher host={host} layout={phoneLayout} theme={theme} />);
   expect(screen.getByText('Use Paseo Desktop to repair saved launcher settings.')).toBeTruthy();
@@ -435,25 +452,28 @@ it.each([
     behavior: 'rejects',
   },
   { label: 'the desktop opener rejects', clientLayout: layout, behavior: 'rejects' },
-])('keeps the selectable URL and retry when $label', async ({ clientLayout, behavior }) => {
-  if (behavior === 'rejects') {
-    externalBrowser.open = vi.fn().mockRejectedValue(new Error('No browser handler'));
-  }
-  renderLauncher(vi.fn(), clientLayout);
+])(
+  'offers retry without exposing the handoff URL when $label',
+  async ({ clientLayout, behavior }) => {
+    if (behavior === 'rejects') {
+      externalBrowser.open = vi.fn().mockRejectedValue(new Error('No browser handler'));
+    }
+    renderLauncher(vi.fn(), clientLayout);
 
-  openDashboard();
-  const address = await screen.findByText(privateUrl);
-  expect(address.style.userSelect).toBe('text');
-  expect(screen.getByText('Copy the private address and open it in your browser.')).toBeTruthy();
+    openDashboard();
+    await screen.findByText('Could not open the dashboard in your browser. Try again.');
+    expect(document.body.textContent).not.toContain(ticket);
+    expect(screen.queryByText(privateUrl)).toBeNull();
 
-  launch.mockResolvedValueOnce({ ok: true, url: 'https://invalid.example.com' });
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  await screen.findByText(/The host returned an invalid private address/);
-  expect(screen.queryByText(privateUrl)).toBeNull();
-  expect(screen.queryByText('https://invalid.example.com')).toBeNull();
-  if (externalBrowser.open)
-    expect(externalBrowser.open).toHaveBeenCalledExactlyOnceWith(privateUrl);
-});
+    handoff.mockResolvedValueOnce({ ...readyHandoff(), url: 'https://invalid.example.com' });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText(/The host returned an invalid private address/);
+    expect(screen.queryByText(privateUrl)).toBeNull();
+    expect(screen.queryByText('https://invalid.example.com')).toBeNull();
+    if (externalBrowser.open)
+      expect(externalBrowser.open).toHaveBeenCalledExactlyOnceWith(handoffUrl);
+  },
+);
 
 it('waits for a browser button press on web clients without workspace navigation', async () => {
   const openExternal = vi.fn(async () => {});
@@ -463,37 +483,70 @@ it('waits for a browser button press on web clients without workspace navigation
   openDashboard();
   const openButton = await screen.findByRole('button', { name: 'Open in browser' });
   expect(openExternal).not.toHaveBeenCalled();
+  expect(document.body.innerHTML).not.toContain(ticket);
   await act(async () => {
     fireEvent.click(openButton);
   });
-  expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl);
-  expect(launch).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(privateUrl).style.userSelect).toBe('text');
-  expect(screen.getByRole('button', { name: 'Open in browser' })).toBeTruthy();
-  expect(
-    screen.getByText('Open the dashboard in your browser or copy the private address.'),
-  ).toBeTruthy();
+  expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl);
+  expect(handoff).toHaveBeenCalledExactlyOnceWith({});
+  expect(screen.queryByText(privateUrl)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open in browser' })).toBeNull();
+});
+
+it('refreshes an expired web handoff on retry and requires a fresh browser click', async () => {
+  vi.useFakeTimers();
+  try {
+    const openExternal = vi.fn(async () => {});
+    externalBrowser.open = openExternal;
+    const nextTicket = 'B'.repeat(43);
+    handoff.mockImplementationOnce(async () => ({
+      ...readyHandoff(),
+      validForMs: 500,
+    }));
+    handoff.mockImplementationOnce(async () => ({ ...readyHandoff(), ticket: nextTicket }));
+    renderLauncher(vi.fn(), layout, false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Open full dashboard' })),
+    );
+    expect(screen.getByRole('button', { name: 'Open in browser' })).toBeTruthy();
+    await act(async () => vi.advanceTimersByTimeAsync(500));
+    expect(screen.queryByRole('button', { name: 'Open in browser' })).toBeNull();
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(handoff).toHaveBeenCalledTimes(1);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Retry' })));
+    expect(handoff).toHaveBeenCalledTimes(2);
+    expect(openExternal).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open in browser' })));
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+      `${privateUrl}/paseo/#ticket=${nextTicket}`,
+    );
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('ignores a launch result from the host the phone left', async () => {
-  const firstLaunch = Promise.withResolvers<{ ok: true; url: string }>();
-  launch.mockReturnValueOnce(firstLaunch.promise);
+  const firstLaunch = Promise.withResolvers<ReturnType<typeof readyHandoff>>();
+  handoff.mockReturnValueOnce(firstLaunch.promise);
   const openExternal = vi.fn(async () => {});
   externalBrowser.open = openExternal;
   const { switchHost } = renderLauncher(vi.fn(), { platform: 'ios', compact: true });
 
   openDashboard();
-  await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(handoff).toHaveBeenCalledTimes(1));
   switchHost({ id: 'another-host', label: 'Another host' });
   await act(async () =>
-    firstLaunch.resolve({ ok: true, url: 'https://old.example-tailnet.ts.net' }),
+    firstLaunch.resolve({ ...readyHandoff(), url: 'https://old.example-tailnet.ts.net' }),
   );
   expect(openExternal).not.toHaveBeenCalled();
-  expect(launch).toHaveBeenCalledTimes(1);
+  expect(handoff).toHaveBeenCalledTimes(1);
 
   openDashboard();
-  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
-  expect(launch).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl));
+  expect(handoff).toHaveBeenCalledTimes(2);
 });
 
 it('offers a reset for invalid saved settings and shows the ready state after a successful reset', () => {
@@ -525,7 +578,7 @@ it('displays a reset failure and keeps the reset action available', () => {
 });
 
 it('shows a host recovery message and retries the managed launch without using the old URL', async () => {
-  launch.mockResolvedValueOnce({
+  handoff.mockResolvedValueOnce({
     ok: false,
     reason: 'route-conflict',
     message: 'Remove the previous private share.',
@@ -537,7 +590,7 @@ it('shows a host recovery message and retries the managed launch without using t
   await screen.findByText('Remove the previous private share.');
   expect(openExternal).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl));
+  await waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(handoffUrl));
 });
 
 it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit quota fallback', async () => {
@@ -918,4 +971,6 @@ it('opens owner settings at the protected Sources destination after an explicit 
   await waitFor(() =>
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(privateUrl + '/sources'),
   );
+  expect(launch).toHaveBeenCalledExactlyOnceWith({});
+  expect(handoff).not.toHaveBeenCalled();
 });
