@@ -278,6 +278,14 @@ Records that mean nothing for the state: Claude Code's `attachment` (hook result
 
 A file can end on housekeeping records. HQ uses the last conversation record to derive turn state.
 
+An active Claude Code subagent can outlive its parent's live window. For a child the feed already
+follows, HQ checks the exact main transcript in the same project using the same containment rules
+and bounded tail reader. It caches only the file identity and projected parent metadata for the
+duration of the feed. A parent whose last recognized conversation is past the live window joins
+the crew as idle context while a child needs attention. An existing live parent, eligible Paseo parent, or
+effective `SessionEnd` keeps its precedence. If HQ cannot verify the old parent, the child keeps
+its separate roster entry.
+
 #### Roots, files, reading
 
 - **Roots.** Claude Code: `projects/` of each `$CLAUDE_CONFIG_DIR` entry, else `~/.config/claude` and `~/.claude`; the file rules are the batch importer's (`classifyTranscript`: main transcripts and `<session>/subagents/*.jsonl`; set-aside `*.orphaned-*` and `*.superseded-*` copies skipped). Codex: `sessions/**/*.jsonl` of each `$CODEX_HOME` entry, else `~/.codex`. **Never followed:** `archived_sessions/`, `.jsonl.zst` files, and any folder outside these (no desktop-app folder). The roots are worked out again at every full listing, so a changed environment is seen without a restart.

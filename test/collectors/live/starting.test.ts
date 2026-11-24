@@ -69,6 +69,7 @@ const agentOf = (sessionId: string): TranscriptAgent => ({
 function feedOver(
   gate: (name: string) => Promise<void> | undefined = () => undefined,
   roots: () => readonly string[] = () => [dir],
+  parentLookup?: Parameters<typeof createTranscriptFeed>[0]['source']['parentLookup'],
 ) {
   const sleep = manualSleep();
   const started: string[] = [];
@@ -81,6 +82,7 @@ function feedOver(
       roots,
       accept: (rel) => rel.endsWith('.jsonl'),
       hotDirs: (followed: readonly RecentFile[]) => followed.map((file) => dirname(file.path)),
+      ...(parentLookup && { parentLookup }),
       start: async (file) => {
         const name = file.rel;
         started.push(name);
@@ -88,7 +90,7 @@ function feedOver(
         const tracker: Tracker = {
           line: () => undefined,
           overlong: () => undefined,
-          agent: () => agentOf(name),
+          agent: () => ({ ...agentOf(name), parentSessionId: parentLookup ? 'main' : null }),
         };
         return tracker;
       },
@@ -98,6 +100,34 @@ function feedOver(
 }
 
 describe('a feed is starting until its first look has read each file', () => {
+  it('shows the children already read if a parent lookup passes the first-read deadline', async () => {
+    write('child.jsonl');
+    const checked = deferred();
+    const finishLookup = deferred();
+    const { feed } = feedOver(
+      undefined,
+      undefined,
+      () => async (_children, _now, _signal, _files, checkDeadline) => {
+        clock += FIRST_READ_DEADLINE_MS;
+        checkDeadline();
+        checked.resolve();
+        await finishLookup.promise;
+        return [];
+      },
+    );
+    try {
+      feed.start();
+      await checked.promise;
+      expect(feed.status()).toBe('live');
+      await feed.ready();
+      expect(feed.read().agents.map((agent) => agent.sessionId)).toEqual(['child.jsonl']);
+      expect(feed.read().parents).toBeUndefined();
+    } finally {
+      finishLookup.resolve();
+      await feed.stop();
+    }
+  });
+
   it('is starting and shows nothing while the first transcript is still being read, and live the moment it has been', async () => {
     write('a.jsonl');
     const slow = deferred();

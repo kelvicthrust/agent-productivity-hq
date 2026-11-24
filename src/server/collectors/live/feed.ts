@@ -62,9 +62,21 @@ export interface TranscriptAgent {
 
 export interface TranscriptSnapshot {
   agents: readonly TranscriptAgent[];
+  /** Projected metadata for Claude parents that may be needed as context. */
+  parents?: readonly TranscriptParent[];
   /** How many files are followed (a file that is not a session to show, or has said nothing yet, is counted too). */
   files: number;
 }
+
+export type TranscriptParent = Pick<TranscriptAgent, 'sessionId' | 'cwd' | 'lastActivityAt'>;
+
+type ParentLookup = (
+  children: readonly RecentFile[],
+  now: number,
+  signal: AbortSignal,
+  files: OpenFiles,
+  checkDeadline: () => void,
+) => Promise<readonly TranscriptParent[]>;
 
 /** What a read may ask of the trackers. */
 export interface TranscriptReadOptions {
@@ -108,6 +120,8 @@ export interface TranscriptSource {
    * be opened through `files`, so that a stop closes it, and it must end (settle) once `signal` aborts: the feed waits for it.
    */
   start(file: RecentFile, signal: AbortSignal, files: OpenFiles): Promise<Tracker | null>;
+  /** Optional lookup, with a cache owned by this run of the feed. */
+  parentLookup?(): ParentLookup;
 }
 
 export interface TranscriptFeedOptions {
@@ -137,6 +151,8 @@ interface Run {
   readonly files: OpenFiles;
   readonly recent: Recent;
   readonly followed: Map<string, Followed>;
+  lookupParents: ParentLookup | undefined;
+  parents: readonly TranscriptParent[];
   readonly startedAt: number;
   status: TranscriptFeedStatus;
   /** Resolves `ready()`. Safe to call more than once. */
@@ -158,7 +174,11 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
 
   const setStatus = (run: Run, next: TranscriptFeedStatus, code?: string): void => {
     run.status = next;
-    if (next !== 'live' && next !== 'starting') run.followed.clear();
+    if (next !== 'live' && next !== 'starting') {
+      run.followed.clear();
+      run.parents = [];
+      run.lookupParents = source.parentLookup?.();
+    }
     const key = `${next}:${code ?? ''}`;
     if (key === lastLogged) return;
     lastLogged = key;
@@ -220,6 +240,12 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
 
   async function tick(run: Run): Promise<void> {
     const { signal } = run.controller;
+    // Slow reads do not keep the feed starting once it has something to show.
+    const checkDeadline = () => {
+      if (run.status === 'starting' && now() - run.startedAt >= FIRST_READ_DEADLINE_MS) {
+        finishFirst(run);
+      }
+    };
     const seen = await run.recent.refresh(signal);
     if (signal.aborted) return;
     const next = STATUS_OF[seen.roots];
@@ -239,9 +265,17 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
         // A file that went away mid-read is simply no longer followed; any other failure is tried again next tick.
         if (classifyFsError(error).kind === 'notfound') run.followed.delete(file.path);
       }
-      // Slow reads do not keep the feed `starting` for ever: what has been read so far is shown after the deadline.
-      if (run.status === 'starting' && now() - run.startedAt >= FIRST_READ_DEADLINE_MS)
-        finishFirst(run);
+      checkDeadline();
+    }
+    if (run.lookupParents) {
+      const at = now();
+      const children = seen.files.filter((file) => {
+        const agent = run.followed.get(file.path)?.tracker?.agent(at);
+        return typeof agent?.parentSessionId === 'string';
+      });
+      const parents = await run.lookupParents(children, at, signal, run.files, checkDeadline);
+      if (signal.aborted) return;
+      run.parents = parents;
     }
     // Only now, with every followed file read once, is the feed live (a feed coming back from `notfound` is no exception).
     finishFirst(run);
@@ -281,6 +315,8 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
           now,
         }),
         followed: new Map(),
+        lookupParents: source.parentLookup?.(),
+        parents: [],
         startedAt: now(),
         status: 'starting',
         settle,
@@ -302,6 +338,8 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
           await run.loop;
         } finally {
           run.followed.clear();
+          run.lookupParents = undefined;
+          run.parents = [];
           run.recent.clear();
         }
       })();
@@ -326,7 +364,11 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
           // A session that cannot be read now is left out of this answer; it never takes the others with it.
         }
       }
-      return { agents, files: run.followed.size };
+      return {
+        agents,
+        files: run.followed.size,
+        ...(run.parents.length > 0 && { parents: run.parents }),
+      };
     },
   };
 }

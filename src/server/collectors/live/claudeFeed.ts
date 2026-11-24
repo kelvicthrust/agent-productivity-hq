@@ -1,4 +1,4 @@
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, posix } from 'node:path';
 import { liveTime } from '../../lib/liveTime.ts';
 import { MAX_LIVE_PATH_CHARS, fits } from '../../lib/liveText.ts';
 import type { Logger } from '../../lib/logger.ts';
@@ -6,9 +6,16 @@ import type { Sleep } from '../../lib/sleep.ts';
 import { classifyTranscript, projectRoots, type Transcript } from '../claude/files.ts';
 import { parseJsonLine } from '../ingest/index.ts';
 import { projectClaudeLine } from './claudeActivity.ts';
-import { createTranscriptFeed, type Tracker, type TranscriptFeed } from './feed.ts';
+import { statWithin, type OpenFiles } from './confined.ts';
+import {
+  createTranscriptFeed,
+  type Tracker,
+  type TranscriptFeed,
+  type TranscriptParent,
+} from './feed.ts';
 import { createSessionMachine } from './machine.ts';
 import type { RecentFile } from './recent.ts';
+import { tailFile } from './tail.ts';
 
 // The Claude Code transcript feed: `projects/<project>/<session>.jsonl` are main sessions and `projects/<project>/<session>/subagents/*.jsonl`
 // their subagents (native children), exactly the files the batch importer reads (`classifyTranscript`); set-aside copies are skipped.
@@ -72,6 +79,92 @@ function hotDirs(followed: readonly RecentFile[]): string[] {
   return dirs;
 }
 
+type ParentFile = NonNullable<Awaited<ReturnType<typeof statWithin>>>;
+
+function createParentLookup() {
+  type CachedParent = { file: ParentFile; parent: TranscriptParent | null };
+  let cache = new Map<string, CachedParent>();
+
+  return async (
+    children: readonly RecentFile[],
+    now: number,
+    signal: AbortSignal,
+    files: OpenFiles,
+    checkDeadline: () => void,
+  ): Promise<TranscriptParent[]> => {
+    const candidates = new Map<string, { scope: RecentFile['guard']; sessionId: string }>();
+    for (const child of children) {
+      const parent = classifyTranscript(`${posix.dirname(posix.dirname(child.rel))}.jsonl`);
+      if (parent?.kind !== 'main') continue;
+      const path = `${dirname(dirname(child.path))}.jsonl`;
+      candidates.set(path, { scope: child.guard, sessionId: parent.sessionId });
+    }
+
+    const next = new Map<string, CachedParent>();
+    const parents: TranscriptParent[] = [];
+    for (const [path, { scope, sessionId }] of candidates) {
+      if (signal.aborted) return [];
+      try {
+        const file = await statWithin(scope, path);
+        if (signal.aborted) return [];
+        checkDeadline();
+        if (file === null) continue;
+        const held = cache.get(path);
+        const unchanged =
+          held !== undefined &&
+          held.file.guard.realRoot === file.guard.realRoot &&
+          held.file.guard.dev === file.guard.dev &&
+          held.file.guard.ino === file.guard.ino &&
+          held.file.size === file.size &&
+          held.file.mtimeMs === file.mtimeMs;
+        const parent = unchanged
+          ? held.parent
+          : await readParent(path, file, sessionId, now, signal, files);
+        next.set(path, { file, parent });
+        if (parent !== null) parents.push(parent);
+      } catch {
+        // The parent can disappear or be refused between stat and read. The child is still valid.
+      } finally {
+        checkDeadline();
+      }
+    }
+    if (signal.aborted) return [];
+    cache = next;
+    return parents;
+  };
+}
+
+async function readParent(
+  path: string,
+  file: ParentFile,
+  sessionId: string,
+  now: number,
+  signal: AbortSignal,
+  files: OpenFiles,
+): Promise<TranscriptParent | null> {
+  let lastActivityAt: number | null = null;
+  let cwd: string | null = null;
+  await tailFile(
+    { path, ...file },
+    null,
+    {
+      begin() {},
+      overlong() {},
+      line(text) {
+        const projected = projectClaudeLine(parseJsonLine(text), false);
+        if (!projected?.events.length) return;
+        const at = liveTime(projected.at, now);
+        if (at === null || (lastActivityAt !== null && at < lastActivityAt)) return;
+        lastActivityAt = at;
+        cwd = fits(projected.cwd, MAX_LIVE_PATH_CHARS) ?? cwd;
+      },
+    },
+    signal,
+    files,
+  );
+  return lastActivityAt === null ? null : { sessionId, cwd, lastActivityAt };
+}
+
 export function createClaudeFeed(options: ClaudeFeedOptions): TranscriptFeed {
   return createTranscriptFeed({
     now: options.now,
@@ -83,6 +176,7 @@ export function createClaudeFeed(options: ClaudeFeedOptions): TranscriptFeed {
       roots: (signal) => projectRoots(options.configDirs(), signal),
       accept: (rel) => classifyTranscript(rel) !== null,
       hotDirs,
+      parentLookup: createParentLookup,
       start: (file) => {
         const transcript = classifyTranscript(file.rel);
         return Promise.resolve(transcript === null ? null : createClaudeTracker(transcript));
