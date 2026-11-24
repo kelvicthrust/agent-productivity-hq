@@ -9,9 +9,15 @@ import { createNet } from './lib/net.ts';
 export function liveBootDeps(): BootDeps {
   const home = homedir();
   const env = process.env;
+  const github = createLiveGithub();
   return {
+    workReview: {
+      keyring: github.keyring,
+      authNet: createNet({ scope: 'work-review-auth' }),
+      modelNet: createNet({ scope: 'work-review', timeoutMs: 60_000 }),
+    },
     local: { env, home },
-    github: createLiveGithub(),
+    github,
     paseo: {},
     chatgpt: { launch: createLiveLauncher() },
     claude: {

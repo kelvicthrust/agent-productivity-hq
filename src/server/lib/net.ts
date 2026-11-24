@@ -6,6 +6,8 @@ import type { NetFetch, NetInit } from '../collectors/github/ports.ts';
 //   https://api.github.com   GET any path (with its query), and POST /graphql
 //   https://github.com       POST /login/device/code and POST /login/oauth/access_token (the device flow and the refresh)
 //   https://api.anthropic.com GET /api/oauth/usage in the dedicated Claude plan-check scope
+//   https://api.openai.com    GET /v1/models and POST /v1/responses in the Work Review inference scope
+//   https://auth.openai.com   GET /.well-known/jwks.json and POST OAuth token/revoke in the Work Review sign-in scope
 //
 // Anything else is refused BEFORE a socket is opened: another scheme, host, port, path or method, a URL with a user name or
 // password in it, a query on a POST, a body on a GET. A redirect is never followed (`redirect: 'manual'`): a 3xx answer is
@@ -62,6 +64,11 @@ export class NetError extends Error {
 export const API_HOST = 'api.github.com';
 export const OAUTH_HOST = 'github.com';
 export const CLAUDE_PLAN_LIMITS_URL = 'https://api.anthropic.com/api/oauth/usage';
+export const WORK_REVIEW_MODELS_URL = 'https://api.openai.com/v1/models';
+export const WORK_REVIEW_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+export const WORK_REVIEW_JWKS_URL = 'https://auth.openai.com/.well-known/jwks.json';
+export const WORK_REVIEW_TOKEN_URL = 'https://auth.openai.com/api/accounts/oauth/token';
+export const WORK_REVIEW_REVOKE_URL = 'https://auth.openai.com/api/accounts/oauth/revoke';
 export const DEFAULT_TIMEOUT_MS = 20_000;
 export const USER_AGENT = 'agent-productivity';
 
@@ -75,8 +82,8 @@ export interface NetOptions {
   fetch?: typeof globalThis.fetch;
   /** How long one request may take, in milliseconds. */
   timeoutMs?: number;
-  /** The Claude plan checker gets its own host and method. The default remains the GitHub scope. */
-  scope?: 'claude-plan';
+  /** Each opt-in integration receives only its own destinations. The default is the GitHub scope. */
+  scope?: 'claude-plan' | 'work-review' | 'work-review-auth';
 }
 
 /** True when the allowlist does not name this request. Looks only at the URL, the method and whether there is a body. */
@@ -95,6 +102,30 @@ function refusal(url: URL, method: string, hasBody: boolean): boolean {
     return !POST_PATHS[url.hostname]?.includes(url.pathname) || url.search !== '';
   }
   return true;
+}
+
+function matchesScope(
+  scope: NonNullable<NetOptions['scope']>,
+  target: string,
+  method: string,
+  hasBody: boolean,
+): boolean {
+  switch (scope) {
+    case 'claude-plan':
+      return target === CLAUDE_PLAN_LIMITS_URL && method === 'GET' && !hasBody;
+    case 'work-review':
+      return (
+        (target === WORK_REVIEW_MODELS_URL && method === 'GET' && !hasBody) ||
+        (target === WORK_REVIEW_RESPONSES_URL && method === 'POST' && hasBody)
+      );
+    case 'work-review-auth':
+      return (
+        (target === WORK_REVIEW_JWKS_URL && method === 'GET' && !hasBody) ||
+        ((target === WORK_REVIEW_TOKEN_URL || target === WORK_REVIEW_REVOKE_URL) &&
+          method === 'POST' &&
+          hasBody)
+      );
+  }
 }
 
 /** The short system code of a failed connection (`ENOTFOUND`, `ECONNRESET`…), if it has one that looks like one. */
@@ -118,10 +149,9 @@ export function createNet(options: NetOptions = {}): NetFetch {
     }
     const method = init.method ?? 'GET';
     // A refusal names the host and path only, so a user name or password in the URL is never repeated.
-    const refused =
-      options.scope === 'claude-plan'
-        ? target !== CLAUDE_PLAN_LIMITS_URL || method !== 'GET' || init.body !== undefined
-        : refusal(url, method, init.body !== undefined);
+    const refused = options.scope
+      ? !matchesScope(options.scope, target, method, init.body !== undefined)
+      : refusal(url, method, init.body !== undefined);
     if (refused) {
       throw new NetError('refused', url.hostname, url.pathname);
     }

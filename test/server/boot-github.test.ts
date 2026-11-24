@@ -206,7 +206,9 @@ describe('the live ports belong to the standalone and Paseo-managed entry points
 
   it('supplies GitHub and ChatGPT through the shared production dependencies', () => {
     const live = readFileSync(join(ROOT, 'src/server/live.ts'), 'utf8');
-    expect(live).toMatch(/github:\s*createLiveGithub\(\)/);
+    expect(live).toContain('const github = createLiveGithub()');
+    expect(live).toMatch(/^\s*github,?$/m);
+    expect(live).toContain('keyring: github.keyring');
     expect(live).toMatch(/chatgpt:\s*\{\s*launch:\s*createLiveLauncher\(\)/);
   });
 

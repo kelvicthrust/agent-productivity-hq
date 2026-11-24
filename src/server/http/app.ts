@@ -38,6 +38,13 @@ import { seriesRoutes } from './routes/series.ts';
 import { setupRoutes } from './routes/setup.ts';
 import { sourcesRoutes } from './routes/sources.ts';
 import { usageRoutes } from './routes/usage.ts';
+import {
+  createWorkReviewService,
+  type WorkReviewService,
+} from '../services/work-review/service.ts';
+import { workReviewAccountRoutes } from './routes/work-review-account.ts';
+import type { WorkReviewAuth } from '../integrations/workReviewAuth/index.ts';
+import { workReviewRoutes } from './routes/work-review.ts';
 import { yearRoutes } from './routes/year.ts';
 import { staticHandler } from './static.ts';
 
@@ -52,6 +59,8 @@ export interface SetupMachine {
 }
 
 export interface AppDeps {
+  workReview?: WorkReviewService;
+  reviewAuth?: WorkReviewAuth | undefined;
   db: Db;
   logger: Logger;
   /** The refresh runner, with the adapters this process has (none in production until the collectors land). */
@@ -137,8 +146,17 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.use('*', csrfGuard(deps.logger));
   app.onError(errorHandler(deps.logger));
 
+  const workReview = deps.workReview ?? createWorkReviewService(deps);
   const reset =
-    deps.reset ?? createResetService({ ...deps, clearRuntime: () => deps.paseoQuota?.clear() });
+    deps.reset ??
+    createResetService({
+      ...deps,
+      clearRuntime: async () => {
+        await workReview.cancel();
+        await deps.reviewAuth?.reset();
+        deps.paseoQuota?.clear();
+      },
+    });
   app.use('/api/*', async (c, next) => {
     if (c.req.path === RESET_PATH && c.req.method === 'POST') return next();
     const leave = reset.enter();
@@ -162,6 +180,8 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   app.route('/', prsRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   // PR links (M8): a PR's evidence and the owner's decisions about it.
   app.route('/', linksRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
+  app.route('/', workReviewRoutes(workReview));
+  app.route('/', workReviewAccountRoutes(deps.db, deps.reviewAuth, workReview.cancel));
   app.route('/', yearRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   app.route('/', usageRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   // The review surfaces (M7): one clock and one report timezone for every figure on a page.

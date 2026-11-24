@@ -30,12 +30,11 @@ Tailwind + Astryx, Hono and SQLite. Follow the layer/import rules in [TECH.md](T
 Generate theme files from `design-system/DESIGN.md`; never edit generated theme output by hand.
 
 Keep local usage and account reports separate. Paseo adds enrichment, never tokens. Count a PR once
-regardless of its linked sessions, and never allocate session tokens to PRs. Read transcript content
-in memory only; retain the permitted metadata and evidence identifiers. Preserve loopback-only
+regardless of its linked sessions, and never allocate session tokens to PRs. Read transcript content in memory only. Retain permitted metadata and evidence identifiers. The [Work Review](docs/tech/data-and-sources.md#work-review) opt-in permits sending selected excerpts to OpenAI and retaining derived notes and reports. Preserve loopback-only
 serving, the outbound boundary and approved credential storage. The app changes a provider's settings only when the owner
 turns on a switch that says exactly what will change, and can undo it; today that is HQ's Claude Code hooks (entries in the
 user-level `settings.json`, 2026-11-19), and nothing else is ever written to a provider. The Claude subscription endpoint can use the active Claude Code sign-in after an explicit plan
-check action or an explicit **Refresh** or **Refresh all** action for a previously checked profile.
+check action or an explicit **Refresh** or **Refresh all** action for a previously checked profile. Work Review uses its own Sign in with ChatGPT grant stored in the system credential store.
 Legacy status-line settings are restored by their owner. Do not introduce API keys or
 broader access to make setup work.
 

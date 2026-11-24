@@ -122,10 +122,13 @@ test.describe('Data kept on this machine', () => {
       await expect(card).toContainText('Stored on this computer only');
       await expect(card).toContainText('kept for 12 months on this machine');
       await expect(card).toContainText(
-        'Prompts, responses, tool output and credentials aren’t stored.',
+        'HQ keeps raw prompts, responses, tool output and credentials out of dashboard history.',
       );
       await expect(card).toContainText(
-        'GitHub and account-report reads are the only network requests.',
+        'sends selected session excerpts and pull request metadata to OpenAI for cloud processing.',
+      );
+      await expect(card).toContainText(
+        'saves the generated notes, reviews and evidence links on this machine and protects the Work Review credentials in macOS Keychain.',
       );
       // The reset section follows the two sections it affects.
       const titles = await page

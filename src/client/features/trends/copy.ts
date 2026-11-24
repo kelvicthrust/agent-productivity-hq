@@ -1,19 +1,6 @@
-import type { Period } from '../../lib/filters';
-
 // The words only Trends uses, moved from the D7 prototype (docs/design/prototype/app.js pageTrends, yearCard, modelBreakdown)
 // unchanged except where the move from inline records to the records drawer changes what a sentence points at. Words other
 // screens share (coverage phrases, range notices) are in lib/copy.ts. Typographic apostrophes (’) are the product's.
-
-/** The period named in the page head. The same words as the filter bar's, which a feature may not import. */
-export const PERIOD_LABEL: Record<Period, string> = {
-  today: 'Today',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'last-90': 'Last 90 days',
-  'last-12m': 'Last 12 months',
-  custom: 'Custom range',
-};
 
 export const TRENDS_COPY = {
   title: 'Trends',

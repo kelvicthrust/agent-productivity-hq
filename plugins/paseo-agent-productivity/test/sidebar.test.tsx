@@ -974,3 +974,25 @@ it('opens owner settings at the protected Sources destination after an explicit 
   expect(launch).toHaveBeenCalledExactlyOnceWith({});
   expect(handoff).not.toHaveBeenCalled();
 });
+
+it('opens Work Review at the protected owner destination from Overview', async () => {
+  const openExternal = vi.fn(async () => {});
+  externalBrowser.open = openExternal;
+  renderLauncher(vi.fn());
+  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+  await screen.findByText('Live agents aren’t available in this session.');
+  fireEvent.click(screen.getByRole('tab', { name: /^Overview/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Filters' }));
+  fireEvent.click(await screen.findByRole('radio', { name: 'Last week' }));
+  const review = await screen.findByRole('button', { name: 'Open Work Review' });
+  expect(launch).not.toHaveBeenCalled();
+  expect(openExternal).not.toHaveBeenCalled();
+  fireEvent.click(review);
+  await waitFor(() =>
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+      privateUrl + '/work-review?start=2026-11-09&end=2026-11-15',
+    ),
+  );
+  expect(launch).toHaveBeenCalledExactlyOnceWith({});
+  expect(handoff).not.toHaveBeenCalled();
+});

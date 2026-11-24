@@ -27,10 +27,10 @@ const MAX_FORM_BYTES = 1024;
 const CODE = /^[A-Za-z0-9_-]{43}$/;
 const FORM_CONTENT_TYPE =
   /^application\/x-www-form-urlencoded(?:\s*;\s*charset=(?:utf-8|"utf-8"))?$/i;
-type Destination = '/' | '/sources';
+type Destination = '/' | '/sources' | '/work-review';
 
 function destination(path: string | null): Destination | null {
-  return path === '/' || path === '/sources' ? path : null;
+  return path === '/' || path === '/sources' || path === '/work-review' ? path : null;
 }
 
 function optionalStat(path: string) {
@@ -160,7 +160,20 @@ async function readForm(request: Request): Promise<URLSearchParams | null> {
   );
 }
 
-function unlockPage(next: Destination, wrongCode = false): string {
+// Carry only report filters through the owner unlock. The redirect path remains a fixed destination
+// and the short, credential-bearing form body keeps its original size limit.
+function reportSearch(destination: Destination, requestUrl: string): string {
+  if (destination !== '/work-review') return '';
+  const input = new URL(requestUrl).searchParams;
+  const scope = new URLSearchParams();
+  for (const key of ['start', 'end', 'gran', 'repos', 'provider', 'author']) {
+    const value = input.get(key);
+    if (value !== null) scope.set(key, value);
+  }
+  return scope.size ? `?${scope}` : '';
+}
+
+function unlockPage(next: Destination, search: string, wrongCode = false): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -184,7 +197,7 @@ function unlockPage(next: Destination, wrongCode = false): string {
     <h1>Unlock Agent HQ</h1>
     <p>On the Mac running Paseo, open <code>${OWNER_BROWSER_CODE_FILE}</code> from the daemon owner’s HQ data folder. The default folder is <code>~/Library/Application Support/agent-productivity</code>.</p>
     ${wrongCode ? '<p role="alert" id="code-error">That code did not match. Copy the current code from the host and try again.</p>' : ''}
-    <form method="post" action="/unlock">
+    <form method="post" action="/unlock${search.replaceAll('&', '&amp;')}">
       <input type="hidden" name="next" value="${next}">
       <label for="code">Browser unlock code</label>
       <input id="code" name="code" type="password" maxlength="43" autocomplete="off" spellcheck="false" required${wrongCode ? ' aria-invalid="true" aria-describedby="code-error"' : ''}>
@@ -198,7 +211,7 @@ function unlockPage(next: Destination, wrongCode = false): string {
 function unlockForm(c: Context<HttpEnv>, next: Destination, wrongCode = false): Response {
   // no-referrer makes browsers send Origin: null on the form POST. Keep same-origin posts identifiable.
   c.header('Referrer-Policy', 'same-origin');
-  return c.html(unlockPage(next, wrongCode), 401);
+  return c.html(unlockPage(next, reportSearch(next, c.req.url), wrongCode), 401);
 }
 
 const denied = {
@@ -227,6 +240,8 @@ export function createOwnerBrowserAccess({
   // The outer app checks the Tailnet owner, Host and response headers before this middleware.
   const middleware: MiddlewareHandler<HttpEnv> = async (c, next) => {
     if (!active) return c.json(denied, 401);
+    if ((c.req.path === '/unlock' || c.req.path === '/work-review') && c.req.url.length > 8192)
+      return c.text('The Work Review filter URL is too long.', 414);
     if (c.req.method === 'POST' && c.req.path === '/unlock') {
       // This form is the only POST handled before the normal dashboard CSRF guard.
       if (c.req.header('origin') !== origin) return c.json(denied, 403);
@@ -255,7 +270,7 @@ export function createOwnerBrowserAccess({
       );
       if (!active) return c.json(denied, 401);
       c.header('Set-Cookie', cookie);
-      return c.redirect(requested, 303);
+      return c.redirect(requested + reportSearch(requested, c.req.url), 303);
     }
 
     const expires = await getSignedCookie(c, signingKey, OWNER_COOKIE, 'host');

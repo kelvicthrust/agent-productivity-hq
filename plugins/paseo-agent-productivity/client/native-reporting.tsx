@@ -141,6 +141,8 @@ const presets: ReadonlyArray<[PeriodPreset, string]> = [
   ['today', 'Today'],
   ['this-week', 'This week'],
   ['this-month', 'This month'],
+  ['last-week', 'Last week'],
+  ['last-month', 'Last month'],
   ['last-30', 'Last 30 days'],
   ['last-90', 'Last 90 days'],
   ['last-12m', 'Last 12 months'],

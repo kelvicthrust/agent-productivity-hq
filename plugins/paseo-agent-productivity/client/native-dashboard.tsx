@@ -1,7 +1,7 @@
 import type { PluginScreenProps } from '@getpaseo/plugin/client';
 import { View } from 'react-native';
 import { formatRange } from '../shared/reporting-dates.ts';
-import { periodOf } from '../shared/reporting-filters.ts';
+import { periodOf, searchFor } from '../shared/reporting-filters.ts';
 import { colors } from '../shared/reporting-palette.ts';
 import type { NativeRequest } from './native-api.ts';
 import { NativeDelivery } from './native-delivery.tsx';
@@ -42,11 +42,13 @@ export function NativeDashboard({
   request,
   onSetupRequired,
   onOpenOwnerSettings,
+  onOpenWorkReview,
 }: Pick<PluginScreenProps, 'host' | 'navigation'> & {
   page: DashboardPage;
   request: NativeRequest;
   onSetupRequired(): void;
   onOpenOwnerSettings(): void;
+  onOpenWorkReview(search: string): void;
 }) {
   const refresh = useDashboardRefresh();
   const { compact } = useDashboardLayout();
@@ -136,7 +138,17 @@ export function NativeDashboard({
       </View>
       {refreshNotice}
       {page !== 'sources' && <ReportingFilters key={page} page={page} />}
-      {page === 'overview' && <NativeOverview />}
+      {page === 'overview' && (
+        <>
+          <NativeOverview />
+          <NativeActions>
+            <NativeButton
+              label="Open Work Review"
+              onPress={() => onOpenWorkReview(searchFor('', filters, bootstrap))}
+            />
+          </NativeActions>
+        </>
+      )}
       {page === 'trends' && <NativeTrends />}
       {page === 'delivery' && <NativeDelivery compact={compact} />}
       {page === 'usage' && <NativeUsage compact={compact} />}

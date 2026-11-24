@@ -63,6 +63,11 @@ import { createHookStore, type HookStore } from './services/hq/hookStore.ts';
 import { createHqService, type HqService } from './services/hq/service.ts';
 import { recomputeLinks } from './services/links.ts';
 import { createPaseoQuotaService } from './services/paseo-quota.ts';
+import { createWorkReviewAuth, type WorkReviewAuth } from './integrations/workReviewAuth/index.ts';
+import type { Keyring, NetFetch } from './collectors/github/ports.ts';
+import { createWorkReviewService, type WorkReviewService } from './services/work-review/service.ts';
+import { workReviewKeyring } from './services/work-review/keyring.ts';
+import { createWorkReviewWorker } from './services/work-review/worker.ts';
 import { createResetService } from './services/reset.ts';
 import { runRetention } from './services/retention.ts';
 import { delayUntilLocalTime, startScheduler, type Scheduler } from './services/scheduler.ts';
@@ -170,6 +175,7 @@ export interface ClaudeBoot {
 }
 
 export interface BootDeps {
+  workReview?: { keyring: Keyring; authNet: NetFetch; modelNet: NetFetch };
   /** The synthetic preview holds ownership while seeding, then hands it to boot. */
   directoryLease?: InstanceLease;
   /** Clock in epoch ms; default Date.now. The seeded preview and tests pass a fixed one. */
@@ -345,6 +351,8 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   let closing = false;
   let closeAccountFlows: (() => void) | null = null;
   let hq: (HqService & { stop(): Promise<void> }) | null = null;
+  let workReview: WorkReviewService | undefined;
+  let reviewAuth: WorkReviewAuth | undefined;
   let claudeHooks: ClaudeHooks | null = null;
   const hookStore: HookStore = createHookStore({ now });
   const hookToken = newHookToken();
@@ -667,6 +675,31 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         ],
       });
       runner = activeRunner;
+      const reviewPorts = deps.workReview;
+      reviewAuth = reviewPorts
+        ? createWorkReviewAuth({
+            keyring: workReviewKeyring(db, reviewPorts.keyring),
+            net: reviewPorts.authNet,
+            storageId: config.dataDir,
+            now,
+          })
+        : undefined;
+      const account = reviewAuth;
+      workReview = createWorkReviewService({
+        db,
+        timezone,
+        now,
+        local: deps.local,
+        accountStatus: account ? () => account.status().status : undefined,
+        worker:
+          account && reviewPorts
+            ? createWorkReviewWorker({
+                net: reviewPorts.modelNet,
+                accessToken: (signal) => account.accessToken(signal),
+                invalidateAccessToken: (token) => account.invalidateAccessToken(token),
+              })
+            : undefined,
+      });
       const reset = createResetService({
         db,
         runner: activeRunner,
@@ -687,6 +720,8 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
           }
         },
         clearRuntime: async () => {
+          await workReview?.cancel();
+          await reviewAuth?.reset();
           await hq?.stop();
           hookStore.clear();
           paseoQuota?.clear();
@@ -759,6 +794,8 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       }
 
       appDeps = {
+        workReview,
+        reviewAuth,
         db,
         logger,
         port: config.port,
@@ -913,6 +950,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         const deadline = performance.now() + timeoutMs;
         // HQ's close starts now, so every feed's signal aborts at once. It is awaited to its end below and never raced against a deadline:
         // its cleanup (feed state, roster memo, repo resolver) is not finished until it resolves, and the database must stay open until then.
+        const reviewClosed = Promise.all([workReview?.close(), reviewAuth?.close()]);
         const hqClosed = hq?.close();
         // The hook registry goes first, so a hook that runs now finds no server; its events are dropped with the rest.
         const hooksClosed = claudeHooks?.close();
@@ -929,6 +967,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         closeAccountFlows?.();
         // Everything HQ holds is released before anything else is closed or returned: the label query reads the database. The close is bounded
         // by abort-aware work (sockets hard-closed, reads budgeted); only a file system call that never answers can delay it.
+        await reviewClosed;
         await hqClosed;
         await hooksClosed;
         hookStore.clear();
@@ -962,6 +1001,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       shutdown,
     };
   } catch (error) {
+    await Promise.all([workReview?.close(), reviewAuth?.close()]);
     logger.error('boot failed', { source: 'boot', code: 'boot_failed', error });
     revokeBrowserAccess?.();
     scheduler?.stop();

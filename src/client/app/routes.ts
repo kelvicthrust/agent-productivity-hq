@@ -72,6 +72,7 @@ export const PRODUCT_NAME = 'Agent Productivity HQ';
 /** The page name for a path, used for the document title. */
 export function pageNameFor(pathname: string): string {
   if (pathname === SETUP_PATH) return 'Setup';
+  if (pathname === '/work-review') return 'Work Review';
   const hit = NAV.find((item) =>
     item.end ? pathname === item.path : pathname.startsWith(item.path),
   );
@@ -80,6 +81,7 @@ export function pageNameFor(pathname: string): string {
 
 /** The filter groups of the screen at `pathname`: none for Sources & repos, Setup and a path that is not a screen. */
 export function filterGroupsFor(pathname: string): readonly FilterGroupId[] {
+  if (pathname === '/work-review') return ['period', 'repos', 'provider', 'author'];
   return (
     NAV.find((item) => (item.end ? pathname === item.path : pathname.startsWith(item.path)))
       ?.filterGroups ?? []

@@ -8,6 +8,12 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
 
 ## Product follow-up
 
+- **Work Review** appears on Overview as a dated summary with a link to its full report.
+  The full view groups personal delivery, team merges, other progress and recorded open work,
+  omitting empty sections. Expand a claim to see its dated sources. The generation dialog
+  identifies what goes to OpenAI and asks for confirmation. When generation fails, keep the
+  saved review readable and show the recovery action alongside it.
+
 - **App bar** shows Refresh. The Sources & repos navigation item carries the issue count on desktop
   and phones.
 - **Sources & repos** starts with a rectangular **Source coverage** section. At 720px and above,

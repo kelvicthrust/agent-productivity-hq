@@ -22,6 +22,14 @@ import { Int, Provider } from './common.ts';
 import { ErrorEnvelope } from './errors.ts';
 import { FilterQuery, LimitQuery } from './filters.ts';
 import { ClaudeHooksRequest, ClaudeHooksStatus, HqClaudeHookEvent, HqResponse } from './hq.ts';
+import {
+  GenerateWorkReview,
+  WorkReviewState,
+  WorkReviewAccount,
+  WorkReviewConnect,
+  WorkReviewConnectRequest,
+  WorkReviewDisconnectRequest,
+} from './work-review.ts';
 import { OverviewResponse } from './overview.ts';
 import { PaseoQuotaResponse } from './paseo-quota.ts';
 import {
@@ -93,6 +101,7 @@ const get = (
   responses: { '200': response, ...Object.fromEntries((options.errors ?? []).map((s) => [s, E])) },
 });
 
+const workReviewFilters = filters('start', 'end', 'gran', 'repos', 'provider', 'author');
 const prId = { prId: z.string() };
 const repoPath = { owner: z.string(), name: z.string() };
 
@@ -118,6 +127,33 @@ export const ROUTES: readonly RouteContract[] = [
     query: filters('start', 'end', 'repos', 'provider', 'author'),
     errors: ['400'],
   }),
+  get('/api/work-review/account', WorkReviewAccount),
+  {
+    method: 'post',
+    path: '/api/work-review/account/connect',
+    csrf: true,
+    body: { schema: WorkReviewConnectRequest, required: true },
+    responses: { '200': WorkReviewConnect, '400': E, '502': E },
+  },
+  {
+    method: 'post',
+    path: '/api/work-review/account/disconnect',
+    csrf: true,
+    body: { schema: WorkReviewDisconnectRequest, required: true },
+    responses: { '200': WorkReviewAccount, '400': E, '502': E },
+  },
+  get('/api/work-review', WorkReviewState, {
+    query: { ...workReviewFilters, version: z.int().positive() },
+    errors: ['400', '404'],
+  }),
+  {
+    method: 'post',
+    path: '/api/work-review/generate',
+    query: workReviewFilters,
+    csrf: true,
+    body: { schema: GenerateWorkReview, required: true },
+    responses: { '200': WorkReviewState, '202': WorkReviewState, '400': E, '409': E, '502': E },
+  },
   get('/api/paseo-quota', PaseoQuotaResponse, { errors: ['404'] }),
   {
     method: 'post',

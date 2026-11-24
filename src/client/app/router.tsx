@@ -29,6 +29,10 @@ export const appRoutes: RouteObject[] = [
         children: [
           { index: true, Component: OverviewRoute },
           deferredRoute(
+            'work-review',
+            async () => (await import('../features/overview/work-review/route')).WorkReviewRoute,
+          ),
+          deferredRoute(
             'trends',
             async () => (await import('../features/trends/route')).TrendsRoute,
           ),

@@ -1,4 +1,5 @@
 import type { Granularity } from '../contracts/common.ts';
+import type { PeriodPreset as DashboardPeriodPreset } from './dashboard-filters.ts';
 
 // Calendar and bucket math for the report timezone (P-09, P-10, P-11). Pure: no I/O. `Temporal` is a global on Node 26
 // (checked by test/domain/periods.test.ts, which also fails loudly if a runtime ever lacks it). Dates are `YYYY-MM-DD`
@@ -91,15 +92,23 @@ export function rangeBounds(
   return { start: utcBounds(start, timeZone).start, end: utcBounds(end, timeZone).end };
 }
 
-export type PeriodPreset = 'this-week' | 'this-month' | 'last-30' | 'last-90' | 'last-12m';
+export type PeriodPreset = Exclude<DashboardPeriodPreset, 'today'>;
 
 /** The date range of a period preset. `this-week` and `this-month` may end after today. */
 export function presetRange(preset: PeriodPreset, today: string): { start: string; end: string } {
   switch (preset) {
     case 'this-week':
       return { start: weekStart(today), end: weekEnd(today) };
+    case 'last-week': {
+      const start = weekStart(today);
+      return { start: addDays(start, -7), end: addDays(start, -1) };
+    }
     case 'this-month':
       return { start: monthStart(today), end: monthEnd(today) };
+    case 'last-month': {
+      const end = addDays(monthStart(today), -1);
+      return { start: monthStart(end), end };
+    }
     case 'last-30':
       return { start: addDays(today, -29), end: today };
     case 'last-90':

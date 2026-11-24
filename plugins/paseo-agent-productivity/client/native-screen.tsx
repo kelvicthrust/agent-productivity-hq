@@ -43,6 +43,7 @@ export function NativeScreen({
   navigate,
   onOpenDashboard,
   onOpenOwnerSettings,
+  onOpenWorkReview,
   ...surface
 }: PluginScreenProps & {
   page: DashboardPage;
@@ -50,6 +51,7 @@ export function NativeScreen({
   navigate(page: DashboardPage, drill?: DrillDown): void;
   onOpenDashboard(): void;
   onOpenOwnerSettings(): void;
+  onOpenWorkReview(search: string): void;
 }) {
   const request = useNativeRequest();
   const cache = useQueryClient();
@@ -228,6 +230,7 @@ export function NativeScreen({
             navigation={navigation}
             onSetupRequired={showSetup}
             onOpenOwnerSettings={onOpenOwnerSettings}
+            onOpenWorkReview={onOpenWorkReview}
           />
         </ReportingProvider>
       ) : null}

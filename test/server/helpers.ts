@@ -65,6 +65,8 @@ export function memoryDb(): DatabaseSync {
 export function testApp(
   overrides: {
     db?: DatabaseSync;
+    workReview?: NonNullable<AppDeps['workReview']>;
+    reviewAuth?: AppDeps['reviewAuth'];
     staticDir?: string | null;
     previewLabel?: string;
     /** The GitHub account service; without it GitHub is not available in this session. */
@@ -89,6 +91,8 @@ export function testApp(
   const logs = memoryLogger();
   const app = createApp({
     db,
+    reviewAuth: overrides.reviewAuth,
+    ...(overrides.workReview ? { workReview: overrides.workReview } : {}),
     logger: logs.logger,
     runner: createRunner({ db, now: () => NOW, logger: logs.logger, adapters: [] }),
     port: PORT,

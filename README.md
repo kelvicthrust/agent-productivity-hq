@@ -80,6 +80,12 @@ HQ refreshes about every two seconds while the view is open. **A quiet one** mea
 - **Usage** shows how many tokens each tool, project, and conversation used. **Trends** shows changes over time and which models used those tokens.
 - **Sources & repos** shows which sources are available and lets you manage accounts, projects, and collection settings.
 
+### Generate a work update
+
+In **Overview**, choose your date range and open **Work Review**. Choose **Continue with ChatGPT** and finish sign-in in a browser on the Mac running HQ. This separate connection authorizes ChatGPT plan usage for Work Review. In native Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. In the limited browser view, use **Open owner Work Review**.
+
+Choose **Generate update** to send selected session excerpts and PR metadata to OpenAI. Check the evidence on a bullet, or use **Copy update** for a team update. Opening saved reviews uses no model allowance. If new evidence arrives after a period closes, **Create revision** saves a new version. The pilot runs on demand.
+
 ## Data and compatibility
 
 ### What the numbers cover

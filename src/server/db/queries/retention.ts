@@ -18,6 +18,8 @@ export function pruneBefore(db: Db, cutoffMs: number): PruneCounts {
   return inTransaction(db, () => {
     const count = (sql: string, ...args: number[]) => Number(db.prepare(sql).run(...args).changes);
 
+    count('DELETE FROM work_review_note WHERE day_start < ?', cutoffMs);
+    count('DELETE FROM work_review_version WHERE period_start < ?', cutoffMs);
     const usageEvents = count('DELETE FROM usage_event WHERE occurred_at < ?', cutoffMs);
 
     const oldPrs = '(SELECT node_id FROM pull_request WHERE merged_at < ?)';
