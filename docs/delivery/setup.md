@@ -7,12 +7,12 @@ and assessment results.
 ## Run a release archive with npx
 
 Use an Apple Silicon Mac with Node 22.x (22.16.0+) or any stable 24.0.0+ and npm. Get
-`kelvicthrust-agent-productivity-hq-1.1.1.tgz` and `SHA256SUMS` from the same GitHub release.
-Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.1.1.tgz` and compare the result with
+`kelvicthrust-agent-productivity-hq-1.1.2.tgz` and `SHA256SUMS` from the same GitHub release.
+Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.1.2.tgz` and compare the result with
 the delivered checksum. Keep the archive compressed at a path you can reuse.
 
 ```sh
-npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.1.1.tgz" agent-productivity-hq
+npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.1.2.tgz" agent-productivity-hq
 ```
 
 The launcher starts or reuses the dashboard for your data directory and opens the default browser.
