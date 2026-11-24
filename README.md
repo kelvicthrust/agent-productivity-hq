@@ -1,5 +1,7 @@
 # Agent Productivity HQ
 
+[![npm version](https://img.shields.io/npm/v/@kelvicthrust/paseo-agent-productivity-hq?logo=npm)](https://www.npmjs.com/package/@kelvicthrust/paseo-agent-productivity-hq)
+
 Agent Productivity HQ is a private dashboard for your AI coding work. See which agents are busy, find the conversations that need your attention, and review what made it into your GitHub projects. Track how much Codex and Claude Code you use over time and see which sessions were involved in a change when HQ can make the connection.
 
 ![Agent Productivity HQ Overview showing weekly merged pull requests, Codex and Claude Code usage, and weekly plan limits](docs/images/overview.jpg)
