@@ -27,8 +27,10 @@ composition. The earlier prototype comparisons below remain evidence for their c
 - Sources reads the coverage summary from its existing Sources and tracked-repo requests. Show
   timestamped groups in a card, collapsed below 720px. Overview leads with its headline metrics
   and keeps refresh warnings. Usage keeps the coverage disclosure with its **Manage sources** link.
-- Setup and Sources share a repository picker. The active GitHub sign-in supplies suggestions.
-  Each result keeps its tracking action inline. Full slugs and pasted GitHub URLs remain valid.
+- Browser Setup and Sources share a repository picker. The active GitHub sign-in supplies
+  suggestions. In Sources, the browser uses an Astryx Popover and Paseo uses a native overlay.
+  Both anchor to **Add repository** and keep results in a bounded scrolling list. Each result
+  keeps its tracking action inline. Full slugs and pasted GitHub URLs remain valid.
 - Source labels describe current availability. A refresh banner represents a recorded failed
   attempt. Last attempt and last success are distinct, and the retained-data line depends on
   `SourceStatus.hasRetainedData`. The **Sources & repos** nav item shows a badge when the issue

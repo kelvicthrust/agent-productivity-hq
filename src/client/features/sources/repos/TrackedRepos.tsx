@@ -1,4 +1,5 @@
 import { Button } from '@astryxdesign/core/Button';
+import { Popover } from '@astryxdesign/core/Popover';
 import { useToast } from '@astryxdesign/core/Toast';
 import { useRef, useState } from 'react';
 import { useSources } from '../../../components/RefreshBanner';
@@ -42,6 +43,11 @@ export function TrackedRepos() {
   const [confirming, setConfirming] = useState<string | null>(null);
   /** Why the last Track again failed, shown on that repo's row. */
   const [trackProblem, setTrackProblem] = useState<{ id: string; problem: Problem } | null>(null);
+
+  function openGithubConnection() {
+    setAdding(false);
+    focusGithubSection();
+  }
 
   const errorToast = (text: string) => toast({ body: text, type: 'error', isAutoHide: true });
 
@@ -126,37 +132,47 @@ export function TrackedRepos() {
           </h2>
           <p className="mt-0.5 text-caption text-ink-muted">{copy.scope}</p>
         </div>
-        <Button
-          ref={addButton}
-          label={adding ? 'Close repository picker' : copy.add}
-          variant="secondary"
-          size="sm"
-          aria-expanded={adding}
-          aria-controls="src-repo-picker"
-          className="max-[719px]:min-h-11"
-          onClick={() => setAdding(!adding)}
-        />
-      </div>
-      <div id="src-repo-picker" hidden={!adding}>
-        {adding &&
-          (account ? (
-            <RepoPicker
-              key={`${account.via}:${account.login.toLowerCase()}`}
-              account={account}
-              inputRef={addInput}
-              focusSearch
-              onNeedsGithub={focusGithubSection}
-              onTracked={(repo) =>
-                toast({
-                  body: repo.reactivated
-                    ? copy.toast.trackingAgain(repo.displayName)
-                    : copy.toast.tracking(repo.displayName, true),
-                })
-              }
-            />
-          ) : (
-            <AddRepoForm inputRef={addInput} />
-          ))}
+        <Popover
+          isOpen={adding}
+          onOpenChange={setAdding}
+          label={copy.add}
+          alignment="end"
+          placement="above"
+          width={480}
+          padding={3}
+          isModal={false}
+          closeButtonLabel="Close repository picker"
+          content={
+            adding ? (
+              account ? (
+                <RepoPicker
+                  key={`${account.via}:${account.login.toLowerCase()}`}
+                  account={account}
+                  inputRef={addInput}
+                  inPopover
+                  onNeedsGithub={openGithubConnection}
+                  onTracked={(repo) =>
+                    toast({
+                      body: repo.reactivated
+                        ? copy.toast.trackingAgain(repo.displayName)
+                        : copy.toast.tracking(repo.displayName, true),
+                    })
+                  }
+                />
+              ) : (
+                <AddRepoForm inputRef={addInput} onNeedsGithub={openGithubConnection} />
+              )
+            ) : null
+          }
+        >
+          <Button
+            ref={addButton}
+            label={copy.add}
+            variant="secondary"
+            size="sm"
+            className="max-[719px]:min-h-11"
+          />
+        </Popover>
       </div>
       {list.isError ? (
         <p role="alert" className="text-copy text-danger">

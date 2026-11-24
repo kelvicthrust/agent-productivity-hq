@@ -23,15 +23,15 @@ const githubSection = (page: Page): Locator =>
   page.getByRole('region', { name: 'GitHub', exact: true });
 const repoRow = (page: Page, id: string): Locator =>
   reposSection(page).locator(':scope > ul > li, :scope > div > ul > li').filter({ hasText: id });
+const repoPicker = (page: Page): Locator =>
+  page.getByRole('dialog', { name: 'Add repository', exact: true });
+const pickerTrigger = (page: Page): Locator =>
+  reposSection(page).getByRole('button', { name: 'Add repository', exact: true });
 const addField = (page: Page): Locator =>
-  reposSection(page).getByLabel(/^(Find a repository|Add a GitHub repository)$/);
-const openPicker = (page: Page) =>
-  reposSection(page).getByRole('button', { name: 'Add repository', exact: true }).click();
+  repoPicker(page).getByLabel(/^(Find a repository|Add a GitHub repository)$/);
+const openPicker = (page: Page) => pickerTrigger(page).click();
 const trackButton = (page: Page, name: string): Locator =>
-  (name.startsWith('Track')
-    ? reposSection(page).getByRole('region', { name: 'Repository picker' })
-    : reposSection(page)
-  ).getByRole('button', { name, exact: true });
+  repoPicker(page).getByRole('button', { name, exact: true });
 const clientIdField = (page: Page): Locator =>
   githubSection(page).getByLabel('GitHub App client ID');
 const tagOf = (within: Locator, text: string): Locator => within.getByText(text, { exact: true });
@@ -146,6 +146,46 @@ test.describe('Data kept on this machine', () => {
   });
 });
 
+for (const width of [1280, 320]) {
+  test(`${width}px: repository dropdown scrolls without expanding the card and restores focus @responsive @a11y`, async ({
+    page,
+    world,
+  }) => {
+    for (let i = 0; i < 30; i += 1) {
+      world.github.addRepo({
+        fullName: `team/repository-with-a-long-unbroken-name-${i}`,
+        nodeId: `dropdown-${i}`,
+        pushedAt: new Date(FIXED_NOW).toISOString(),
+      });
+    }
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto(`${ORIGIN}/sources`);
+    const card = reposSection(page);
+    await expect(repoRow(page, 'kelvin/notes-cli')).toBeVisible();
+    const before = (await card.boundingBox())!.height;
+    const trigger = pickerTrigger(page);
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const dropdown = repoPicker(page);
+    const search = dropdown.getByRole('searchbox', { name: 'Find a repository' });
+    await expect(search).toBeFocused();
+    const results = dropdown.getByRole('region', { name: 'Recently pushed repositories' });
+    await expect(results.getByRole('listitem')).toHaveCount(30);
+    expect((await card.boundingBox())!.height).toBeCloseTo(before);
+    const box = (await dropdown.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(701);
+    await results.focus();
+    await page.keyboard.press('PageDown');
+    await expect.poll(() => results.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await expect(dropdown).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+}
+
 test.describe('adding a repository', () => {
   test('searches later GitHub pages, ranks an exact name first, and retries only the failed row', async ({
     page,
@@ -214,7 +254,7 @@ test.describe('adding a repository', () => {
       match: (request) => request.path === '/user/repos',
     });
     await openPicker(page);
-    await expect(reposSection(page).getByText('GitHub returned no repositories.')).toBeVisible();
+    await expect(repoPicker(page).getByText('GitHub returned no repositories.')).toBeVisible();
     await addField(page).fill('https://github.com/Kelvin/dotfiles/pulls');
     await expect(trackButton(page, 'Track Kelvin/dotfiles directly')).toBeVisible();
     await addField(page).press('Enter');
@@ -258,7 +298,7 @@ test.describe('adding a repository', () => {
     await addField(page).fill('kelvin/no-such-repo');
     await trackButton(page, 'Track kelvin/no-such-repo directly').click();
 
-    const alert = reposSection(page).getByRole('alert');
+    const alert = repoPicker(page).getByRole('alert');
     await expect(alert).toContainText(
       'GitHub didn’t grant access to kelvin/no-such-repo. Check the name, or that your GitHub connection can read this repository, then try again.',
     );
@@ -274,7 +314,7 @@ test.describe('adding a repository', () => {
     await addField(page).fill('kelvin/dotfiles');
     await trackButton(page, 'Track kelvin/dotfiles').click();
     await expect(repoRow(page, 'kelvin/dotfiles')).toBeVisible();
-    await expect(reposSection(page).getByRole('alert')).toHaveCount(0);
+    await expect(repoPicker(page).getByRole('alert')).toHaveCount(0);
     await world.githubIdle();
   });
 
@@ -301,7 +341,7 @@ test.describe('adding a repository', () => {
     await addField(page).fill('kelvin/dotfiles');
     await trackButton(page, 'Track kelvin/dotfiles').click();
 
-    const alert = reposSection(page).getByRole('alert');
+    const alert = repoPicker(page).getByRole('alert');
     await expect(alert).toContainText('GitHub is limiting requests until 9:43 AM. Try again then.');
     await expect(alert).not.toContainText(/couldn’t be reached|Reconnect/);
     await expect(addField(page)).toHaveValue('kelvin/dotfiles');
@@ -312,7 +352,7 @@ test.describe('adding a repository', () => {
     // the limit passes and the same row can be retried
     await trackButton(page, 'Track kelvin/dotfiles').click();
     await expect(repoRow(page, 'kelvin/dotfiles')).toBeVisible();
-    await expect(reposSection(page).getByRole('alert')).toHaveCount(0);
+    await expect(repoPicker(page).getByRole('alert')).toHaveCount(0);
     await world.githubIdle();
   });
 
@@ -325,7 +365,7 @@ test.describe('adding a repository', () => {
 
     await addField(page).fill('kelvin/not a repository');
     await trackButton(page, 'Track by name or URL').click();
-    await expect(reposSection(page).getByRole('alert')).toContainText(
+    await expect(repoPicker(page).getByRole('alert')).toContainText(
       'That doesn’t look like a GitHub repository. Use owner/name, for example kelvin/atlas-api.',
     );
     await expect(addField(page)).toHaveValue('kelvin/not a repository');
@@ -359,10 +399,10 @@ test.describe('adding a repository', () => {
     await openPicker(page);
     await addField(page).fill('kelvin/dotfiles');
     await trackButton(page, 'Track kelvin/dotfiles directly').click();
-    await expect(reposSection(page).getByRole('alert')).toContainText(
+    await expect(repoPicker(page).getByRole('alert')).toContainText(
       'Install your Agent Productivity HQ GitHub App on kelvin and give it this repository, then check again.',
     );
-    const install = reposSection(page).getByRole('link', {
+    const install = repoPicker(page).getByRole('link', {
       name: 'Open your GitHub App installations',
     });
     await expect(install).toHaveAttribute('href', 'https://github.com/settings/installations');
@@ -481,7 +521,7 @@ test.describe('stop tracking', () => {
     await expect(
       reposSection(page).getByRole('list').first().getByText('kelvin/notes-cli'),
     ).toHaveCount(0);
-    await expect(trackButton(page, 'Add repository')).toBeFocused();
+    await expect(pickerTrigger(page)).toBeFocused();
 
     const stopped = reposSection(page).getByRole('list').last().getByRole('listitem');
     await expect(
@@ -707,7 +747,7 @@ test.describe('GitHub with gh signed out', () => {
     await openPicker(page);
     await addField(page).fill('kelvin/dotfiles');
     await trackButton(page, 'Add repository').click();
-    const alert = reposSection(page).getByRole('alert');
+    const alert = repoPicker(page).getByRole('alert');
     await expect(alert).toContainText('Set up your GitHub App to connect GitHub.');
     await expect(addField(page)).toHaveValue('kelvin/dotfiles');
 
@@ -933,7 +973,7 @@ test.describe('GitHub with gh signed out', () => {
 
 for (const width of [1280, 390, 320]) {
   test.describe(`at ${width}px`, () => {
-    test(`repositories: an error and an open Stop tracking panel have no layout FAIL and no axe violation @a11y`, async ({
+    test(`repository dropdown errors and the Stop tracking panel fit with no axe violation @a11y`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -947,7 +987,13 @@ for (const width of [1280, 390, 320]) {
         page,
         'Track kelvin/no-such-repo-with-a-rather-long-name-that-has-no-breakpoints directly',
       ).click();
-      await expect(reposSection(page).getByRole('alert')).toBeVisible();
+      await expect(repoPicker(page).getByRole('alert')).toBeVisible();
+      expect(failures(await measureContainment(page))).toEqual([]);
+      expect(
+        (await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations,
+      ).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(repoPicker(page)).toBeHidden();
       await repoRow(page, 'kelvin/notes-cli')
         .getByRole('button', { name: 'Stop tracking kelvin/notes-cli' })
         .click();

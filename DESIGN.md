@@ -14,8 +14,10 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
   show On this machine, Delivery and Account reports in three columns. On phones collapse the
   groups behind one disclosure and indicate actionable issues. Keep refresh timestamps in its header.
   List optional Claude plan checks as **Not checked yet** until the owner requests a reading.
-- **Repositories** uses the same inline picker in Setup and Sources. Display visibility and one
-  **Track**, **Tracking** or **Track again** action per result. Keep the search open after tracking.
+- **Repositories** uses the same actions in Setup and Sources. In browser and Paseo Sources,
+  **Add repository** opens an anchored dropdown with scrollable results, leaving the
+  tracked-repository card in place. Browser Setup shows the picker inline. Display visibility and
+  one **Track**, **Tracking** or **Track again** action per result. Keep the search open after tracking.
 - **Overview** opens on its headline metrics. Usage retains its compact coverage disclosure.
   Keep Merged PRs and Linked PRs visible on a populated 320 × 700 phone. At viewport widths of
   1280px and above (D9), the aligned chart occupies eight columns and **Account-reported usage**

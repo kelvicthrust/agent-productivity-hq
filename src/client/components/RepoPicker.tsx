@@ -130,13 +130,13 @@ function PickerRow({
 export function RepoPicker({
   account,
   inputRef,
-  focusSearch = false,
+  inPopover = false,
   onNeedsGithub,
   onTracked,
 }: {
   account: GithubRepoAccount;
   inputRef?: RefObject<HTMLInputElement | null>;
-  focusSearch?: boolean;
+  inPopover?: boolean;
   onNeedsGithub?: () => void;
   onTracked?: (repo: AddedRepo) => void;
 }) {
@@ -154,10 +154,6 @@ export function RepoPicker({
   const slug = parsed.ok ? `${parsed.owner}/${parsed.name}` : null;
   const filter = (slug ?? search.trim()).toLowerCase();
   const connectionChanged = isChangedConnection(error) || isChangedConnection(add.error);
-
-  useEffect(() => {
-    if (focusSearch) input.current?.focus();
-  }, [focusSearch, input]);
 
   useEffect(() => {
     if (filter && hasNextPage && !isFetching && !error && !connectionChanged) {
@@ -229,7 +225,7 @@ export function RepoPicker({
   return (
     <section
       aria-label="Repository picker"
-      className="flex min-w-0 flex-col gap-2 rounded-md border border-border px-3 py-3 sm:px-4"
+      className={`flex min-w-0 flex-col gap-2 ${inPopover ? '' : 'rounded-md border border-border px-3 py-3 sm:px-4'}`}
     >
       <div className="flex flex-col gap-1.5">
         <label htmlFor={fieldId} className="text-label font-semibold text-ink">
@@ -298,7 +294,7 @@ export function RepoPicker({
           aria-labelledby={headingId}
           // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
           tabIndex={0}
-          className="max-h-80 overflow-y-auto overscroll-contain px-1"
+          className={`overflow-y-auto overscroll-contain px-1 ${inPopover ? 'max-h-[min(20rem,26dvh)]' : 'max-h-80'}`}
         >
           <ul>
             {matching.map((repo) => {

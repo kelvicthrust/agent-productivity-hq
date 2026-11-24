@@ -1,5 +1,15 @@
-import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type TextInput,
+} from 'react-native';
 import { colors } from '../shared/reporting-palette.ts';
 import type { DiscoveredRepo, GithubRepoAccount, Repo } from './native-types.ts';
 import {
@@ -11,6 +21,7 @@ import {
 import { formatInstant, int } from './native-report-details.tsx';
 import { ReportIcon, ReportText } from './native-session.tsx';
 import {
+  cardShadow,
   NativeActions,
   NativeButton,
   NativeCard,
@@ -18,6 +29,7 @@ import {
   NativeProblem,
   NativeRow,
   NativeText,
+  useDashboardLayout,
 } from './native-ui.tsx';
 
 const accessLabels: Record<Repo['accessState'], string> = {
@@ -26,19 +38,121 @@ const accessLabels: Record<Repo['accessState'], string> = {
   unknown: 'Access not checked yet',
 };
 
+function RepositoryDropdown({
+  anchor,
+  children,
+  onClose,
+}: {
+  anchor: RefObject<View | null>;
+  children: ReactNode;
+  onClose(): void;
+}) {
+  const { width, height } = useWindowDimensions();
+  const [visibleHeight, setVisibleHeight] = useState(height);
+  const [bounds, setBounds] = useState<{ x: number; y: number; width: number; height: number }>();
+
+  useEffect(() => {
+    let current = true;
+    anchor.current?.measureInWindow((x, y, width, height) => {
+      if (current) setBounds({ x, y, width, height });
+    });
+    return () => {
+      current = false;
+    };
+  }, [anchor, height, width]);
+
+  const inset = 12;
+  const gap = 6;
+  const maxHeight = 320;
+  const dropdownWidth = Math.min(420, width - 2 * inset);
+  const below = bounds ? Math.max(inset, bounds.y + bounds.height + gap) : inset;
+  const above = bounds ? Math.min(visibleHeight - inset, bounds.y - gap) : inset;
+  const availableBelow = visibleHeight - inset - below;
+  const availableAbove = above - inset;
+  const opensAbove = availableBelow < maxHeight && availableAbove > availableBelow;
+  const position = opensAbove ? { bottom: visibleHeight - above } : { top: below };
+  return (
+    <Modal visible transparent onRequestClose={onClose} aria-label="Add repository">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'height' : undefined}
+        style={{ flex: 1 }}
+      >
+        <View
+          style={{ flex: 1 }}
+          accessibilityViewIsModal
+          onLayout={({ nativeEvent }) => setVisibleHeight(nativeEvent.layout.height)}
+        >
+          <Pressable
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no"
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+          />
+          {bounds && (
+            <ScrollView
+              testID="repository-picker-results"
+              keyboardShouldPersistTaps="handled"
+              style={{
+                ...cardShadow,
+                ...position,
+                position: 'absolute',
+                left: Math.max(
+                  inset,
+                  Math.min(width - dropdownWidth - inset, bounds.x + bounds.width - dropdownWidth),
+                ),
+                width: dropdownWidth,
+                maxHeight: Math.min(maxHeight, opensAbove ? availableAbove : availableBelow),
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 8,
+              }}
+              contentContainerStyle={{ padding: 12, gap: 8 }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <NativeText heading>Find a repository</NativeText>
+                <NativeButton
+                  label="Close repository picker"
+                  icon="x"
+                  iconOnly
+                  variant="ghost"
+                  onPress={onClose}
+                />
+              </View>
+              {children}
+            </ScrollView>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function RepositoryPicker({
   account,
   active,
+  add,
   request,
   onAdded,
   inSources = false,
 }: {
   account: GithubRepoAccount;
   active: Repo[];
+  add: ReturnType<typeof useNativeAction>;
   request: NativeRequest;
   onAdded(repo: Repo): void;
   inSources?: boolean;
 }) {
+  const { web } = useDashboardLayout();
+  const searchInput = useRef<TextInput>(null);
   const [input, setInput] = useState('');
   const [repositories, setRepositories] = useState<DiscoveredRepo[]>([]);
   const [page, setPage] = useState(1);
@@ -46,9 +160,12 @@ function RepositoryPicker({
   const [looking, setLooking] = useState(true);
   const [searchProblem, setSearchProblem] = useState<string>();
   const [retry, setRetry] = useState(0);
-  const add = useNativeAction();
   const query = input.trim().toLowerCase();
   const { login, via } = account;
+
+  useEffect(() => {
+    if (inSources && web) searchInput.current?.focus();
+  }, [inSources, web]);
 
   useNativePoll(
     useCallback(
@@ -92,7 +209,7 @@ function RepositoryPicker({
       });
       if (signal.aborted) return;
       onAdded(repo);
-      setInput('');
+      if (searchInput.current) setInput('');
     });
   }
 
@@ -104,10 +221,11 @@ function RepositoryPicker({
     trackedIds.has(repo.displayName.toLowerCase()) ||
     trackedNodes.has(repo.nodeId);
 
-  return (
-    <NativeRow>
-      <NativeText heading>Find a repository</NativeText>
+  const form = (
+    <>
+      {!inSources && <NativeText heading>Find a repository</NativeText>}
       <NativeInput
+        ref={searchInput}
         accessibilityLabel="Find a repository"
         placeholder="Search GitHub or enter owner/name"
         maxLength={300}
@@ -169,8 +287,9 @@ function RepositoryPicker({
       {!looking && !searchProblem && nextPage !== null && nextPage > page ? (
         <NativeButton label="Load more repositories" onPress={() => setPage(nextPage)} />
       ) : null}
-    </NativeRow>
+    </>
   );
+  return inSources ? <View style={{ gap: 6 }}>{form}</View> : <NativeRow>{form}</NativeRow>;
 }
 
 function TrackedRepository({
@@ -346,8 +465,11 @@ export function NativeRepos({
   const [active, setActive] = useState<Repo[]>();
   const [stopped, setStopped] = useState<Repo[]>([]);
   const [adding, setAdding] = useState(false);
+  const addButton = useRef<View>(null);
   const [problem, setProblem] = useState<string>();
   const [retry, setRetry] = useState(0);
+  // An add can complete after the picker closes. Keep it scoped to the repositories card.
+  const add = useNativeAction();
 
   useNativePoll(
     useCallback(
@@ -384,6 +506,7 @@ export function NativeRepos({
         key={`${account.via}:${account.login}`}
         account={account}
         active={active}
+        add={add}
         request={request}
         onAdded={upsert}
         inSources={inSources}
@@ -404,10 +527,13 @@ export function NativeRepos({
       title={inSources ? 'Tracked repositories' : 'Choose repositories to track'}
       headingAccessory={
         inSources ? (
-          <NativeButton
-            label={adding ? 'Close repository picker' : 'Add repository'}
-            onPress={() => setAdding(!adding)}
-          />
+          <View ref={addButton} collapsable={false} style={{ maxWidth: '100%' }}>
+            <NativeButton
+              label="Add repository"
+              expanded={adding}
+              onPress={() => setAdding(true)}
+            />
+          </View>
         ) : undefined
       }
     >
@@ -420,10 +546,17 @@ export function NativeRepos({
           Merged pull requests come only from the repositories you track.
         </NativeText>
       )}
-      {inSources &&
-        adding &&
-        (picker ??
-          (!account && <NativeText>Connect GitHub in Accounts to add repositories.</NativeText>))}
+      {inSources && adding && (
+        <RepositoryDropdown anchor={addButton} onClose={() => setAdding(false)}>
+          {picker ?? (
+            <NativeText tone="foregroundMuted">
+              {account
+                ? (problem ?? 'Loading tracked repositories…')
+                : 'Connect GitHub in Accounts to add repositories.'}
+            </NativeText>
+          )}
+        </RepositoryDropdown>
+      )}
       {!inSources && !account ? (
         <NativeText>
           Connect GitHub to add repositories, or finish setup and connect later.

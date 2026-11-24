@@ -15,7 +15,13 @@ import { ProblemLine } from './ProblemLine';
 const INPUT =
   'h-11 min-w-0 flex-[1_1_260px] rounded-sm border border-control-border bg-surface px-3 text-[16px] text-ink placeholder:text-ink-muted min-[720px]:h-8 min-[720px]:text-copy aria-invalid:border-danger aria-invalid:shadow-[inset_0_0_0_1px_var(--color-danger)]';
 
-export function AddRepoForm({ inputRef }: { inputRef: RefObject<HTMLInputElement | null> }) {
+export function AddRepoForm({
+  inputRef,
+  onNeedsGithub,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  onNeedsGithub: () => void;
+}) {
   const ids = useId();
   const toast = useToast();
   const add = useAddRepo();
@@ -80,7 +86,7 @@ export function AddRepoForm({ inputRef }: { inputRef: RefObject<HTMLInputElement
         />
       </div>
       {problem !== null ? (
-        <ProblemLine id={`${ids}-problem`} problem={problem} />
+        <ProblemLine id={`${ids}-problem`} problem={problem} onNeedsGithub={onNeedsGithub} />
       ) : (
         <p id={`${ids}-hint`} className="text-caption text-ink-muted">
           {copy.hint}

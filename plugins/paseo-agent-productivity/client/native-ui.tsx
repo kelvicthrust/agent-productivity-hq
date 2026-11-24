@@ -1,6 +1,14 @@
 import type { PluginScreenProps } from '@getpaseo/plugin/client';
 import { ExternalLink, Icon } from '@getpaseo/plugin/client/ui';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   Pressable,
   ScrollView,
@@ -245,6 +253,7 @@ export function NativeButton({
   accessibilityLabel,
   onPress,
   disabled,
+  expanded,
   primary,
   selected,
   variant = 'outline',
@@ -257,6 +266,7 @@ export function NativeButton({
   accessibilityLabel?: string;
   onPress(): void;
   disabled?: boolean;
+  expanded?: boolean;
   primary?: boolean;
   selected?: boolean;
   variant?: 'outline' | 'ghost' | 'pill';
@@ -278,6 +288,7 @@ export function NativeButton({
       accessibilityLabel={accessibilityLabel ?? (iconOnly ? label : undefined)}
       accessibilityState={{
         disabled: Boolean(disabled),
+        expanded,
       }}
       aria-checked={selected}
       disabled={disabled}
@@ -331,7 +342,7 @@ export function NativeButton({
   );
 }
 
-export function NativeInput(props: TextInputProps) {
+export function NativeInput(props: TextInputProps & { ref?: Ref<TextInput> }) {
   const colors = useColors();
   return (
     <TextInput

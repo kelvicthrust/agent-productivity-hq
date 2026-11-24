@@ -1,7 +1,14 @@
 import type { PluginScreenProps } from '@getpaseo/plugin/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  useEffect,
+  useImperativeHandle,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { NativeRequest } from '../client/native-api.ts';
 import { NativeDelivery } from '../client/native-delivery.tsx';
@@ -15,12 +22,60 @@ const { openExternalUrl } = vi.hoisted(() => ({ openExternalUrl: vi.fn() }));
 vi.mock('@getpaseo/plugin/client', () => ({ openExternalUrl, useRpc: vi.fn() }));
 vi.mock('@getpaseo/plugin/client/ui', () => ({ Icon: () => null }));
 vi.mock('react-native', () => {
-  const container = ({ children, role }: { children: ReactNode; role?: string }) => (
-    <div role={role}>{children}</div>
-  );
+  const Container = ({
+    children,
+    ref,
+    role,
+    style,
+    testID,
+  }: {
+    children: ReactNode;
+    ref?: Ref<{ measureInWindow(callback: (...bounds: number[]) => void): void; scrollTo(): void }>;
+    role?: string;
+    style?: CSSProperties;
+    testID?: string;
+  }) => {
+    useImperativeHandle(ref, () => ({
+      measureInWindow: (callback) => callback(680, 340, 120, 44),
+      scrollTo: () => {},
+    }));
+    return (
+      <div data-testid={testID} role={role} style={Array.isArray(style) ? undefined : style}>
+        {children}
+      </div>
+    );
+  };
+  function Modal({
+    'aria-label': label,
+    children,
+    onRequestClose,
+  }: {
+    'aria-label': string;
+    children: ReactNode;
+    onRequestClose(): void;
+  }) {
+    useEffect(() => {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') onRequestClose();
+      };
+      document.addEventListener('keyup', handleEscape);
+      return () => document.removeEventListener('keyup', handleEscape);
+    }, [onRequestClose]);
+    return createPortal(
+      <div aria-label={label} role="dialog">
+        {children}
+      </div>,
+      document.body,
+    );
+  }
   return {
-    View: container,
-    ScrollView: container,
+    View: Container,
+    ScrollView: Container,
+    KeyboardAvoidingView: Container,
+    StyleSheet: { absoluteFill: {} },
+    Platform: { OS: 'web' },
+    useWindowDimensions: () => ({ width: 1024, height: 720 }),
+    Modal,
     Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     Pressable: ({
       accessibilityLabel,
@@ -52,8 +107,23 @@ vi.mock('react-native', () => {
         {children}
       </button>
     ),
-    TextInput: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
-      <input aria-label={accessibilityLabel} />
+    TextInput: ({
+      accessibilityLabel,
+      onChangeText,
+      value,
+      ref,
+    }: {
+      accessibilityLabel: string;
+      onChangeText?(value: string): void;
+      value?: string;
+      ref?: Ref<HTMLInputElement>;
+    }) => (
+      <input
+        aria-label={accessibilityLabel}
+        onChange={(event) => onChangeText?.(event.currentTarget.value)}
+        value={value}
+        ref={ref}
+      />
     ),
   };
 });
@@ -239,6 +309,106 @@ it('requires confirmation before stopping a repository in Sources', async () => 
   expect(request.mock.calls.filter(([operation]) => operation === 'repoRemove')).toEqual([
     ['repoRemove', { id: pr.repo }],
   ]);
+});
+
+it('opens the Sources repository picker in a bounded overlay and keeps setup inline', async () => {
+  const account = { login: 'kelvin', via: 'gh' } as const;
+  const repositories = Array.from({ length: 20 }, (_, index) => ({
+    displayName: `kelvin/repo-${index}`,
+    nodeId: `node-${index}`,
+    trackedRepoId: null,
+  }));
+  const request = vi.fn(async (operation) => {
+    if (operation === 'repos') return { active: [] };
+    if (operation === 'repoDiscover') return { repositories, nextPage: null };
+    if (operation === 'repoAdd') {
+      return { id: 'kelvin/repo-19', displayName: 'kelvin/repo-19', accessState: 'ok' };
+    }
+    return null;
+  });
+  reporting(
+    <NativeRepos account={account} mode="sources" request={request as NativeRequest} />,
+    request,
+  );
+  await screen.findByText('No repositories tracked yet.');
+
+  const trigger = screen.getByRole('button', { name: 'Add repository' });
+  expect(request.mock.calls.some(([operation]) => operation === 'repoDiscover')).toBe(false);
+  fireEvent.click(trigger);
+
+  const dropdown = await screen.findByRole('dialog', { name: 'Add repository' });
+  const page = screen.getByTestId('agent-hq-app');
+  const results = within(dropdown).getByTestId('repository-picker-results');
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(page.contains(dropdown)).toBe(false);
+  expect(results.style.maxHeight).toBe('320px');
+  const search = within(dropdown).getByRole('textbox', { name: 'Find a repository' });
+  expect(document.activeElement).toBe(search);
+  await within(results).findByRole('button', { name: 'Track kelvin/repo-1' });
+  fireEvent.change(search, { target: { value: 'repo-19' } });
+  expect(within(results).queryByRole('button', { name: 'Track kelvin/repo-1' })).toBeNull();
+  fireEvent.click(await within(results).findByRole('button', { name: 'Track kelvin/repo-19' }));
+  expect(await within(page).findByText('kelvin/repo-19')).toBeTruthy();
+  expect(within(results).getByText('Tracking')).toBeTruthy();
+  expect(request).toHaveBeenCalledWith('repoAdd', {
+    input: 'kelvin/repo-19',
+    githubAccount: account,
+    repositoryNodeId: 'node-19',
+  });
+  fireEvent.keyUp(search, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+  cleanup();
+  reporting(<NativeRepos account={account} request={request as NativeRequest} />, request);
+  expect(
+    await within(screen.getByTestId('agent-hq-app')).findByRole('textbox', {
+      name: 'Find a repository',
+    }),
+  ).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('updates tracked repositories after dismissing the picker during an add', async () => {
+  const repo = { id: pr.repo, displayName: pr.repo, accessState: 'ok' } as const;
+  const addition = Promise.withResolvers<typeof repo>();
+  const request = vi.fn(async (operation) => {
+    if (operation === 'repos') return { active: [] };
+    if (operation === 'repoDiscover') {
+      return {
+        repositories: [{ displayName: pr.repo, nodeId: 'repo-node', trackedRepoId: null }],
+        nextPage: null,
+      };
+    }
+    if (operation === 'repoAdd') return addition.promise;
+    return null;
+  });
+  const onReposChange = vi.fn();
+  reporting(
+    <NativeRepos
+      account={{ login: 'kelvin', via: 'gh' }}
+      mode="sources"
+      request={request as NativeRequest}
+      onReposChange={onReposChange}
+    />,
+    request,
+  );
+  await screen.findByText('No repositories tracked yet.');
+  const trigger = screen.getByRole('button', { name: 'Add repository' });
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole('button', { name: `Track ${pr.repo}` }));
+  expect(request).toHaveBeenCalledWith('repoAdd', expect.objectContaining({ input: pr.repo }));
+
+  fireEvent.keyUp(screen.getByRole('textbox', { name: 'Find a repository' }), { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  addition.resolve(repo);
+  await within(screen.getByTestId('agent-hq-app')).findByText(pr.repo);
+  expect(onReposChange).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(trigger);
+  const dropdown = await screen.findByRole('dialog', { name: 'Add repository' });
+  expect(await within(dropdown).findByText('Tracking')).toBeTruthy();
+  expect(within(dropdown).queryByRole('button', { name: `Track ${pr.repo}` })).toBeNull();
 });
 
 it('expands and pages Usage roots and drills through on the merge day in the report timezone', async () => {
