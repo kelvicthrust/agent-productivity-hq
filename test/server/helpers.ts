@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -14,6 +14,7 @@ import type { PaseoQuotaService } from '../../src/server/services/paseo-quota.ts
 import { createRunner } from '../../src/server/collectors/runner.ts';
 import { migrate } from '../../src/server/db/migrate.ts';
 import { createApp } from '../../src/server/http/app.ts';
+import { TAILSCALE_LOGIN_HEADER, type TailscaleAccess } from '../../src/server/http/guards.ts';
 import { loadConfig, type ServerConfig } from '../../src/server/lib/config.ts';
 import { createLogger, type Logger } from '../../src/server/lib/logger.ts';
 
@@ -80,7 +81,7 @@ export function testApp(
     /** The owner's switch for Claude Code hooks, and what the hook script posts to (loopback only). */
     claudeHooks?: ClaudeHooks;
     hookIngest?: HookIngest;
-    /** Builds the app as the Tailscale listener's: owner guard on, and no hook endpoint whatever `hookIngest` is. */
+    /** Route tests can simulate a verified browser session while exercising the proxy guard. */
     remote?: { host: string; ownerLogin: string };
   } = {},
 ) {
@@ -104,7 +105,9 @@ export function testApp(
     paseoQuota: overrides.paseoQuota,
     claudeHooks: overrides.claudeHooks,
     hookIngest: overrides.hookIngest,
-    ...(overrides.remote ? { remote: overrides.remote } : {}),
+    ...(overrides.remote
+      ? { remote: { ...overrides.remote, session: async (_context, next) => next() } }
+      : {}),
   });
   return { app, db, ...logs };
 }
@@ -122,3 +125,23 @@ export const call = (
   path: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
 ) => app.request(`http://127.0.0.1:${PORT}${path}`, init);
+
+export async function unlockBrowser(
+  dispatch: (request: Request) => Response | Promise<Response>,
+  dataDir: string,
+  access: TailscaleAccess,
+) {
+  const code = readFileSync(join(dataDir, 'paseo-browser-code.txt'), 'utf8').trim();
+  const origin = `https://${access.host}`;
+  const headers = { host: access.host, [TAILSCALE_LOGIN_HEADER]: access.ownerLogin };
+  const unlocked = await dispatch(
+    new Request(`${origin}/unlock`, {
+      method: 'POST',
+      headers: { ...headers, origin },
+      body: new URLSearchParams({ code, next: '/' }),
+    }),
+  );
+  const cookie = unlocked.headers.get('set-cookie')?.split(';', 1)[0];
+  if (unlocked.status !== 303 || !cookie) throw new Error('Owner browser unlock did not succeed.');
+  return { ...headers, cookie };
+}

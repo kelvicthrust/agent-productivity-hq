@@ -100,7 +100,7 @@ const probe = (host: string, port: number) =>
 
 // ---- 1. Other devices reach the API ----------------------------------------------------------------------------------------
 
-check('Other devices reach the API', async () => {
+check('Other devices or macOS users reach the managed API', async () => {
   // There is no way to ask for another address: any AGENT_PRODUCTIVITY_HOST that is not 127.0.0.1 is refused, and the config always says 127.0.0.1.
   const env = { AGENT_PRODUCTIVITY_DATA_DIR: join(tempDir(), 'data') };
   for (const host of ['0.0.0.0', '::', '::1', '192.168.1.20', 'localhost', 'example.com'])
@@ -629,22 +629,24 @@ check(
 // ---- 7. Child process injection ------------------------------------------------------------------------------------------------
 
 check('Child process injection', () => {
-  // Every child is started with an argument array and no shell. Only two files start a program: the ChatGPT launcher (`codex
-  // app-server`) and the `gh auth token` runner. (The hook script's chained call runs under `sh -c` by design: it is the owner's own
-  // status-line command, written into the wrapper only after the owner confirmed the preview.)
+  // Every child is started with an argument array and no shell. The provider ports start Codex and gh.
+  // Browser access checks macOS ACLs with a fixed system binary and a separate path argument.
   const users = SRC_FILES.filter(
     (f) => /child_process/.test(code(f)) && !f.endsWith('claude-statusline.mjs'),
   );
   expect(users.map(rel).sort()).toEqual([
     'src/server/collectors/chatgpt/live.ts',
     'src/server/collectors/github/live.ts',
+    'src/server/http/owner-browser.ts',
   ]);
   for (const file of users) {
     const text = code(file);
     expect(text, rel(file)).not.toMatch(/\b(exec|execSync)\s*\(|\bshell\s*:\s*(true|['"`])/);
     const calls = [...text.matchAll(/\b(spawn|spawnSync|execFile|execFileSync)\s*\(/g)];
     const withArray = [
-      ...text.matchAll(/\b(spawn|spawnSync|execFile|execFileSync)\s*\(\s*[\w.]+\s*,\s*\[/g),
+      ...text.matchAll(
+        /\b(spawn|spawnSync|execFile|execFileSync)\s*\(\s*(?:[\w.]+|'\/bin\/ls')\s*,\s*\[/g,
+      ),
     ];
     expect(calls.length, rel(file)).toBeGreaterThan(0);
     expect(withArray.length, `${rel(file)}: every start passes its arguments as an array`).toBe(
@@ -657,6 +659,9 @@ check('Child process injection', () => {
   expect(code(join(ROOT, 'src/server/collectors/github/live.ts'))).toMatch(
     /run\('gh', \['auth', 'token'/,
   );
+  const browser = code(join(ROOT, 'src/server/http/owner-browser.ts'));
+  expect(browser.match(/\b(spawn|spawnSync|execFile|execFileSync)\s*\(/g)).toHaveLength(1);
+  expect(browser).toMatch(/spawnSync\('\/bin\/ls', \['-delBn', '--', path\]/);
 });
 
 // ---- 8. Supply chain -----------------------------------------------------------------------------------------------------------

@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFileSync, fork } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { request } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -158,7 +166,7 @@ async function checkPackagedService(plugin: string, scratch: string) {
   const entrypoint = join(app, 'src/server/managed.js');
   const data = join(scratch, 'data');
   const home = join(scratch, 'home');
-  mkdirSync(home);
+  mkdirSync(join(home, '.claude'), { recursive: true });
   const port = await availablePort();
   const env: NodeJS.ProcessEnv = {
     PATH: '/usr/bin:/bin',
@@ -230,6 +238,8 @@ async function checkPackagedService(plugin: string, scratch: string) {
     assert.equal(ready.version, version);
     assert.equal(ready.port, port);
     assert.equal(ready.remotePort, undefined, 'Native startup must not start a browser share');
+    const ownerCodePath = join(data, 'paseo-browser-code.txt');
+    assert.ok(!existsSync(ownerCodePath));
     let nextId = 0;
     async function call(command: Record<string, string | { operation: string }>) {
       const id = ++nextId;
@@ -287,20 +297,45 @@ async function checkPackagedService(plugin: string, scratch: string) {
     const expectedHealth = { status: 'ok', version, schemaVersion: listMigrations().length };
     const local = `http://127.0.0.1:${port}`;
     const signal = deadline.signal;
-    const health = await fetch(`${local}/api/health`, { signal });
-    assert.equal(health.status, 200);
-    assert.deepEqual(await health.json(), expectedHealth);
-    const protectedProbe = (identity?: string) =>
-      new Promise<{ status: number | undefined; body: string }>((done, fail) => {
+    const writeHeaders = {
+      'content-type': 'application/json',
+      'x-agent-productivity-request': '1',
+    };
+    const hookPath = '/api/hq/hooks/claude';
+    const hookSettingsPath = '/api/hq/claude-hooks';
+    for (const path of [
+      '/',
+      '/api/health',
+      '/api/hq',
+      '/api/paseo-quota',
+      '/api/overview',
+      hookSettingsPath,
+    ]) {
+      assert.equal((await fetch(local + path, { signal })).status, 404, path);
+    }
+    for (const [method, path] of [
+      ['POST', '/api/setup/reset'],
+      ['PUT', hookSettingsPath],
+    ] as const) {
+      assert.equal(
+        (await fetch(local + path, { method, headers: writeHeaders, body: '{}', signal })).status,
+        404,
+        path,
+      );
+    }
+    const protectedProbe = (
+      path: string,
+      init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+    ) =>
+      new Promise<Response>((done, fail) => {
+        const { body: payload, ...options } = init;
         const probe = request(
           {
             hostname: '127.0.0.1',
             port: remotePort,
-            path: '/api/health',
-            headers: {
-              Host: remoteHost,
-              ...(identity ? { 'Tailscale-User-Login': identity } : {}),
-            },
+            path,
+            ...options,
+            headers: { host: remoteHost, ...options.headers },
             signal,
           },
           (response) => {
@@ -310,28 +345,111 @@ async function checkPackagedService(plugin: string, scratch: string) {
               body += chunk;
             });
             response.once('error', fail);
-            response.once('end', () => done({ status: response.statusCode, body }));
+            response.once('end', () => {
+              const headers = new Headers();
+              for (const [name, values] of Object.entries(response.headersDistinct)) {
+                for (const value of values ?? []) headers.append(name, value);
+              }
+              const status = response.statusCode!;
+              done(new Response(status === 204 ? null : body, { status, headers }));
+            });
           },
         );
         probe.once('error', fail);
-        probe.end();
+        probe.end(payload);
       });
-    assert.equal((await protectedProbe()).status, 403);
-    const protectedHealth = await protectedProbe(ownerLogin);
+    const tailscaleHeaders = { 'Tailscale-User-Login': ownerLogin };
+    assert.equal((await protectedProbe('/api/health')).status, 403);
+    assert.equal((await protectedProbe('/api/health', { headers: tailscaleHeaders })).status, 401);
+    assert.equal(
+      (
+        await protectedProbe('/api/setup/reset', {
+          method: 'POST',
+          headers: { ...tailscaleHeaders, ...writeHeaders },
+          body: '{}',
+        })
+      ).status,
+      401,
+    );
+    const unlockPage = await protectedProbe('/sources', { headers: tailscaleHeaders });
+    assert.match(await unlockPage.text(), /name="code"/);
+    const ownerFile = statSync(ownerCodePath);
+    assert.equal(ownerFile.mode & 0o777, 0o600);
+    assert.equal(ownerFile.uid, process.getuid!());
+    const unlock = await protectedProbe('/unlock', {
+      method: 'POST',
+      headers: {
+        ...tailscaleHeaders,
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: `https://${remoteHost}`,
+      },
+      body: new URLSearchParams({
+        code: readFileSync(ownerCodePath, 'utf8').trim(),
+        next: '/sources',
+      }).toString(),
+    });
+    assert.equal(unlock.status, 303);
+    assert.equal(unlock.headers.get('location'), '/sources');
+    const cookie = unlock.headers.get('set-cookie');
+    assert.ok(cookie?.startsWith('__Host-agent-hq-owner='));
+    const ownerHeaders = { ...tailscaleHeaders, cookie: cookie!.split(';')[0]! };
+    const protectedHealth = await protectedProbe('/api/health', { headers: ownerHeaders });
     assert.equal(protectedHealth.status, 200);
-    assert.deepEqual(JSON.parse(protectedHealth.body), expectedHealth);
+    assert.deepEqual(await protectedHealth.json(), expectedHealth);
 
-    const page = await fetch(local, { signal });
+    const page = await protectedProbe('/sources', { headers: ownerHeaders });
     assert.equal(page.status, 200);
     const html = await page.text();
     const asset = html.match(/<script[^>]*\bsrc="(\/assets\/[^"]+\.js)"/)?.[1];
     assert.ok(asset, 'Missing a production JavaScript bundle in the packaged dashboard');
-    const javascript = await fetch(`${local}${asset}`, { signal });
+    assert.equal((await protectedProbe(asset, { headers: tailscaleHeaders })).status, 401);
+    const javascript = await protectedProbe(asset, { headers: ownerHeaders });
     assert.equal(javascript.status, 200);
     assert.match(javascript.headers.get('content-type') ?? '', /^text\/javascript/);
     await javascript.arrayBuffer();
 
+    const preview = (await (
+      await protectedProbe(hookSettingsPath, { headers: ownerHeaders })
+    ).json()) as { preview: string };
+    assert.equal(
+      (
+        await protectedProbe(hookSettingsPath, {
+          method: 'PUT',
+          headers: { ...ownerHeaders, ...writeHeaders },
+          body: JSON.stringify({ enabled: true, preview: preview.preview }),
+        })
+      ).status,
+      200,
+    );
+    const { token } = JSON.parse(
+      readFileSync(join(data, 'claude-hooks', 'registry.json'), 'utf8'),
+    ) as { token: string };
+    const hook = {
+      method: 'POST',
+      body: JSON.stringify({ hook_event_name: 'Stop', session_id: 'fixture-session' }),
+    };
+    const hookHeaders = { ...writeHeaders, authorization: `Bearer ${token}` };
+    assert.equal(
+      (await fetch(local + hookPath, { ...hook, headers: writeHeaders, signal })).status,
+      401,
+    );
+    assert.equal(
+      (await fetch(local + hookPath, { ...hook, headers: hookHeaders, signal })).status,
+      204,
+    );
+    assert.equal(
+      (await fetch(`${local}/api/overview`, { headers: hookHeaders, signal })).status,
+      404,
+    );
+    assert.equal(
+      (await protectedProbe(hookPath, { ...hook, headers: { ...ownerHeaders, ...hookHeaders } }))
+        .status,
+      404,
+    );
+
     assert.equal((await call({ type: 'detach-remote' })).ok, true);
+    assert.ok(!existsSync(ownerCodePath));
+    await assert.rejects(protectedProbe('/api/health', { headers: ownerHeaders }));
     assert.equal(
       (await call({ type: 'native', request: { operation: 'bootstrap' } })).result?.ok,
       true,
@@ -390,7 +508,7 @@ try {
   checkArchiveNotices(unpacked);
   await checkPackagedService(unpacked, scratch);
   console.log(
-    `${name}@${version} installed offline and served the built dashboard using host Node.js.`,
+    `${name}@${version} installed offline, served the protected browser dashboard and kept native data behind IPC.`,
   );
 } finally {
   rmSync(scratch, { recursive: true, force: true });

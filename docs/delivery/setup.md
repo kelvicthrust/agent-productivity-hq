@@ -7,12 +7,12 @@ and assessment results.
 ## Run a release archive with npx
 
 Use an Apple Silicon Mac with Node 22.x (22.16.0+) or any stable 24.0.0+ and npm. Get
-`kelvicthrust-agent-productivity-hq-1.1.0.tgz` and `SHA256SUMS` from the same GitHub release.
-Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.1.0.tgz` and compare the result with
+`kelvicthrust-agent-productivity-hq-1.1.1.tgz` and `SHA256SUMS` from the same GitHub release.
+Run `shasum -a 256 kelvicthrust-agent-productivity-hq-1.1.1.tgz` and compare the result with
 the delivered checksum. Keep the archive compressed at a path you can reuse.
 
 ```sh
-npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.1.0.tgz" agent-productivity-hq
+npx --package="/absolute/path/to/kelvicthrust-agent-productivity-hq-1.1.1.tgz" agent-productivity-hq
 ```
 
 The launcher starts or reuses the dashboard for your data directory and opens the default browser.
@@ -26,6 +26,8 @@ To stop a dashboard started from Terminal, add `stop` at the end of the command.
 the same `AGENT_PRODUCTIVITY_DATA_DIR` if you set one at launch. The command preserves your data.
 Stop a server started from source with Ctrl+C in its terminal. For a Paseo-managed server, disable
 the plugin from **Settings → Plugins** on the daemon host.
+When Paseo owns the selected data directory, open **Agent HQ** in Paseo or stop the managed
+instance before starting the standalone dashboard.
 
 If the local port is occupied, follow the message printed by the launcher. Stop the app that owns
 the port or set `AGENT_PRODUCTIVITY_PORT` to a free port when launching a separate data directory.
@@ -33,7 +35,9 @@ See [startup recovery](#when-something-is-wrong) for data-directory and port con
 
 ## Requirements
 
-The packaged launchers support Apple Silicon macOS on a trusted single-user host. Other local processes and OS users can access the ordinary loopback listener. Keep that listener out of port-sharing and reverse-proxy configurations.
+The packaged launchers support Apple Silicon macOS. Use a trusted single-user host for the
+standalone dashboard. Other local processes and OS users can access its loopback listener, so keep
+it out of port-sharing and reverse-proxy configurations.
 
 For a standalone checkout, use Node 26 (manifest range `>=26.0.0`) and pnpm 11.25.0. The GitHub App connection uses macOS Keychain.
 The first dependency installation needs registry access. The lockfile and
@@ -73,7 +77,9 @@ follow the live roster, which lists agents and their activity under the drawing.
 refresh sources, and manage connections inside Paseo.
 
 Paseo uses the selected daemon's management permission. Other managers of the same host can read
-HQ data and manage reports, PR links, and source connections.
+HQ data and manage reports, PR links, and source connections through Paseo RPC. When the Claude
+Code hook integration is available, the managed loopback listener accepts only hook events
+authenticated by the hook's token.
 
 Weekly limits come from the selected host's Paseo usage reports. When a provider has no usable
 weekly report, **Check provider directly** makes an explicit check using the provider's existing
@@ -109,11 +115,15 @@ The optional runtime lives in `~/Library/Application Support/agent-productivity/
 on the daemon Mac. It contains the executable and its license. After disabling the plugin, you can remove
 that directory to reclaim space. The dashboard database and provider sign-ins are stored separately.
 
-The full dashboard's browser action needs the Tailscale CLI, HTTPS certificates, and Serve
-permission on the daemon Mac. It uses the daemon's private HTTPS name on port 4317. The managed server
-checks the Serve identity on every remote dashboard request. Use an untagged client device signed
-into the host owner's Tailscale account. The normal local dashboard remains available to
-processes on the host. [How Tailscale Serve supplies identity](https://tailscale.com/docs/features/tailscale-serve#identity-headers)
+The browser actions need the Tailscale CLI, HTTPS certificates, and Serve permission on the
+daemon Mac. Use the daemon's private HTTPS name on port 4317 from an untagged client device signed
+into the host owner's Tailscale account. The browser also asks for an unlock code. As the macOS
+account running Paseo on the daemon host, open `paseo-browser-code.txt` in the
+[HQ data directory](#data-directory) and enter the code in the form. The default file is
+`~/Library/Application Support/agent-productivity/paseo-browser-code.txt`. The browser session
+lasts up to eight hours. Closing the managed share removes its code file and ends its sessions.
+Use an owner-only HQ data directory without macOS access-control list entries for browser sharing.
+[How Tailscale Serve supplies identity](https://tailscale.com/docs/features/tailscale-serve#identity-headers)
 
 ### Upgrade a launcher or recover
 

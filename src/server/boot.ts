@@ -44,9 +44,10 @@ import { readLiveSessionLabels } from './db/queries/hq.ts';
 import { joinPaseoSessions } from './db/queries/paseo.ts';
 import { isResetSetupPending, readSetupState } from './db/queries/setup.ts';
 import { markRunningRunsInterrupted } from './db/queries/runs.ts';
-import { createApp, type AppDeps, type SetupMachine } from './http/app.ts';
+import { createApp, createHookIngestApp, type AppDeps, type SetupMachine } from './http/app.ts';
 import type { HttpEnv } from './http/errors.ts';
-import { TAILSCALE_LOGIN_HEADER, type TailscaleAccess } from './http/guards.ts';
+import type { TailscaleAccess } from './http/guards.ts';
+import { createOwnerBrowserAccess } from './http/owner-browser.ts';
 import { createAlreadyRunningApp, createRecoveryApp, type RecoveryInfo } from './http/recovery.ts';
 import { isDiskFull } from './lib/diskFull.ts';
 import { acquireInstanceLock, type InstanceLease } from './lib/instance.ts';
@@ -78,15 +79,19 @@ export const BOOT_STEPS = ['migrate', 'interrupted', 'retention', 'scheduler', '
 export class AlreadyRunningError extends Error {
   readonly port: number | null;
   readonly lockPath: string;
-  constructor(port: number | null, lockPath: string) {
+  readonly managed: boolean;
+  constructor(port: number | null, lockPath: string, managed = false) {
     super(
-      port === null
-        ? 'Another Agent Productivity HQ process owns this data folder.'
-        : `Agent Productivity HQ is already running at ${baseUrl(port)}`,
+      managed
+        ? 'Paseo is using this Agent HQ data folder. Open Agent HQ in Paseo or stop it there before starting the standalone dashboard.'
+        : port === null
+          ? 'Another Agent Productivity HQ process owns this data folder.'
+          : `Agent Productivity HQ is already running at ${baseUrl(port)}`,
     );
     this.name = 'AlreadyRunningError';
-    this.port = port;
+    this.port = managed ? null : port;
     this.lockPath = lockPath;
+    this.managed = managed;
   }
 }
 
@@ -279,6 +284,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   const now = deps.now ?? Date.now;
   const timezone = deps.timezone ?? machineTimeZone();
   const version = deps.version ?? packageVersion() ?? '0.0.0';
+  const managed = deps.managed === true || deps.remote !== undefined;
 
   ensureDir(config.dataDir);
   const logger: Logger = deps.logger ?? createLogger({ sink: fileSink(config.logDir), now });
@@ -286,13 +292,15 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
     logger.info(`boot: ${name}`, { source: 'boot', step: name, ...fields });
 
   const lock =
-    deps.directoryLease ?? acquireInstanceLock(config.lockPath, { port: config.port, now });
+    deps.directoryLease ??
+    acquireInstanceLock(config.lockPath, { port: config.port, now, managed });
   if (!lock.ok) {
     // Another copy holds this data folder. The common case is the same port: that copy is bound to it, so there is nothing to serve
     // and this process says so and exits (TECH › Failure modes). Only when this process's own port is a different one and is free
     // does it serve the already-running page, and it still never opens the database.
     const holder = lock.holder;
-    if (deps.managed || deps.remote || holder === null || holder.port === config.port)
+    if (holder?.managed) throw new AlreadyRunningError(null, config.lockPath, true);
+    if (managed || holder === null || holder.port === config.port)
       throw new AlreadyRunningError(holder?.port ?? null, config.lockPath);
     const pointer = createAlreadyRunningApp({
       port: config.port,
@@ -338,6 +346,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   let acceptsClaudeHookEvents = false;
   let requestChatgptRead: () => void = () => undefined;
   const listeners = new Set<ListeningServer>();
+  let revokeBrowserAccess: (() => void) | undefined;
 
   try {
     const integrity = checkIntegrity(config.dbPath);
@@ -775,9 +784,9 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
             ? { net: deps.github.net, auth: github.auth, requestSync: requestGithubSync }
             : undefined,
       };
-      app = createApp(appDeps);
+      app = createApp(managed ? { ...appDeps, hookIngest: undefined } : appDeps);
     } else {
-      if (deps.managed || remote) throw new DatabaseRecoveryError(recovery!);
+      if (managed) throw new DatabaseRecoveryError(recovery!);
       app = createRecoveryApp({ port: config.port, info: recovery!, logger });
       step('recovery', { reason: recovery!.reason });
     }
@@ -787,7 +796,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       requests.add(request);
       return request.finally(() => requests.delete(request));
     }
-    let accepting = !(deps.managed || remote);
+    let accepting = !managed;
     const bind = async (target: Hono<HttpEnv>, port: number) => {
       const dispatch = target.fetch;
       const listener = await (deps.listen ?? nodeListen)({
@@ -805,38 +814,54 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       return listener;
     };
     try {
-      await bind(app, config.port);
+      if (!managed) {
+        await bind(app, config.port);
+      } else if (appDeps?.hookIngest) {
+        await bind(createHookIngestApp(appDeps, appDeps.hookIngest), config.port);
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE')
         throw new PortInUseError(config.port);
       throw error;
     }
 
-    const assertHealth = async (target: Hono<HttpEnv>, headers: Record<string, string>) => {
-      if (!(await target.request('/api/health', { headers })).ok) {
-        throw new Error(
-          'An Agent Productivity HQ listener did not pass its startup health check. Check its local log.',
-        );
-      }
-    };
     const attachRemote = async (access: TailscaleAccess) => {
       if (closing || !appDeps) throw new Error('The Agent Productivity HQ service is unavailable.');
-      const remoteApp = createApp({ ...appDeps, remote: access });
-      await assertHealth(remoteApp, {
-        host: access.host,
-        [TAILSCALE_LOGIN_HEADER]: access.ownerLogin,
-      });
-      if (closing) throw new Error('The Agent Productivity HQ service is unavailable.');
-      const listener = await bind(remoteApp, 0);
+      if (revokeBrowserAccess)
+        throw new Error('The Agent Productivity HQ browser share is already open.');
+      const owner = createOwnerBrowserAccess({ access, dataDir: config.dataDir, now });
+      const revoke = () => {
+        if (revokeBrowserAccess !== revoke) return;
+        revokeBrowserAccess = undefined;
+        try {
+          owner.close();
+        } catch {
+          logger.warn('could not remove the browser unlock code file', { source: 'boot' });
+        }
+      };
+      revokeBrowserAccess = revoke;
+      let listener: ListeningServer;
+      try {
+        const remoteApp = createApp({
+          ...appDeps,
+          remote: { ...access, session: owner.middleware },
+        });
+        listener = await bind(remoteApp, 0);
+      } catch (error) {
+        revoke();
+        throw error;
+      }
       let closed: Promise<void> | undefined;
-      const close = () =>
-        (closed ??= new Promise<void>((done) => {
+      const close = () => {
+        revoke();
+        return (closed ??= new Promise<void>((done) => {
           listener.close(() => {
             listeners.delete(listener);
             done();
           });
           listener.closeAllConnections?.();
         }));
+      };
       const address = listener.address?.();
       if (closing || !address || typeof address === 'string' || !address.port) {
         await close();
@@ -846,8 +871,15 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       }
       return { port: address.port, close };
     };
-    if (deps.managed || remote) {
-      await assertHealth(app, { host: `${config.host}:${config.port}` });
+    if (
+      managed &&
+      !(
+        await app.request('/api/health', {
+          headers: { host: `${config.host}:${config.port}` },
+        })
+      ).ok
+    ) {
+      throw new Error('The Agent Productivity HQ service failed its startup health check.');
     }
     const remotePort = remote ? (await attachRemote(remote)).port : undefined;
     accepting = true;
@@ -869,6 +901,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
       (stopping ??= (async () => {
         logger.info('shutting down', { source: 'boot', step: 'shutdown' });
         closing = true;
+        revokeBrowserAccess?.();
         scheduler?.stop();
         const deadline = performance.now() + timeoutMs;
         // HQ's close starts now, so every feed's signal aborts at once. It is awaited to its end below and never raced against a deadline:
@@ -923,6 +956,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
     };
   } catch (error) {
     logger.error('boot failed', { source: 'boot', code: 'boot_failed', error });
+    revokeBrowserAccess?.();
     scheduler?.stop();
     const hqClosed = hq?.close(); // as in shutdown: started now, awaited to its end below, before the database closes
     const hooksClosed = claudeHooks?.close();

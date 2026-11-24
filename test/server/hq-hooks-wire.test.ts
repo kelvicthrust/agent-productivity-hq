@@ -3,10 +3,19 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { boot, type ListenFn, type RunningServer } from '../../src/server/boot.ts';
 import { completeSetup } from '../../src/server/db/queries/setup.ts';
-import { TAILSCALE_LOGIN_HEADER } from '../../src/server/http/guards.ts';
 import { HqResponse } from '../../src/shared/contracts/hq.ts';
 import { claudePrompt, claudeToolUse, line } from '../collectors/live/lines.ts';
-import { HOST, NOW, TZ, WRITE, call, memoryLogger, tempConfig, tempDir } from './helpers.ts';
+import {
+  HOST,
+  NOW,
+  TZ,
+  WRITE,
+  call,
+  memoryLogger,
+  tempConfig,
+  tempDir,
+  unlockBrowser,
+} from './helpers.ts';
 
 // Claude Code hooks through the real boot: the registry the hook script reads is written when the server listens (and the switch is
 // on) and removed at shutdown; the endpoint is on the loopback listener and never on the Tailscale one; what the hooks report is
@@ -193,7 +202,7 @@ describe('Claude Code hooks through boot', () => {
 
   it('serves the hook endpoint on the loopback listener only, never on the Tailscale one', async () => {
     const remote = { host: 'box.example.ts.net', ownerLogin: 'me@example.com' };
-    const { server, listeners, registry } = await start({ remote });
+    const { server, listeners, registry, config } = await start({ remote });
     await put(server, true);
     const token = tokenOf(registry);
     const [local, tailscale] = listeners;
@@ -211,10 +220,11 @@ describe('Claude Code hooks through boot', () => {
       }),
     );
     expect(viaLocal.status).toBe(204);
+    const owner = await unlockBrowser(tailscale!, config.dataDir, remote);
     const viaTailscale = await tailscale!(
       new Request('http://localhost/api/hq/hooks/claude', {
         method: 'POST',
-        headers: { ...headers, host: remote.host, [TAILSCALE_LOGIN_HEADER]: remote.ownerLogin },
+        headers: { ...headers, ...owner },
         body,
       }),
     );
@@ -222,7 +232,7 @@ describe('Claude Code hooks through boot', () => {
     // The owner can still see and use the switch through Tailscale, behind its guards.
     const status = await tailscale!(
       new Request('http://localhost/api/hq/claude-hooks', {
-        headers: { host: remote.host, [TAILSCALE_LOGIN_HEADER]: remote.ownerLogin },
+        headers: owner,
       }),
     );
     expect(status.status).toBe(200);

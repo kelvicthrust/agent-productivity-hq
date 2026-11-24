@@ -85,7 +85,7 @@ try {
   if (ownsControl) await removeControl(loadConfig().dataDir);
   await dashboard?.shutdown();
   await reply({
-    kind: error instanceof AlreadyRunningError ? 'busy' : 'error',
+    kind: error instanceof AlreadyRunningError && !error.managed ? 'busy' : 'error',
     message: error instanceof Error ? error.message : String(error),
   });
   process.exitCode = 1;

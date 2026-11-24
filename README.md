@@ -55,7 +55,8 @@ In Paseo, a fresh installation opens Setup. After setup, **Agent HQ** opens the 
 We recommend Tailscale for opening HQ in a browser from another device. In Paseo, choose
 **Open full dashboard** to open the browser version. To reset HQ or change Claude Code settings,
 go to **Sources & repos → Open owner settings**. Both browser actions use the host owner’s
-Tailscale account. [Paseo setup guide](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop)
+Tailscale account and an unlock code stored in the owner’s private HQ data folder on the daemon Mac.
+[Paseo setup guide](docs/delivery/setup.md#open-agent-hq-from-paseo-desktop)
 
 ## HQ: your agents at work
 

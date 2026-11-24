@@ -91,9 +91,12 @@ export function csrfGuard(logger: Logger): MiddlewareHandler {
 export function securityHeaders(): MiddlewareHandler {
   return async (c, next) => {
     await next();
-    c.header('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+    if (!c.res.headers.has('Content-Security-Policy')) {
+      c.header('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+    }
     c.header('Cache-Control', 'no-store');
     c.header('X-Content-Type-Options', 'nosniff');
-    c.header('Referrer-Policy', 'no-referrer');
+    // The unlock form needs a same-origin policy for browsers to send Origin on submit.
+    if (!c.res.headers.has('Referrer-Policy')) c.header('Referrer-Policy', 'no-referrer');
   };
 }

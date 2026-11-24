@@ -256,33 +256,36 @@ export function hqHooksRoutes(deps: {
     }
   });
 
-  const { ingest } = deps;
-  if (ingest) {
-    app.post('/api/hq/hooks/claude', async (c) => {
-      // No detail and no log line: a wrong token says nothing about why. A header that is not exactly `Bearer <token>` is a wrong token.
-      const given = bearerToken(c.req.header('authorization'));
-      if (given === null || !tokenMatches(given, ingest.token)) return c.body(null, 401);
-      // Everything below is one answer: the message isn't valid. It says nothing of why and never echoes any of the request.
-      const invalid = () => new ApiError('invalid_input', 'The hook message isn’t valid.');
-      if (!JSON_CONTENT_TYPE.test(c.req.header('content-type') ?? '')) throw invalid();
-      let text: string | null;
-      try {
-        text = await readBounded(c.req.raw, HOOK_BODY_MAX_BYTES);
-      } catch {
-        throw invalid();
-      }
-      if (text === null) return c.body(null, 413);
-      let json: unknown;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw invalid();
-      }
-      const event = HqClaudeHookEvent.safeParse(json);
-      if (!event.success) throw invalid();
-      if (ingest.acceptsEvents?.() !== false) ingest.store.record(event.data);
-      return c.body(null, 204);
-    });
-  }
+  if (deps.ingest) app.route('/', hqHookIngestRoutes(deps.ingest));
+  return app;
+}
+
+export function hqHookIngestRoutes(ingest: HookIngest): Hono<HttpEnv> {
+  const app = new Hono<HttpEnv>();
+  app.post('/api/hq/hooks/claude', async (c) => {
+    // No detail and no log line: a wrong token says nothing about why. A header that is not exactly `Bearer <token>` is a wrong token.
+    const given = bearerToken(c.req.header('authorization'));
+    if (given === null || !tokenMatches(given, ingest.token)) return c.body(null, 401);
+    // Everything below is one answer: the message isn't valid. It says nothing of why and never echoes any of the request.
+    const invalid = () => new ApiError('invalid_input', 'The hook message isn’t valid.');
+    if (!JSON_CONTENT_TYPE.test(c.req.header('content-type') ?? '')) throw invalid();
+    let text: string | null;
+    try {
+      text = await readBounded(c.req.raw, HOOK_BODY_MAX_BYTES);
+    } catch {
+      throw invalid();
+    }
+    if (text === null) return c.body(null, 413);
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw invalid();
+    }
+    const event = HqClaudeHookEvent.safeParse(json);
+    if (!event.success) throw invalid();
+    if (ingest.acceptsEvents?.() !== false) ingest.store.record(event.data);
+    return c.body(null, 204);
+  });
   return app;
 }
