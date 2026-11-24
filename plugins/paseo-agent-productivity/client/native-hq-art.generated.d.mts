@@ -50,11 +50,17 @@ export interface Session {
   waiting: boolean;
 }
 export function buildSessions(agents: readonly RosterAgent[]): Session[];
+export function groupSessions(agents: readonly RosterAgent[]): {
+  focus: Session[];
+  recentIdle: Session[];
+};
+export const HQ_COPY: { recentIdle: string; quiet: string; sessions: string };
+export function recentIdleLabel(count: number): string;
 export function stateWords(agent: RosterAgent, nowMs: number): string;
 export function summaryLine(agents: readonly RosterAgent[]): string;
 export function layoutScene(
   previous: Scene | null,
-  sessions: Session[],
+  sessions: readonly Session[],
   options: { columns: 1 | 2 | 3; nowMs: number },
 ): Scene;
 export function planStage(

@@ -5,15 +5,16 @@ import { useNow } from '../../lib/useNow';
 import { HQ_COPY, summaryLine } from './copy';
 import { FeedLine, SetupLine } from './FeedLine';
 import { HooksFirstRun } from './HooksFirstRun';
-import { Roster } from './Roster';
+import { RecentIdle, Roster } from './Roster';
 import { HqScene } from './HqScene';
 import { HqLoading, HqNotice, HqQuiet, HqRequestError, HqUnavailable } from './states';
+import { groupSessions } from './sessions';
 
 // HQ: the coding agents running on this machine right now, grouped into sessions (an orchestrator and the agents it spawned).
 // View-only: nothing here controls an agent, and a waiting agent is shown, never notified.
 //
 // State ownership (TECH): the roster is TanStack Query's (queries.ts, polled every 2 s while the tab is visible); the feature keeps
-// no state of its own. The page has no filter bar and no URL state. The roster list is the accessible account of the page.
+// no persisted state of its own. The roster list is the accessible account of the scene.
 
 const allUnavailable = (feeds: readonly HqFeed[]) =>
   feeds.every((feed) => feed.status === 'unavailable');
@@ -37,6 +38,7 @@ export function HqRoute() {
   const nowMs = useNow();
 
   const agents = data?.agents ?? [];
+  const { focus, recentIdle } = groupSessions(agents);
   const feeds = data?.feeds ?? [];
   const nothingLive = data !== undefined && allUnavailable(feeds);
   const setupIncomplete = feeds.some((feed) => feed.status === 'setup_incomplete');
@@ -66,16 +68,19 @@ export function HqRoute() {
             )}
           {data.truncated && <HqNotice tone="info">{HQ_COPY.truncated}</HqNotice>}
           {/* The illustrated scene is decorative (aria-hidden); the roster below stays the accessible account. */}
-          {agents.length > 0 && <HqScene agents={agents} nowMs={nowMs} />}
-          {agents.length > 0 ? (
-            <Roster agents={agents} nowMs={nowMs} />
+          {focus.length > 0 ? (
+            <>
+              <HqScene sessions={focus} nowMs={nowMs} />
+              <Roster sessions={focus} nowMs={nowMs} />
+            </>
           ) : nothingLive ? (
             <HqUnavailable />
-          ) : isQuiet(feeds) ? (
+          ) : !isError && isQuiet(feeds) ? (
             <HqQuiet />
           ) : (
             !setupIncomplete && <p className="text-copy text-ink-muted">{HQ_COPY.noAgents}</p>
           )}
+          {recentIdle.length > 0 && <RecentIdle sessions={recentIdle} nowMs={nowMs} />}
         </>
       )}
     </div>

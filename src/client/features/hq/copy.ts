@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/contracts/hq';
 import { PROVIDER_NAMES, SOURCE_NAMES } from '../../lib/copy';
 import { dotJoin, int } from '../../lib/format';
+import { hasActionableError, isReadyToReview, isWorking } from './sessions';
 
 // The words HQ uses. Every state is spoken in words, never by colour or art alone. The contract carries no prompt, tool name or
 // error text, so none can appear here; `activity` is a coarse category. Typographic apostrophes (’) are the product's.
@@ -15,6 +16,7 @@ export const HQ_COPY = {
   title: 'HQ',
   loading: 'Loading HQ…',
   sessions: 'Sessions',
+  recentIdle: 'Recent idle',
   /** The accessible name of one session's list: its root's name, then how many agents it holds. */
   sessionList: (name: string, agents: number) =>
     `${name}: ${agents === 1 ? '1 agent' : `${int(agents)} agents`}`,
@@ -48,6 +50,8 @@ export const HQ_COPY = {
       `${name}’s recent sessions couldn’t be read. It will keep trying.`,
   },
 } as const;
+
+export const recentIdleLabel = (count: number): string => `${HQ_COPY.recentIdle} (${int(count)})`;
 
 /** "Claude Code", "Codex", "Other agent". */
 export function providerName(provider: HqProvider): string {
@@ -92,9 +96,25 @@ export function elapsed(sinceMs: number, nowMs: number): string {
  * inferred from silence, not reported), "Idle for 12 min". `nowMs` is the clock the idle time is measured against.
  */
 export function stateWords(
-  agent: Pick<HqAgent, 'state' | 'activity' | 'waitReason' | 'confidence' | 'since'>,
+  agent: Pick<
+    HqAgent,
+    | 'state'
+    | 'activity'
+    | 'waitReason'
+    | 'confidence'
+    | 'since'
+    | 'reviewPending'
+    | 'backgroundWorkActive'
+  >,
   nowMs: number,
 ): string {
+  if (agent.state === 'idle' || agent.state === 'finished') {
+    const followUp = dotJoin([
+      isReadyToReview(agent) && 'Ready to review',
+      agent.backgroundWorkActive && 'Background work running',
+    ]);
+    if (followUp) return followUp;
+  }
   switch (agent.state) {
     case 'starting':
       return 'Starting';
@@ -125,15 +145,19 @@ export function agentMeta(agent: Pick<HqAgent, 'provider' | 'repo' | 'workspace'
  * "3 working · 1 needs you": counts of what is happening, zeros left out. A waiting agent that was only inferred "may need you".
  * Empty when nobody is on the roster.
  */
-export function summaryLine(agents: readonly Pick<HqAgent, 'state' | 'confidence'>[]): string {
-  const count = (predicate: (agent: Pick<HqAgent, 'state' | 'confidence'>) => boolean) =>
-    agents.filter(predicate).length;
+type SummaryAgent = Pick<
+  HqAgent,
+  'state' | 'confidence' | 'reviewPending' | 'backgroundWorkActive' | 'confirmedEmpty'
+>;
+
+export function summaryLine(agents: readonly SummaryAgent[]): string {
+  const count = (predicate: (agent: SummaryAgent) => boolean) => agents.filter(predicate).length;
   const parts: [number, string][] = [
-    [count((a) => a.state === 'working' || a.state === 'starting'), 'working'],
+    [count(isWorking), 'working'],
     [count((a) => a.state === 'waiting' && a.confidence === 'reported'), 'needs you'],
     [count((a) => a.state === 'waiting' && a.confidence === 'inferred'), 'may need you'],
-    [count((a) => a.state === 'idle'), 'idle'],
-    [count((a) => a.state === 'error'), 'with an error'],
+    [count(isReadyToReview), 'ready to review'],
+    [count(hasActionableError), 'with an error'],
   ];
   return dotJoin(parts.map(([n, label]) => n > 0 && `${int(n)} ${label}`));
 }
@@ -172,7 +196,16 @@ const SCENE_WORKING: Record<HqActivity, string> = {
  * The short state under a character in the scene: lowercase, a word or two, so six fit along one floor. A waiting state that was only
  * inferred ends in a question mark, as the roster says it "may be waiting".
  */
-export function sceneCaption(agent: Pick<HqAgent, 'state' | 'activity' | 'confidence'>): string {
+export function sceneCaption(
+  agent: Pick<
+    HqAgent,
+    'state' | 'activity' | 'confidence' | 'reviewPending' | 'backgroundWorkActive'
+  >,
+): string {
+  if (isReadyToReview(agent)) return 'review';
+  if ((agent.state === 'idle' || agent.state === 'finished') && agent.backgroundWorkActive) {
+    return 'working';
+  }
   switch (agent.state) {
     case 'starting':
       return 'starting';

@@ -437,6 +437,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('keeps only the background-work flag from a listing beyond the pinned SDK snapshot schema', async () => {
+  const { feed } = startFeed({ backgroundWorkspaces: true }, [
+    { agent: { ...agentSnapshot('busy'), backgroundWork: { count: 2, detail: MARKER } }, project },
+    { agent: { ...agentSnapshot('idle'), backgroundWork: { count: 0 } }, project },
+    { agent: { ...agentSnapshot('invalid'), backgroundWork: { count: '2' } }, project },
+  ]);
+  try {
+    await feed.ready();
+    expect(feed.status()).toBe('live');
+    expect(
+      feed.read().agents.map(({ id, backgroundWorkActive }) => [id, backgroundWorkActive]),
+    ).toEqual([
+      ['busy', true],
+      ['idle', false],
+      ['invalid', false],
+    ]);
+    expect(JSON.stringify(feed.read())).not.toContain(MARKER);
+  } finally {
+    await feed.stop();
+  }
+});
+
 /** Runs two polls with `push` between them, and returns whether the marker is anywhere in the SDK client afterwards. */
 async function retainsMarker(
   features: Record<string, boolean>,

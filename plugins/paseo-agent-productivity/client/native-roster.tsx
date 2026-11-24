@@ -2,13 +2,16 @@ import { Icon } from '@getpaseo/plugin/client/ui';
 import type { PluginScreenProps } from '@getpaseo/plugin/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { colors as palette } from '../shared/reporting-palette.ts';
 import {
-  buildSessions,
+  groupSessions,
+  HQ_COPY,
+  recentIdleLabel,
   stateWords,
   summaryLine,
   type AgentNode,
+  type Session,
 } from './native-hq-art.generated.mjs';
 import { NativeBuddy } from './native-hq-crew.tsx';
 import { IllustratedHq } from './native-hq-scene.tsx';
@@ -71,7 +74,8 @@ function RosterRow({
           mood={
             agent.state === 'error'
               ? 'dizzy'
-              : agent.state === 'idle' || agent.state === 'finished'
+              : !agent.backgroundWorkActive &&
+                  (agent.state === 'idle' || agent.state === 'finished')
                 ? 'sleep'
                 : 'awake'
           }
@@ -155,6 +159,85 @@ function RosterRow({
   );
 }
 
+interface RosterListProps {
+  sessions: readonly Session[];
+  now: number;
+  openAgent?: (id: string) => void;
+}
+
+function RosterList({ sessions, now, openAgent, label }: RosterListProps & { label: string }) {
+  return (
+    <View role="list" accessibilityLabel={label} style={{ gap: 12 }}>
+      {sessions.map((session) => (
+        <View
+          key={session.id}
+          role="listitem"
+          style={{
+            ...cardShadow,
+            backgroundColor: session.waiting ? palette['warning-surface'] : palette.surface,
+            borderColor: session.waiting ? palette.warning : palette.border,
+            borderWidth: 1,
+            borderRadius: 14,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+          }}
+        >
+          <View
+            role="list"
+            accessibilityLabel={`${session.root.agent.title ?? 'No name recorded'}: ${session.size} ${session.size === 1 ? 'agent' : 'agents'}`}
+          >
+            <RosterRow node={session.root} depth={0} now={now} openAgent={openAgent} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function RecentIdleRoster(props: RosterListProps) {
+  const [open, setOpen] = useState(false);
+  const label = recentIdleLabel(props.sessions.length);
+  return (
+    <View
+      style={{
+        ...cardShadow,
+        backgroundColor: palette.surface,
+        borderColor: palette.border,
+        borderWidth: 1,
+        borderRadius: 14,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        aria-expanded={open}
+        onPress={() => setOpen((current) => !current)}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          minHeight: 44,
+          paddingHorizontal: 16,
+        }}
+      >
+        <View aria-hidden importantForAccessibility="no-hide-descendants">
+          <Icon
+            name={open ? 'ChevronDown' : 'ChevronRight'}
+            color={palette['text-muted']}
+            size={16}
+          />
+        </View>
+        <NativeText style={{ fontWeight: '600' }}>{label}</NativeText>
+      </Pressable>
+      {open && (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+          <RosterList {...props} label={HQ_COPY.recentIdle} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function NativeRosterPanel({
   request,
   host,
@@ -200,12 +283,13 @@ export function NativeRosterPanel({
   );
 
   const quiet =
+    !problem &&
     roster?.feeds.some((feed) => feed.status === 'live') &&
     roster.feeds.every((feed) => ['live', 'unavailable', 'notfound'].includes(feed.status));
 
   const now = roster?.generatedAt ? Date.parse(roster.generatedAt) : undefined;
   const summary = roster ? summaryLine(roster.agents) : '';
-  const sessions = roster ? buildSessions(roster.agents) : [];
+  const { focus, recentIdle } = groupSessions(roster?.agents ?? []);
   const selectAgent = openAgent
     ? (agentId: string) => openAgent({ agentId, serverId: host.id })
     : undefined;
@@ -258,47 +342,28 @@ export function NativeRosterPanel({
         </NativeText>
       )}
       {roster && (
-        <IllustratedHq
-          agents={roster.agents}
-          quiet={Boolean(quiet && !roster.agents.length)}
-          nowMs={now}
-        />
+        <IllustratedHq sessions={focus} quiet={Boolean(quiet && focus.length === 0)} nowMs={now} />
       )}
-      {roster && sessions.length === 0 && (
+      {roster && focus.length === 0 && (
         <NativeText tone="foregroundMuted">
           {quiet
-            ? 'A quiet one. No agents are running right now.'
+            ? HQ_COPY.quiet
             : roster.feeds.length === 0 ||
                 roster.feeds.every((feed) => feed.status === 'unavailable')
               ? 'Live agents aren’t available in this session.'
               : 'No agents to show right now.'}
         </NativeText>
       )}
-      {sessions.length > 0 && (
-        <View role="list" accessibilityLabel="Sessions" style={{ gap: 12 }}>
-          {sessions.map((session) => (
-            <View
-              key={session.id}
-              role="listitem"
-              style={{
-                ...cardShadow,
-                backgroundColor: session.waiting ? palette['warning-surface'] : palette.surface,
-                borderColor: session.waiting ? palette.warning : palette.border,
-                borderWidth: 1,
-                borderRadius: 14,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-              }}
-            >
-              <View
-                role="list"
-                accessibilityLabel={`${session.root.agent.title ?? 'No name recorded'}: ${session.size} ${session.size === 1 ? 'agent' : 'agents'}`}
-              >
-                <RosterRow node={session.root} depth={0} now={now ?? 0} openAgent={selectAgent} />
-              </View>
-            </View>
-          ))}
-        </View>
+      {focus.length > 0 && (
+        <RosterList
+          sessions={focus}
+          now={now ?? 0}
+          openAgent={selectAgent}
+          label={HQ_COPY.sessions}
+        />
+      )}
+      {recentIdle.length > 0 && (
+        <RecentIdleRoster sessions={recentIdle} now={now ?? 0} openAgent={selectAgent} />
       )}
     </>
   );

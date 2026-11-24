@@ -61,7 +61,7 @@ export function entry(spec: SnapshotSpec): { agent: Record<string, unknown>; pro
       model: 'SENTINEL_USAGE_MODEL',
       createdAt: spec.createdAt ?? minutesAgo(40),
       updatedAt: spec.updatedAt ?? minutesAgo(1),
-      lastUserMessageAt: null,
+      lastUserMessageAt: minutesAgo(2),
       status: spec.status ?? 'idle',
       activeTurn:
         spec.turnStartedAt === undefined ? null : { turnId: 't-1', startedAt: spec.turnStartedAt },
@@ -110,9 +110,12 @@ export function liveAgent(over: Partial<LiveAgent> & { id: string }): LiveAgent 
     parentAgentId: null,
     sessionId: null,
     status: 'idle',
+    reportsEmptyThread: false,
+    hasActiveTurn: false,
     turnStartedAt: null,
+    backgroundWorkActive: false,
     pendingPermissionKind: null,
-    requiresAttention: false,
+    requiresAttention: undefined,
     attentionReason: null,
     attentionAt: null,
     updatedAt: NOW - MIN,
@@ -195,6 +198,7 @@ export interface FakeLiveDaemon {
   scriptLists(...results: ListScript[]): void;
   /** What every listing answers: the daemon's whole current state. Change it to change what the next poll sees. */
   entries: unknown[];
+  attentionEntries?: unknown[];
   hasMore: boolean;
   /** The socket goes away without a word, as with the SDK's reconnect off: only the connection state changes. */
   drop(): void;
@@ -255,7 +259,9 @@ export function fakeLiveDaemon(initial: unknown[] = []): FakeLiveDaemon {
             if (result instanceof Error) return Promise.reject(result);
             if (result === 'hang') return new Promise(() => undefined);
             return Promise.resolve({
-              entries: structuredClone(daemon.entries),
+              entries: structuredClone(
+                options.filter.requiresAttention ? (daemon.attentionEntries ?? []) : daemon.entries,
+              ),
               pageInfo: { hasMore: daemon.hasMore },
             });
           },

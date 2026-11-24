@@ -291,6 +291,58 @@ describe('which state wins', () => {
 });
 
 describe('parents', () => {
+  it('keeps an expired Paseo parent for a native child without taking ownership from an active transcript', () => {
+    const memo = createKeyMemo();
+    const child = transcript({ sessionId: 'helper', parentSessionId: 'main' });
+    const parent = {
+      id: 'parent',
+      provider: 'claude',
+      sessionId: 'main',
+      updatedAt: NOW - 31 * MIN,
+    };
+    const withContext = build({ paseo: [parent], transcripts: [child], memo });
+    const parentId = keyId('claude:main');
+    expect(withContext.agents).toHaveLength(2);
+    expect(withContext.agents[0]).toMatchObject({ parentId, parentBasis: 'native' });
+
+    const withActivity = build({
+      paseo: [parent],
+      transcripts: [child, transcript({ sessionId: 'main' })],
+      memo,
+    });
+    expect(withActivity.agents).toHaveLength(2);
+    expect(withActivity.agents.find((agent) => agent.id === parentId)?.seenBy).toEqual({
+      paseo: false,
+      transcript: true,
+    });
+    expect(withActivity.agents.find((agent) => agent.id === keyId('claude:helper'))?.parentId).toBe(
+      parentId,
+    );
+  });
+
+  it('retains the exact expired Paseo parent while preserving a native parent on the active transcript', () => {
+    const memo = createKeyMemo();
+    const parent = { id: 'parent', title: 'Paseo parent', provider: 'claude', sessionId: 'main' };
+    const nativeChild = transcript({ sessionId: 'native-child', parentSessionId: 'main' });
+    const labeledChild = { id: 'paseo-child', status: 'running', parentAgentId: parent.id };
+    build({ paseo: [parent, labeledChild], transcripts: [nativeChild], memo });
+    const roster = build({
+      paseo: [{ ...parent, updatedAt: NOW - 31 * MIN }, labeledChild],
+      transcripts: [nativeChild, transcript({ sessionId: 'main' })],
+      memo,
+    });
+    const providerOwner = roster.agents.find((agent) => agent.id === keyId('claude:main'))!;
+    const paseoParent = roster.agents.find((agent) => agent.title === parent.title)!;
+    expect(providerOwner.seenBy).toEqual({ paseo: false, transcript: true });
+    expect(paseoParent.id).not.toBe(providerOwner.id);
+    expect(roster.agents.find((agent) => agent.id === keyId('claude:native-child'))?.parentId).toBe(
+      providerOwner.id,
+    );
+    expect(roster.agents.find((agent) => agent.id === rosterId(labeledChild.id))?.parentId).toBe(
+      paseoParent.id,
+    );
+  });
+
   it('a Claude subagent is a native child of its session', () => {
     const roster = build({
       transcripts: [

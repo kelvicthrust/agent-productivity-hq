@@ -81,6 +81,10 @@ describe('the live feed', () => {
       {
         includeBackground: true,
         filter: { includeBackground: true, includeArchived: false },
+        sort: [
+          { key: 'status_priority', direction: 'asc' },
+          { key: 'updated_at', direction: 'desc' },
+        ],
         page: { limit: 200 },
       },
     ]);
@@ -146,6 +150,50 @@ describe('the live feed', () => {
     await feed.stop();
   });
 
+  it('checks a bounded unread page only for a truncated listing and merges it by agent id', async () => {
+    const { daemon, feed } = setup(
+      fakeLiveDaemon([entry({ id: 'recent' }), entry({ id: 'both' })]),
+    );
+    daemon.hasMore = true;
+    daemon.attentionEntries = [
+      entry({ id: 'older-unread', requiresAttention: true, attentionReason: 'finished' }),
+      entry({ id: 'both', requiresAttention: true, attentionReason: 'error' }),
+    ];
+    try {
+      feed.start();
+      await feed.ready();
+      expect(ids(feed)).toEqual(['both', 'older-unread', 'recent']);
+      expect(feed.read().agents.find(({ id }) => id === 'both')?.attentionReason).toBe('error');
+      expect(daemon.lists).toHaveLength(2);
+      expect(daemon.lists[1]).toMatchObject({
+        filter: { requiresAttention: true },
+        page: { limit: 60 },
+      });
+      expect(feed.read().truncated).toBe(true);
+    } finally {
+      await feed.stop();
+    }
+  });
+
+  it('keeps the primary page when the optional unread page times out', async () => {
+    const { daemon, sleep, feed } = setup(fakeLiveDaemon([entry({ id: 'recent' })]));
+    daemon.hasMore = true;
+    daemon.scriptLists('ok', 'hang');
+    try {
+      feed.start();
+      await settle();
+      sleep.releaseMs(LIVE_LIST_TIMEOUT_MS);
+      await feed.ready();
+      expect(ids(feed)).toEqual(['recent']);
+      await poll(sleep);
+      expect(feed.status()).toBe('live');
+      expect(daemon.lists).toHaveLength(3);
+      expect(daemon.lists[2]?.filter.requiresAttention).toBeUndefined();
+    } finally {
+      await feed.stop();
+    }
+  });
+
   it('keeps only the named fields of each agent, nothing of the raw answer', async () => {
     const { feed } = setup(fakeLiveDaemon([entry({ id: 'a-1', permissions: ['tool'] })]));
     feed.start();
@@ -160,7 +208,10 @@ describe('the live feed', () => {
         'parentAgentId',
         'sessionId',
         'status',
+        'reportsEmptyThread',
+        'hasActiveTurn',
         'turnStartedAt',
+        'backgroundWorkActive',
         'pendingPermissionKind',
         'requiresAttention',
         'attentionReason',

@@ -26,6 +26,7 @@ const waitReasonOf = (kind: string | null): HqWaitReason =>
 export function mapLiveState(agent: LiveAgent, now: number): LiveState | null {
   if (agent.archived) return null;
   const attentionSince = agent.attentionAt ?? agent.updatedAt;
+  const recent = now - agent.updatedAt < IDLE_VISIBLE_MS;
 
   if (agent.pendingPermissionKind !== null || agent.attentionReason === 'permission') {
     return {
@@ -36,12 +37,11 @@ export function mapLiveState(agent: LiveAgent, now: number): LiveState | null {
     };
   }
   if (agent.status === 'error' || agent.providerUnavailable || agent.attentionReason === 'error') {
-    // Paseo keeps an old failure on an agent until it is archived, so one nobody has touched for a while leaves like an idle one.
-    return now - agent.updatedAt < IDLE_VISIBLE_MS
+    return agent.requiresAttention || agent.backgroundWorkActive || recent
       ? { state: 'error', activity: 'none', waitReason: null, since: attentionSince }
       : null;
   }
-  if (agent.status === 'running') {
+  if (agent.status === 'running' || agent.hasActiveTurn) {
     return {
       state: 'working',
       activity: 'none',
@@ -52,8 +52,11 @@ export function mapLiveState(agent: LiveAgent, now: number): LiveState | null {
   if (agent.status === 'initializing') {
     return { state: 'starting', activity: 'none', waitReason: null, since: agent.updatedAt };
   }
+  if (agent.requiresAttention && agent.attentionReason === 'finished') {
+    return { state: 'finished', activity: 'none', waitReason: null, since: attentionSince };
+  }
   if (agent.status === 'closed') {
-    return now - agent.updatedAt < CLOSED_FINISHED_MS
+    return agent.backgroundWorkActive || now - agent.updatedAt < CLOSED_FINISHED_MS
       ? { state: 'finished', activity: 'none', waitReason: null, since: agent.updatedAt }
       : null;
   }
@@ -65,7 +68,7 @@ export function mapLiveState(agent: LiveAgent, now: number): LiveState | null {
   ) {
     return { state: 'finished', activity: 'none', waitReason: null, since: agent.attentionAt };
   }
-  return now - agent.updatedAt < IDLE_VISIBLE_MS
+  return agent.backgroundWorkActive || recent
     ? { state: 'idle', activity: 'none', waitReason: null, since: agent.updatedAt }
     : null;
 }

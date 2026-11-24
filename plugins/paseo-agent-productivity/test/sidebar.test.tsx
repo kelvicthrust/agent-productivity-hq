@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { idleReviewRoster } from '../../../test/fixtures/hq/scripted.ts';
 import { ConfigureLauncher } from '../client/settings.tsx';
 import contribute from '../index.client.tsx';
 
@@ -647,6 +648,28 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
     operation: 'usageFallback',
     parameters: { provider: 'claude' },
   });
+});
+
+it('shows unreviewed results and background work, then reveals recent idle on demand', async () => {
+  const roster = idleReviewRoster(Date.parse('2026-11-20T12:00:00.000Z'));
+  native.mockImplementation(async ({ operation }) => {
+    if (operation === 'bootstrap') return ok({ setupComplete: true });
+    if (operation === 'roster') return ok(roster);
+  });
+  renderLauncher(vi.fn());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+  const disclosure = await screen.findByRole('button', { name: 'Recent idle (2)' });
+  expect(screen.getByText('Ready to review')).toBeTruthy();
+  expect(screen.getByText('Background work running')).toBeTruthy();
+  expect(screen.queryByText('Recently acknowledged')).toBeNull();
+  expect(screen.queryByText('Older imported thread')).toBeNull();
+
+  fireEvent.click(disclosure);
+  const recent = screen.getByText('Recently acknowledged');
+  const older = screen.getByText('Older imported thread');
+  expect(recent.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByText('Opened by accident')).toBeNull();
 });
 
 it('discovers sources, connects both providers, tracks and removes a repo, then finishes in native HQ', async () => {

@@ -2,6 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HqScene } from '../../../src/client/features/hq/HqScene';
+import { buildSessions } from '../../../src/client/features/hq/sessions';
 import { agent } from '../../fixtures/hq/scripted';
 
 // The drawn grid at each column count (the layout rules themselves are in scene.test.ts): a surviving room keeps its cell when a room
@@ -53,26 +54,24 @@ describe.each([
 
   it('keeps a surviving room in its cell when the first, a middle or the last room empties', () => {
     const all = sessions(7);
-    const { rerender } = render(<HqScene agents={all} nowMs={NOW} />);
+    const { rerender } = render(<HqScene sessions={buildSessions(all)} nowMs={NOW} />);
     expect(grid()).toEqual([...all.map((a) => a.id), ...pad(columns, 7)]);
     const rows = Math.ceil(7 / columns);
     expect(screen.getByTestId('hq-scene').querySelector('.grid')?.getAttribute('style')).toContain(
       `repeat(${columns}, minmax(0px, 1fr))`,
     );
 
-    rerender(<HqScene agents={all.slice(1)} nowMs={NOW} />);
+    rerender(<HqScene sessions={buildSessions(all.slice(1))} nowMs={NOW} />);
     expect(grid()).toEqual([null, ...all.slice(1).map((a) => a.id), ...pad(columns, 7)]);
 
-    rerender(<HqScene agents={all.filter((a) => a.id !== 's3' && a.id !== 's0')} nowMs={NOW} />);
+    const withoutVacancies = all.filter((a) => a.id !== 's3' && a.id !== 's0');
+    rerender(<HqScene sessions={buildSessions(withoutVacancies)} nowMs={NOW} />);
     expect(grid()).toEqual([null, 's1', 's2', null, 's4', 's5', 's6', ...pad(columns, 7)]);
 
     // A newcomer takes the lowest empty cell.
     rerender(
       <HqScene
-        agents={[
-          ...all.filter((a) => a.id !== 's3' && a.id !== 's0'),
-          agent(NOW, { id: 'n', provider: 'claude' }),
-        ]}
+        sessions={buildSessions([...withoutVacancies, agent(NOW, { id: 'n', provider: 'claude' })])}
         nowMs={NOW}
       />,
     );
@@ -80,12 +79,12 @@ describe.each([
 
     // The last row goes when its last room does, and nothing above it moves.
     const fewer = sessions(columns === 1 ? 6 : columns * (rows - 1));
-    rerender(<HqScene agents={fewer} nowMs={NOW} />);
+    rerender(<HqScene sessions={buildSessions(fewer)} nowMs={NOW} />);
     expect(grid()).toEqual(fewer.map((a) => a.id));
   });
 
   it('draws every session and no "+N more", however many there are', () => {
-    render(<HqScene agents={sessions(25)} nowMs={NOW} />);
+    render(<HqScene sessions={buildSessions(sessions(25))} nowMs={NOW} />);
     expect(screen.getAllByTestId('hq-room')).toHaveLength(25);
     expect(screen.getByTestId('hq-scene').textContent).not.toMatch(/\+\d+ more/);
   });
@@ -109,7 +108,7 @@ describe.each([
   it('gives two chats in the same repository different first lines', () => {
     render(
       <HqScene
-        agents={[
+        sessions={buildSessions([
           agent(NOW, {
             id: 'a',
             provider: 'claude',
@@ -124,7 +123,7 @@ describe.each([
             title: 'Weekly digest',
             startedMinutesAgo: 8,
           }),
-        ]}
+        ])}
         nowMs={NOW}
       />,
     );
@@ -136,7 +135,12 @@ describe.each([
   });
 
   it('falls back to the repository name without saying it twice when there is no title', () => {
-    render(<HqScene agents={[agent(NOW, { id: 'a', provider: 'claude', repo })]} nowMs={NOW} />);
+    render(
+      <HqScene
+        sessions={buildSessions([agent(NOW, { id: 'a', provider: 'claude', repo })])}
+        nowMs={NOW}
+      />,
+    );
     expect(signs()).toEqual([['usage-metrics', 'solo']]);
   });
 
@@ -144,7 +148,7 @@ describe.each([
     const title = 'Investigate why the nightly import job keeps timing out on large repositories';
     render(
       <HqScene
-        agents={[
+        sessions={buildSessions([
           agent(NOW, {
             id: 'a',
             provider: 'claude',
@@ -154,7 +158,7 @@ describe.each([
             activity: 'none',
             sinceMinutesAgo: 12,
           }),
-        ]}
+        ])}
         nowMs={NOW}
       />,
     );

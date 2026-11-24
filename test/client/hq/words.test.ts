@@ -9,7 +9,7 @@ import {
   stateWords,
   summaryLine,
 } from '../../../src/client/features/hq/copy';
-import { buildSessions } from '../../../src/client/features/hq/sessions';
+import { buildSessions, groupSessions } from '../../../src/client/features/hq/sessions';
 import { NOW } from '../../server/helpers';
 import { agent, officeAgents } from '../../fixtures/hq/scripted';
 
@@ -81,6 +81,15 @@ describe('stateWords', () => {
     expect(stateWords(base({ state: 'finished' }), NOW)).toBe('Finished');
     expect(stateWords(base({ state: 'error' }), NOW)).toBe('Something went wrong');
   });
+
+  it('describes unread completion independently of continuing background work', () => {
+    const finished = base({ state: 'finished', reviewPending: true });
+    expect(stateWords(finished, NOW)).toBe('Ready to review');
+    expect(sceneCaption(finished)).toBe('review');
+    expect(stateWords({ ...finished, backgroundWorkActive: true }, NOW)).toBe(
+      'Ready to review · Background work running',
+    );
+  });
 });
 
 describe('elapsed', () => {
@@ -95,7 +104,7 @@ describe('elapsed', () => {
 
 describe('summaryLine', () => {
   it('counts what is happening, leaving zeros out', () => {
-    expect(summaryLine(officeAgents(NOW))).toBe('6 working · 1 needs you · 1 idle');
+    expect(summaryLine(officeAgents(NOW))).toBe('6 working · 1 needs you');
     expect(summaryLine([])).toBe('');
   });
 
@@ -107,6 +116,17 @@ describe('summaryLine', () => {
         { state: 'error', confidence: 'reported' },
       ]),
     ).toBe('1 working · 1 may need you · 1 with an error');
+  });
+
+  it('counts background work, review and actionable errors without counting idle sessions', () => {
+    expect(
+      summaryLine([
+        base({ state: 'finished', backgroundWorkActive: true, reviewPending: true }),
+        base({ state: 'error', reviewPending: false }),
+        base({ state: 'error', reviewPending: true }),
+        base({ state: 'idle' }),
+      ]),
+    ).toBe('1 working · 1 ready to review · 1 with an error');
   });
 });
 
@@ -187,5 +207,60 @@ describe('buildSessions', () => {
     const a = buildSessions(officeAgents(NOW)).map((s) => s.id);
     const b = buildSessions(officeAgents(NOW + 90_000)).map((s) => s.id);
     expect(b).toEqual(a);
+  });
+});
+
+describe('groupSessions', () => {
+  it('keeps a crew in focus for any member and orders idle sessions by recent activity across their crews', () => {
+    const grouped = groupSessions([
+      base({ id: 'parent', state: 'idle', confirmedEmpty: true }),
+      base({
+        id: 'empty-helper',
+        kind: 'child',
+        parentId: 'parent',
+        state: 'idle',
+        confirmedEmpty: true,
+      }),
+      base({
+        id: 'review-helper',
+        kind: 'child',
+        parentId: 'parent',
+        state: 'finished',
+        reviewPending: true,
+      }),
+      base({ id: 'background', state: 'finished', backgroundWorkActive: true }),
+      base({ id: 'error', state: 'error' }),
+      base({ id: 'empty', state: 'idle', confirmedEmpty: true }),
+      base({ id: 'idle', state: 'idle', lastActivityAt: new Date(NOW - 500).toISOString() }),
+      base({
+        id: 'read',
+        state: 'error',
+        reviewPending: false,
+        lastActivityAt: new Date(NOW - 2000).toISOString(),
+      }),
+      base({
+        id: 'read-helper',
+        kind: 'child',
+        parentId: 'read',
+        state: 'idle',
+        lastActivityAt: new Date(NOW - 100).toISOString(),
+      }),
+    ]);
+
+    expect(grouped.focus.map(({ id }) => id)).toEqual(['error', 'background', 'parent']);
+    const parent = grouped.focus[2]!;
+    expect(parent.size).toBe(2);
+    expect(parent.root.children.map(({ agent }) => agent.id)).toEqual(['review-helper']);
+    expect(grouped.recentIdle.map(({ id }) => id)).toEqual(['read', 'idle']);
+  });
+
+  it('keeps empty starting agents only as context for a visible descendant', () => {
+    const empty = base({ id: 'empty', state: 'starting', confirmedEmpty: true });
+    const parent = { ...empty, id: 'parent' };
+    const idle = base({ id: 'recent', kind: 'child', parentId: 'parent', state: 'idle' });
+    expect(summaryLine([empty, parent, idle])).toBe('');
+    const grouped = groupSessions([empty, parent, idle]);
+    expect(grouped.focus).toEqual([]);
+    expect(grouped.recentIdle.map(({ id, size }) => [id, size])).toEqual([['parent', 2]]);
   });
 });

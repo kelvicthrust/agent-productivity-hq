@@ -25,6 +25,12 @@ export const HqAgent = z.object({
   id: z.string(),
   /** Selected daemon's agent identity, available to managed Paseo clients for navigation. */
   paseoAgentId: z.string().optional(),
+  /** An unread Paseo result or error. An explicit false is a known acknowledged error. */
+  reviewPending: z.boolean().optional(),
+  /** Paseo reports work that continues outside the foreground turn. */
+  backgroundWorkActive: z.boolean().optional(),
+  /** An empty thread retained in the roster to link descendants. */
+  confirmedEmpty: z.boolean().optional(),
   provider: HqProvider,
   kind: z.enum(['root', 'child']),
   /** Only when the parent is on this roster; see `parentAway`. */

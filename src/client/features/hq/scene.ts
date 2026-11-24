@@ -2,7 +2,7 @@ import type { HqActivity, HqAgent, HqProvider } from '../../../shared/contracts/
 import { SESSION_COPY } from '../../lib/copy';
 import { dotJoin } from '../../lib/format';
 import { SCENE_COPY, elapsed, sceneCaption } from './copy';
-import type { AgentNode, Session } from './sessions';
+import { isReadyToReview, type AgentNode, type Session } from './sessions';
 
 // The scene's layout model, pure and React-free: which session sits in which room, who stands in it and what they are doing. The
 // drawing (Scene.tsx and the files beside it) only follows this. Rooms keep their slot for as long as their session is present, so
@@ -86,7 +86,13 @@ const POSE_OF_ACTIVITY: Record<HqActivity, Pose> = {
   none: 'working',
 };
 
-export function poseOf(agent: Pick<HqAgent, 'state' | 'activity'>): Pose {
+export function poseOf(
+  agent: Pick<HqAgent, 'state' | 'activity' | 'reviewPending' | 'backgroundWorkActive'>,
+): Pose {
+  if ((agent.state === 'idle' || agent.state === 'finished') && agent.backgroundWorkActive) {
+    return 'working';
+  }
+  if (isReadyToReview(agent)) return 'finished';
   switch (agent.state) {
     case 'working':
       return POSE_OF_ACTIVITY[agent.activity];
@@ -109,7 +115,7 @@ function inOrder(node: AgentNode): HqAgent[] {
 }
 
 const time = (instant: string) => Date.parse(instant);
-const idle = (agent: HqAgent) => agent.state === 'idle';
+const idle = (agent: HqAgent) => agent.state === 'idle' && poseOf(agent) === 'idle';
 
 /** Where the session runs: the repository's name (without its owner), else the workspace. */
 function placeOf(root: HqAgent): string | null {
@@ -146,7 +152,7 @@ function roomOf(session: Session, slot: number, nowMs: number): SceneRoom {
     detail: roomDetail(session, agents, nowMs),
     mood: agents.some((a) => a.state === 'waiting')
       ? 'needs'
-      : agents.every((a) => a.state === 'idle')
+      : agents.every(idle)
         ? 'idle'
         : 'normal',
     characters: drawn.map((agent, i) => ({

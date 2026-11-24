@@ -2,7 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { HQ_HOOKS_PROMPT_KEY } from '../../src/client/lib/shownOnce.ts';
 import { FIXED_NOW } from '../fixtures/seed.ts';
-import { agent, emptyRoster, officeRoster, type HqScenario } from '../fixtures/hq/scripted.ts';
+import {
+  agent,
+  emptyRoster,
+  idleReviewRoster,
+  officeRoster,
+  type HqScenario,
+} from '../fixtures/hq/scripted.ts';
 import type { ScriptedHooksScenario } from '../fixtures/hq/scriptedHooks.ts';
 import { expect, test } from './fixtures';
 import { failures, measureContainment } from './helpers/containment';
@@ -10,7 +16,7 @@ import { ORIGIN } from './helpers/virtualOrigin';
 import { openWorld, type World } from './helpers/world';
 
 // HQ in a real browser, over the real API with a scripted roster (test/fixtures/hq). With no live feeder the page says so; with the
-// example office it lists four sessions and eight agents, the one that needs the owner first. The roster is plain HTML (nested
+// example office it lists three focused sessions and a recent idle session, the one that needs the owner first. The roster is plain HTML (nested
 // lists); the illustrated scene above it is decorative, so everything about the roster is asserted without it.
 //
 // The fixed clock is Wed 2026-11-04 17:42 UTC; the example roster is built from it, so "idle for 12 min" is exact.
@@ -51,10 +57,12 @@ test.describe('HQ', () => {
     await expect(page.getByRole('region', { name: 'Filters' })).toHaveCount(0);
   });
 
-  test('shows four sessions, the one that needs you first, with state words', async ({ page }) => {
+  test('shows three focused sessions, the one that needs you first, with state words', async ({
+    page,
+  }) => {
     await openHq(page, 1280, 'office');
-    await expect(sessionCards(page)).toHaveCount(4);
-    await expect(page.getByText('6 working · 1 needs you · 1 idle')).toBeVisible();
+    await expect(sessionCards(page)).toHaveCount(3);
+    await expect(page.getByText('6 working · 1 needs you')).toBeVisible();
     const first = sessionCards(page).first();
     await expect(first).toContainText('Sync shared instructions');
     await expect(first).toContainText('Needs you: permission');
@@ -64,14 +72,18 @@ test.describe('HQ', () => {
     for (const words of ['Editing', 'Reading', 'Running a command', 'Thinking']) {
       await expect(build).toContainText(words);
     }
-    await expect(sessions(page)).toContainText('Idle for 12 min');
-    await expect(sessions(page)).toContainText('No name recorded');
+    const recent = page.getByRole('button', { name: 'Recent idle (1)' });
+    await expect(recent).toHaveAttribute('aria-expanded', 'false');
+    await recent.click();
+    const idle = page.getByRole('list', { name: 'Recent idle' });
+    await expect(idle).toContainText('Idle for 12 min');
+    await expect(idle).toContainText('No name recorded');
     await expect(sessions(page)).toContainText('Claude Code · kelvin/agent-productivity');
   });
 
   test('shows roster changes after the next poll', async ({ page }) => {
     const world = await openHq(page, 1280, 'office');
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     // A new solo agent arrives, and the waiting one goes back to work.
     const next = officeRoster(FIXED_NOW);
     next.agents = [
@@ -88,10 +100,10 @@ test.describe('HQ', () => {
       }),
     ];
     world.hq!.set(next);
-    await expect(sessionCards(page)).toHaveCount(5, { timeout: 8_000 });
+    await expect(sessionCards(page)).toHaveCount(4, { timeout: 8_000 });
     // The title is on the roster and, now, on the new room's sign: look in the list.
     await expect(sessions(page).getByText('Update the changelog')).toBeVisible();
-    await expect(page.getByText('8 working · 1 idle')).toBeVisible();
+    await expect(page.getByText('8 working')).toBeVisible();
     await expect(page.getByText('Needs you: permission')).toHaveCount(0);
 
     world.hq!.set(emptyRoster(FIXED_NOW));
@@ -111,25 +123,77 @@ test.describe('HQ', () => {
 
   test('keeps the last roster and offers Retry when a poll fails', async ({ page }) => {
     await openHq(page, 1280, 'office');
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     // The app stops answering: the last roster stays, with a notice.
     await page.route(`${ORIGIN}/api/hq`, (route) => route.abort());
     const notice = page.getByRole('alert');
     await expect(notice).toContainText('Couldn’t refresh HQ', { timeout: 8_000 });
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     await page.unroute(`${ORIGIN}/api/hq`);
     await notice.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
 });
 
+test.describe('HQ recent idle and review', { tag: ['@a11y', '@responsive'] }, () => {
+  for (const width of [1280, 390]) {
+    test(`${width}px: keeps attention in rooms and discloses recent idle in activity order`, async ({
+      page,
+    }) => {
+      const world = await openHq(page, width, 'idle-review');
+      const rooms = scene(page).getByTestId('hq-room');
+      await expect(rooms).toHaveCount(2);
+      await expect(sessions(page).getByText('Ready to review')).toBeVisible();
+      await expect(sessions(page).getByText('Background work running')).toBeVisible();
+      await expect(page.getByText('Opened by accident')).toHaveCount(0);
+
+      const disclosure = page.getByRole('button', { name: 'Recent idle (2)' });
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByRole('list', { name: 'Recent idle' })).toHaveCount(0);
+      await disclosure.focus();
+      await disclosure.press('Space');
+      await expect(disclosure).toBeFocused();
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+      const recent = page.getByRole('list', { name: 'Recent idle' });
+      await expect(recent.locator(':scope > li').first()).toContainText('Recently acknowledged');
+      await expect(recent.locator(':scope > li').last()).toContainText('Older imported thread');
+      await expect(recent).not.toContainText('Opened by accident');
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(failures(await measureContainment(page))).toEqual([]);
+
+      const backgroundRoom = rooms.and(page.locator('[data-session="background"]'));
+      const roomPosition = () =>
+        backgroundRoom.evaluate((room) => {
+          const building = room.closest('[data-testid="hq-scene"]')!.getBoundingClientRect();
+          const position = room.getBoundingClientRect();
+          return { x: position.x - building.x, y: position.y - building.y };
+        });
+      const previousPosition = await roomPosition();
+      const roster = idleReviewRoster(FIXED_NOW);
+      roster.agents = roster.agents.map((agent) =>
+        agent.id === 'review'
+          ? { ...agent, state: 'idle', reviewPending: false, lastActivityAt: roster.generatedAt }
+          : agent,
+      );
+      world.hq!.set(roster);
+      await expect(rooms).toHaveCount(1, { timeout: 8_000 });
+      await expect(recent.locator(':scope > li').first()).toContainText('Review shipped work');
+      expect(await roomPosition()).toEqual(previousPosition);
+
+      world.hq!.set(idleReviewRoster(FIXED_NOW));
+      await expect(rooms).toHaveCount(2, { timeout: 8_000 });
+      await expect(sessions(page).getByText('Ready to review')).toBeVisible();
+    });
+  }
+});
+
 test.describe('HQ scene', () => {
-  test('draws four rooms above the roster for the office, and none when there is nothing to draw', async ({
+  test('draws three rooms above the roster for the office, and none when there is nothing to draw', async ({
     page,
   }) => {
     await openHq(page, 1280, 'office');
     await expect(scene(page)).toBeVisible();
-    await expect(scene(page).getByTestId('hq-room')).toHaveCount(4);
+    await expect(scene(page).getByTestId('hq-room')).toHaveCount(3);
     // Three rooms to a row at this width, so a sign is narrow: its first line is the chat's title (cut with an ellipsis when long, and
     // shorter on the room with the star), its second the repository then the state, and the repository gives way to the state.
     const signs = await scene(page)
@@ -143,7 +207,6 @@ test.describe('HQ scene', () => {
       ['Sync shared inst…', 'agent… · captain + 1'],
       ['Fix the flaky checko…', 'atlas-api · solo'],
       ['Build the HQ page', 'agent-prod… · captain + 3'],
-      ['scratch', 'idle 12 min'],
     ]);
     // Above the roster, and out of the accessibility tree: nothing in it can be focused or read.
     const above = await page.evaluate(
@@ -180,7 +243,7 @@ test.describe('HQ scene', () => {
         .getByTestId('hq-room')
         .evaluateAll((rooms) => rooms.map((room) => room.getAttribute('data-session')));
     const before = await order();
-    expect(before).toHaveLength(4);
+    expect(before).toHaveLength(3);
     // A new solo agent arrives: it gets the first free cell, and no room moves.
     const next = officeRoster(FIXED_NOW);
     next.agents = [
@@ -188,7 +251,7 @@ test.describe('HQ scene', () => {
       agent(FIXED_NOW, { id: 'new', provider: 'codex', repo: 'kelvin/newcomer' }),
     ];
     world.hq!.set(next);
-    await expect(scene(page).getByTestId('hq-room')).toHaveCount(5, { timeout: 8_000 });
+    await expect(scene(page).getByTestId('hq-room')).toHaveCount(4, { timeout: 8_000 });
     const after = await order();
     // The building is three rooms to a row at this width: every room keeps its place and the newcomer takes the first free cell.
     expect(after).toEqual([...before, 'new']);
@@ -309,7 +372,7 @@ test.describe('HQ accessibility', { tag: '@a11y' }, () => {
     page,
   }) => {
     await openHq(page, 1280, 'office');
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     // One list of sessions; each session holds a list whose first item is its root and which nests the agents it spawned.
     const build = page.getByRole('list', { name: 'Build the HQ page: 4 agents' });
     await expect(build.locator(':scope > li')).toHaveCount(1);
@@ -326,7 +389,7 @@ test.describe('HQ accessibility', { tag: '@a11y' }, () => {
   for (const width of [1280, 390, 320]) {
     test(`axe: HQ with the office roster at ${width}px has no violations`, async ({ page }) => {
       await openHq(page, width, 'office');
-      await expect(sessionCards(page)).toHaveCount(4);
+      await expect(sessionCards(page)).toHaveCount(3);
       await expect(scene(page)).toBeVisible();
       const { violations } = await new AxeBuilder({ page }).analyze();
       const summary = violations.map(
@@ -378,7 +441,7 @@ test.describe('HQ layout', { tag: '@responsive' }, () => {
   for (const width of [1280, 390, 320]) {
     test(`${width}px: the office roster stays inside the window`, async ({ page }, testInfo) => {
       await openHq(page, width, 'office');
-      await expect(sessionCards(page)).toHaveCount(4);
+      await expect(sessionCards(page)).toHaveCount(3);
       await expect(scene(page)).toBeVisible();
       // The scene stays inside the window, and the page does not scroll sideways.
       const box = (await scene(page).boundingBox())!;
@@ -653,7 +716,7 @@ test.describe('HQ hooks first-time dialog', () => {
     // HQ itself holds no switch, and a reload does not ask again.
     await expect(hooksSection(page)).toHaveCount(0);
     await page.reload();
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     await expect(page.getByRole('dialog', { name: DIALOG })).toHaveCount(0);
     expect(world.hooks!.changes).toEqual([]);
   });
@@ -682,13 +745,13 @@ test.describe('HQ hooks first-time dialog', () => {
     await dialog.getByRole('button', { name: 'Done' }).click();
     await expect(dialog).toBeHidden();
     await page.reload();
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     await expect(page.getByRole('dialog', { name: DIALOG })).toHaveCount(0);
   });
 
   test('is not offered when the switch is on', async ({ page }) => {
     await openHq(page, 1280, 'office', 'on', { firstTime: true });
-    await expect(sessionCards(page)).toHaveCount(4);
+    await expect(sessionCards(page)).toHaveCount(3);
     await expect(page.getByRole('dialog', { name: DIALOG })).toHaveCount(0);
   });
 
