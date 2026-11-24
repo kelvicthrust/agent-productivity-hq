@@ -87,6 +87,7 @@ function createCodexTracker(sessionId: string, meta: CodexMeta | null): Tracker 
         parentSessionId: meta?.parentId ?? null,
         cwd: meta?.cwd ?? null,
         startedAt: liveTime(meta?.startedAt, now),
+        ...(meta?.subagentTitle !== undefined && { subagentTitle: meta.subagentTitle }),
         ...seen,
       };
     },

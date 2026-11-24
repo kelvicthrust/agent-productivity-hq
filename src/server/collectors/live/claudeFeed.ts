@@ -1,10 +1,10 @@
 import { basename, dirname, join, posix } from 'node:path';
 import { liveTime } from '../../lib/liveTime.ts';
-import { MAX_LIVE_PATH_CHARS, fits } from '../../lib/liveText.ts';
+import { MAX_LIVE_PATH_CHARS, fits, liveTitle } from '../../lib/liveText.ts';
 import type { Logger } from '../../lib/logger.ts';
 import type { Sleep } from '../../lib/sleep.ts';
 import { classifyTranscript, projectRoots, type Transcript } from '../claude/files.ts';
-import { parseJsonLine } from '../ingest/index.ts';
+import { asRecord, parseJsonLine } from '../ingest/index.ts';
 import { projectClaudeLine } from './claudeActivity.ts';
 import { statWithin, type OpenFiles } from './confined.ts';
 import {
@@ -30,12 +30,50 @@ export interface ClaudeFeedOptions {
   pollMs?: number;
 }
 
-function createClaudeTracker(transcript: Transcript): Tracker {
+const MAX_SUBAGENT_METADATA_BYTES = 16 * 1024;
+
+/** Read only the metadata next to this child, through the same guarded handles as its transcript. */
+async function readSubagentTitle(
+  file: RecentFile,
+  signal: AbortSignal,
+  files: OpenFiles,
+): Promise<string | null> {
+  const path = `${file.path.slice(0, -'.jsonl'.length)}.meta.json`;
+  try {
+    const metadata = await statWithin(file.guard, path);
+    if (signal.aborted || !metadata || metadata.size > MAX_SUBAGENT_METADATA_BYTES) return null;
+    const opened = await files.open({ path, guard: metadata.guard });
+    try {
+      if (signal.aborted) return null;
+      const buffer = Buffer.allocUnsafe(metadata.size + 1);
+      const { bytesRead } = await opened.handle.read(buffer, 0, buffer.length, 0);
+      if (signal.aborted || bytesRead !== metadata.size) return null;
+      const record = asRecord(parseJsonLine(buffer.toString('utf8', 0, bytesRead)));
+      return liveTitle(record?.['agentType']);
+    } finally {
+      await opened.close();
+    }
+  } catch {
+    // Missing, unreadable or replaced metadata never interrupts the child's transcript.
+    return null;
+  }
+}
+
+function createClaudeTracker(
+  transcript: Transcript,
+  readTitle?: () => Promise<string | null>,
+): Tracker {
   const machine = createSessionMachine();
   const sidechainFile = transcript.kind === 'subagent';
   const parentSessionId = transcript.kind === 'subagent' ? transcript.parentId : null;
   let cwd: string | null = null;
+  let subagentTitle: string | null = null;
   return {
+    ...(readTitle && {
+      async refreshMetadata() {
+        subagentTitle ??= await readTitle();
+      },
+    }),
     line(text, observedAt) {
       const projected = projectClaudeLine(parseJsonLine(text), sidechainFile);
       if (projected === null) return;
@@ -61,6 +99,7 @@ function createClaudeTracker(transcript: Transcript): Tracker {
         parentSessionId,
         cwd,
         startedAt: null,
+        ...(subagentTitle !== null && { subagentTitle }),
         ...seen,
       };
     },
@@ -177,9 +216,12 @@ export function createClaudeFeed(options: ClaudeFeedOptions): TranscriptFeed {
       accept: (rel) => classifyTranscript(rel) !== null,
       hotDirs,
       parentLookup: createParentLookup,
-      start: (file) => {
+      start: (file, signal, files) => {
         const transcript = classifyTranscript(file.rel);
-        return Promise.resolve(transcript === null ? null : createClaudeTracker(transcript));
+        if (transcript === null) return Promise.resolve(null);
+        const readTitle =
+          transcript.kind === 'subagent' ? () => readSubagentTitle(file, signal, files) : undefined;
+        return Promise.resolve(createClaudeTracker(transcript, readTitle));
       },
     },
   });

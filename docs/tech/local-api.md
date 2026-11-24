@@ -495,7 +495,7 @@ components:
         parentId: { type: [string, "null"] }
         parentBasis: { type: [string, "null"], enum: [native, paseo, null], description: where the parent link came from }
         parentAway: { type: boolean }
-        title: { type: [string, "null"] }
+        title: { type: [string, "null"], description: "Workspace title for a main Paseo agent, individual title or provider subagent label when available" }
         repo: { type: [string, "null"], description: owner/name }
         workspace: { type: [string, "null"] }
         state: { type: string, enum: [starting, working, waiting, idle, error, finished] }

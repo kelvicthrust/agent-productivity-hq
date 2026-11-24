@@ -622,6 +622,15 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
               seenBy: { paseo: true },
             },
             {
+              id: 'a123456789abc',
+              title: null,
+              provider: 'claude',
+              state: 'working',
+              kind: 'child',
+              parentId: 'a',
+              seenBy: { paseo: false, transcript: true },
+            },
+            {
               id: 'a',
               title: 'Paseo task',
               provider: 'codex',
@@ -672,7 +681,7 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
   await screen.findByText('Paseo task');
   expect(screen.getAllByRole('heading').map((heading) => heading.textContent)).toEqual(
-    expect.arrayContaining(['Paseo task', 'Child task', 'Local task']),
+    expect.arrayContaining(['Paseo task', 'Child task', 'Subagent · 789abc', 'Local task']),
   );
   expect(
     screen.getByText('Paseo task').compareDocumentPosition(screen.getByText('Child task')) &
@@ -680,7 +689,7 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
   ).toBeTruthy();
   expect(screen.getByText('Local task')).toBeTruthy();
   expect(screen.getByText('Needs you: permission')).toBeTruthy();
-  expect(screen.getByText('Claude Code')).toBeTruthy();
+  expect(screen.getAllByText('Claude Code')).toHaveLength(2);
   expect(screen.queryByRole('button', { name: 'Open Paseo agent Local task' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Open Paseo agent Paseo task' }));
   expect(openAgent).toHaveBeenCalledExactlyOnceWith({ agentId: 'agent-1', serverId: host.id });

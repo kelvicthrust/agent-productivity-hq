@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HqAgent } from '../../../src/shared/contracts/hq';
 import {
+  agentDisplayTitle,
   agentMeta,
   elapsed,
   feedName,
@@ -17,6 +18,16 @@ import { agent, officeAgents } from '../../fixtures/hq/scripted';
 
 const base = (over: Partial<HqAgent>): HqAgent =>
   agent(NOW, { id: 'a', provider: 'claude', ...over });
+
+it('distinguishes generic and unnamed subagents using the opaque roster id', () => {
+  const child = base({ id: 'a123456789abc', kind: 'child', parentAway: true });
+  expect(agentDisplayTitle(child)).toBe('Subagent · 789abc');
+  expect(agentDisplayTitle({ ...child, title: 'general-purpose' })).toBe(
+    'general-purpose · 789abc',
+  );
+  expect(agentDisplayTitle({ ...child, title: 'Explore' })).toBe('Explore');
+  expect(agentDisplayTitle(base({}))).toBeNull();
+});
 
 describe('stateWords', () => {
   it.each([
@@ -139,11 +150,12 @@ describe('names', () => {
   });
 
   it('puts where an agent works after its provider, preferring the repo', () => {
-    expect(agentMeta({ provider: 'codex', repo: 'a/b', workspace: 'w', parentAway: false })).toBe(
-      'Codex · a/b',
-    );
-    expect(agentMeta({ provider: 'claude', repo: null, workspace: 'w', parentAway: true })).toBe(
+    expect(agentMeta(base({ provider: 'codex', repo: 'a/b', workspace: 'w' }))).toBe('Codex · a/b');
+    expect(agentMeta(base({ workspace: 'w', parentAway: true }))).toBe(
       'Claude Code · w · Started by an agent that isn’t listed',
+    );
+    expect(agentMeta(base({ workspace: 'Scratch workspace', title: 'Scratch workspace' }))).toBe(
+      'Claude Code',
     );
   });
 });

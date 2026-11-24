@@ -16,3 +16,8 @@ export const fits = (value: string | null, max: number): string | null =>
 /** `value` cut to `max` characters (a title or a name, which are only shown). */
 export const clipped = (value: string | null, max: number): string | null =>
   value !== null && value.length > max ? value.slice(0, max) : value;
+
+/** A recorded label from provider metadata. */
+export function liveTitle(value: unknown): string | null {
+  return typeof value === 'string' ? clipped(value.trim() || null, MAX_LIVE_TITLE_CHARS) : null;
+}

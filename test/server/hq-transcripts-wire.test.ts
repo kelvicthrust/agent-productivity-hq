@@ -140,12 +140,19 @@ describe('transcript feeds through boot', () => {
       writeFileSync(parent, records.map((record) => JSON.stringify(record)).join('\n') + '\n');
       stamp(parent, parentFile === 'recent housekeeping' ? CLOCK : old);
       for (const name of ['agent-a1', 'agent-a2']) writeWorkingChild(project, name);
+      writeFileSync(
+        join(project, S1, 'subagents', 'agent-a1.meta.json'),
+        JSON.stringify({ agentType: 'Explore', description: 'SENTINEL_SUBAGENT_TASK' }),
+      );
 
       const body = await hq(server);
       const children = body.agents.filter(
         (agent) => agent.provider === 'claude' && agent.kind === 'child',
       );
       expect(children).toHaveLength(2);
+      expect(children.map((child) => child.title)).toEqual(
+        expect.arrayContaining(['Explore', null]),
+      );
       expect(children[0]).toMatchObject({
         parentId: expect.any(String),
         parentBasis: 'native',
@@ -161,7 +168,8 @@ describe('transcript feeds through boot', () => {
         }),
       ]);
       const output = JSON.stringify({ body, logs });
-      for (const sentinel of [SENTINELS[0], homes.root, S1]) expect(output).not.toContain(sentinel);
+      for (const sentinel of [SENTINELS[0], 'SENTINEL_SUBAGENT_TASK', homes.root, S1])
+        expect(output).not.toContain(sentinel);
     },
   );
 
@@ -283,11 +291,16 @@ describe('transcript feeds through boot', () => {
     await until(() => looks.refreshes > seen, 'another look');
   });
 
-  it('nothing in what it answers or logs is text from a transcript, a title or a path', async () => {
+  it('includes a recorded Codex nickname in the response and keeps it and conversation text out of logs', async () => {
     const { server, homes, logs } = await start();
-    const text = JSON.stringify(await hq(server));
+    const body = await hq(server);
+    expect(
+      body.agents.find((agent) => agent.provider === 'codex' && agent.kind === 'child')?.title,
+    ).toBe('Atlas');
+    const text = JSON.stringify(body);
     for (const sentinel of SENTINELS) expect(text).not.toContain(sentinel);
     const logged = JSON.stringify(logs);
+    expect(logged).not.toContain('Atlas');
     for (const sentinel of SENTINELS) expect(logged).not.toContain(sentinel);
     expect(logged).not.toContain(homes.root);
     expect(logged).not.toContain('rollout-');

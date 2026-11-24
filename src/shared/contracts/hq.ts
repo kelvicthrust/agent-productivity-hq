@@ -39,6 +39,7 @@ export const HqAgent = z.object({
   parentBasis: z.enum(['native', 'paseo']).nullable(),
   /** The agent has a parent that is not on this roster. */
   parentAway: z.boolean(),
+  /** Main Paseo workspace title, individual recorded title, or provider subagent label. */
   title: z.string().nullable(),
   /** `owner/name`. */
   repo: z.string().nullable(),

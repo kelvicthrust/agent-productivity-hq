@@ -19,8 +19,8 @@ import { tailFile, type TailState } from './tail.ts';
 //
 // Every `TRANSCRIPT_POLL_MS` it asks `recent` for the files written in the last 15 minutes, reads what is new at the end of each
 // (`tail`), gives each line to that session's tracker, and forgets the sessions whose file is no longer followed. What a tracker keeps
-// is the state machine and a few ids; no line, title, tool name or path outside the file's own record is kept. `read()` asks each
-// tracker for its state at the time of the call. Nothing is written anywhere.
+// is the state machine, ids, working directory, and recorded subagent label when available. `read()` asks each tracker
+// for its state at the time of the call. Nothing is written anywhere.
 //
 // `starting` lasts until the first complete tick has finished: the files found AND each of them read once (`FIRST_READ_DEADLINE_MS`
 // ends the wait if that takes too long). The same holds when a feed that had no roots finds them again: it reports `live` only after
@@ -51,6 +51,8 @@ export interface TranscriptAgent {
   sessionId: string;
   /** The native parent's session id: a subagent's `<session>/subagents/` folder, a Codex thread's spawner. */
   parentSessionId: string | null;
+  /** A provider-recorded nickname or role for a native subagent. */
+  subagentTitle?: string;
   cwd: string | null;
   startedAt: number | null;
   state: HqState;
@@ -106,6 +108,7 @@ export interface TranscriptFeed {
 export interface Tracker {
   line(text: string, observedAt: number): void;
   overlong(observedAt: number): void;
+  refreshMetadata?(): Promise<void>;
   agent(now: number, options?: TranscriptReadOptions): TranscriptAgent | null;
 }
 
@@ -231,6 +234,8 @@ export function createTranscriptFeed(options: TranscriptFeedOptions): Transcript
       signal,
       run.files,
     );
+    if (signal.aborted) return;
+    await entry?.tracker?.refreshMetadata?.();
     if (signal.aborted) return;
     if (outcome === null) return; // unchanged: the tracker stays as it was
     if (entry === null) entry = { tail: outcome.state, tracker: null };

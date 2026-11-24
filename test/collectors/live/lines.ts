@@ -246,7 +246,7 @@ export const spawnedSource = (parentThreadId: string) => ({
     thread_spawn: {
       parent_thread_id: parentThreadId,
       depth: 1,
-      agent_nickname: 'SENTINEL_AGENT_NAME',
+      description: 'SENTINEL_AGENT_NAME',
     },
   },
 });

@@ -417,6 +417,30 @@ test.describe('HQ quiet state accessibility', { tag: '@a11y' }, () => {
 });
 
 test.describe('HQ layout', { tag: '@responsive' }, () => {
+  test('fits workspace titles and distinct subagent labels on a phone', async ({ page }) => {
+    const world = await openHq(page, 390, 'empty');
+    world.hq!.set({
+      ...officeRoster(FIXED_NOW),
+      agents: [
+        agent(FIXED_NOW, { id: 'paseo', provider: 'codex', title: 'Assess PDLC workflow' }),
+        agent(FIXED_NOW, {
+          id: 'a123456789abc',
+          provider: 'claude',
+          kind: 'child',
+          parentBasis: 'native',
+          parentAway: true,
+        }),
+      ],
+    });
+    await expect(sessions(page)).toContainText('Assess PDLC workflow');
+    await expect(sessions(page)).toContainText('Subagent · 789abc');
+    const rooms = scene(page).getByTestId('hq-room');
+    await expect(rooms.and(page.locator('[data-session="paseo"]'))).toContainText('Assess PDLC');
+    await expect(rooms.and(page.locator('[data-session="a123456789abc"]'))).toContainText(
+      'Subagent',
+    );
+    expect(failures(await measureContainment(page))).toEqual([]);
+  });
   for (const width of [1280, 390, 320]) {
     test(`${width}px: the quiet state stays inside the window`, async ({ page }, testInfo) => {
       await openHq(page, width, 'empty');
