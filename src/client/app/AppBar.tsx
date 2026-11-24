@@ -1,10 +1,11 @@
 import { BrandMark } from '../components/BrandMark';
+import { AboutButton } from './AboutButton';
 import { AppBarLinks } from './AppBarLinks';
 import { RefreshButton } from './RefreshButton';
 import { PRODUCT_NAME } from './routes';
 
 /**
- * The 60px app bar on the canvas, no divider (design-system Layout). The dashboard shows Refresh.
+ * The 60px app bar on the canvas, no divider (design-system Layout). The dashboard shows Refresh and About.
  * During Setup the actions slot holds the step caption.
  */
 export function AppBar({
@@ -26,9 +27,16 @@ export function AppBar({
           This machine
         </span>
       </div>
-      <div id="appbar-actions" ref={actionsRef} className="flex items-center gap-2">
-        {!setup && <AppBarLinks />}
-        {!setup && <RefreshButton />}
+      <div id="appbar-actions" className="flex shrink-0 items-center gap-2">
+        {setup ? (
+          <div ref={actionsRef} />
+        ) : (
+          <>
+            <AppBarLinks />
+            <RefreshButton />
+          </>
+        )}
+        <AboutButton />
       </div>
     </header>
   );

@@ -432,36 +432,47 @@ function QuotaRow({
       : inline && !refreshed
         ? 'Not checked yet'
         : 'Weekly quota unavailable';
-  const readings = (
+  const windows = quota?.windows?.map((window) => {
+    const windowReset = formatQuotaTime(window.resetsAt, timezone);
+    const label = `${window.label} · ${window.usedPercent}% used`;
+    const detail = [
+      window.source === 'paseo' ? 'Paseo' : name,
+      window.stale ? 'Last available reading' : null,
+      windowReset ? `Resets ${windowReset}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const key = `${window.source}:${window.id}`;
+    return inline ? (
+      <NativeText key={key} tone="foregroundMuted" size={12}>
+        {label} · {detail}
+      </NativeText>
+    ) : (
+      <View key={key} style={{ gap: 2 }}>
+        <NativeText size={13} style={{ fontWeight: '600', fontVariant: ['tabular-nums'] }}>
+          {label}
+        </NativeText>
+        <NativeText tone="foregroundMuted" size={12}>
+          {detail}
+        </NativeText>
+      </View>
+    );
+  });
+  const details = (
     <>
-      {quota?.windows?.map((window) => {
-        const windowReset = formatQuotaTime(window.resetsAt, timezone);
-        return (
-          <NativeText
-            key={`${window.source}:${window.id}`}
-            tone="foregroundMuted"
-            size={inline ? 12 : 14}
-          >
-            {window.label} · {window.usedPercent}% used ·{' '}
-            {window.source === 'paseo' ? 'Paseo' : name}
-            {window.stale ? ' · Last available reading' : ''}
-            {windowReset ? ` · Resets ${windowReset}` : ''}
-          </NativeText>
-        );
-      })}
       {source ? (
-        <NativeText tone="foregroundMuted" size={inline ? 12 : 14}>
+        <NativeText tone="foregroundMuted" size={12}>
           Source · {source}
           {quota?.stale ? ' · Last available reading' : ''}
         </NativeText>
       ) : null}
       {reset ? (
-        <NativeText tone="foregroundMuted" size={inline ? 12 : 14}>
+        <NativeText tone="foregroundMuted" size={12}>
           Resets {reset}
         </NativeText>
       ) : null}
       {refreshed ? (
-        <NativeText tone="foregroundMuted" size={inline ? 12 : 14}>
+        <NativeText tone="foregroundMuted" size={12}>
           Checked {refreshed}
         </NativeText>
       ) : null}
@@ -491,7 +502,8 @@ function QuotaRow({
                 Uses the existing {name} sign-in if Paseo has no current reading.
               </NativeText>
             )}
-            {readings}
+            {windows}
+            {details}
             <NativeProblem message={check.problem} />
           </View>
           {button}
@@ -502,9 +514,40 @@ function QuotaRow({
 
   return (
     <NativeRow>
-      <NativeText heading>{title}</NativeText>
-      <NativeText announce>{status}</NativeText>
-      {readings}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          columnGap: 16,
+          rowGap: 4,
+        }}
+      >
+        <NativeText heading>{title}</NativeText>
+        {quota?.usedPercent != null ? (
+          <NativeText
+            announce
+            size={21}
+            style={{ maxWidth: '100%', fontWeight: '700', fontVariant: ['tabular-nums'] }}
+          >
+            {quota.usedPercent}%{' '}
+            <NativeText size={12} tone="foregroundMuted">
+              used this week
+            </NativeText>
+          </NativeText>
+        ) : (
+          <NativeText announce size={12} tone="foregroundMuted">
+            {status}
+          </NativeText>
+        )}
+      </View>
+      {(source || reset || refreshed) && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 4 }}>
+          {details}
+        </View>
+      )}
+      {!!windows?.length && <View style={{ marginTop: 4, gap: 6 }}>{windows}</View>}
       {quota?.canCheck ? (
         <>
           {button}

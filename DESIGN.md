@@ -8,8 +8,9 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
 
 ## Product follow-up
 
-- **App bar** shows Refresh. The Sources & repos navigation item carries the issue count on desktop
-  and phones.
+- **App bar** shows Refresh on the dashboard and an About info icon at every width. About opens a
+  dialog with the app version, project and support links, and the creator credit. The Sources &
+  repos navigation item carries the issue count on desktop and phones.
 - **Sources & repos** starts with a rectangular **Source coverage** section. At 720px and above,
   show On this machine, Delivery and Account reports in three columns. On phones collapse the
   groups behind one disclosure and indicate actionable issues. Keep refresh timestamps in its header.

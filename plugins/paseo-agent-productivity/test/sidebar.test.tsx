@@ -603,6 +603,17 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
     refreshedAt: date,
     stale: false,
     canCheck: false,
+    windows: [
+      {
+        id: 'fable:weekly',
+        label: 'Weekly · Fable',
+        source: 'paseo',
+        usedPercent: 23,
+        resetsAt: date,
+        refreshedAt: date,
+        stale: false,
+      },
+    ],
   };
   native.mockImplementation(async ({ operation }) => {
     switch (operation) {
@@ -695,7 +706,9 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
   expect(openAgent).toHaveBeenCalledExactlyOnceWith({ agentId: 'agent-1', serverId: host.id });
   expect(native.mock.calls.map(([input]) => input.operation)).not.toContain('usage');
   fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-  await screen.findByText('25% used this week');
+  await screen.findByText('25%');
+  expect(screen.getByText('used this week')).toBeTruthy();
+  expect(screen.getByText('Weekly · Fable · 23% used')).toBeTruthy();
   expect(screen.getByText('Source · Paseo')).toBeTruthy();
   expect(screen.getByText('Weekly quota unavailable')).toBeTruthy();
   expect(native.mock.calls.map(([input]) => input.operation)).not.toContain('usageFallback');
@@ -703,9 +716,9 @@ it('opens live HQ in Paseo, navigates only matched agents, and uses the explicit
   expect(openExternal).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole('button', { name: 'Check Claude Code directly' }));
-  await screen.findByText('5% used this week');
+  await screen.findByText('5%');
   expect(screen.getByText('Source · Claude Code')).toBeTruthy();
-  expect(screen.getByText('25% used this week')).toBeTruthy();
+  expect(screen.getByText('25%')).toBeTruthy();
   expect(native).toHaveBeenLastCalledWith({
     operation: 'usageFallback',
     parameters: { provider: 'claude' },
@@ -958,12 +971,12 @@ it('discards prior-host requests and keeps quota available when the new host ros
   expect(screen.queryByText('Previous host task')).toBeNull();
   await screen.findByText('Roster unavailable here.');
   fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-  await screen.findByText('14% used this week');
+  await screen.findByText('14%');
   await act(async () =>
     oldQuota.resolve(ok({ providers: [{ provider: 'codex', source: 'paseo', usedPercent: 90 }] })),
   );
-  expect(screen.queryByText('90% used this week')).toBeNull();
-  expect(screen.getByText('14% used this week')).toBeTruthy();
+  expect(screen.queryByText('90%')).toBeNull();
+  expect(screen.getByText('14%')).toBeTruthy();
 });
 
 it('opens owner settings at the protected Sources destination after an explicit action', async () => {
