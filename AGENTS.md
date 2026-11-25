@@ -21,6 +21,8 @@ and assessment limits. This file is a task map; detailed decisions stay in their
   [candidate evidence map](docs/archive/implementation/candidate-handoff.md). Preserve sanitized milestone history. Private original reports and workflow receipts are excluded from public snapshots.
   Historical reports and document status labels are bound to their original revisions; they do not
   replace a current candidate assessment.
+- For releases, draft [What's new](docs/delivery/publishing.md#draft-whats-new) from the changes since
+  the last published tag. Commit `docs/releases/vX.Y.Z.md` in the same PR as the version bump.
 
 ## Working boundaries
 

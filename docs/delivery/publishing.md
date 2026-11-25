@@ -16,11 +16,25 @@ Configure both publishers when the first new release is ready. Each configuratio
 
 ### Publish a new version
 
-1. In the release PR, update the stable version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Match the version in both entries in `plugins/paseo-agent-productivity/package-lock.json`. Use a patch bump for fixes, a minor bump for compatible features, or a major bump for breaking changes.
-2. Merge the reviewed PR into `main`. The higher version starts the Release workflow and serves as the release signal. Merges that leave the version unchanged skip publication. **Run workflow** still builds archives for testing.
-3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, then tags the tested commit and publishes the GitHub release with both tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
+1. In the release PR, update the stable version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Match the version in both entries in `plugins/paseo-agent-productivity/package-lock.json`. Use a patch bump for fixes, a minor bump for compatible features, or a major bump for breaking changes. Include the matching [What's new](#draft-whats-new) Markdown.
+2. Confirm **Check release version** passes before merging the reviewed PR into `main`. The higher version starts the Release workflow and serves as the release signal. Merges that leave the version unchanged skip publication. **Run workflow** still builds archives for testing.
+3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, and tags the tested commit. GitHub uses the reviewed Markdown as the release body and attaches it alongside both tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
 
 If publishing fails after one package reaches npm, rerun failed jobs to reuse the original artifacts. The workflow reuses a published version only when its integrity matches the original archive. If the artifacts expire or the bytes differ, use a new version. For a GitHub release that already exists, verify its tag and assets before completing it manually.
+
+### Draft What's new
+
+Compare the release candidate with the last published tag. Include relevant changes from PRs
+that merged between package version bumps, and check each claim against the candidate. Write for
+someone upgrading Agent Productivity HQ or its Paseo plugin. Lead with what they can do now and
+where to find it. Include fixes users can recognize and any compatibility changes, upgrade steps,
+or known limits that affect them. Link to PRs or guides when they help.
+
+Create `docs/releases/vX.Y.Z.md` with a first heading of `# What's new in vX.Y.Z` using the actual
+version. Write a short summary or a few bullets below the heading. Include the file in the
+version-bump PR for review. Run `node scripts/check-release-version.ts <previous-package-version>`
+from the candidate checkout using the previous app version from `main`. The release check requires
+matching notes for version bumps. Manually dispatched build-only runs work without a notes file.
 
 ## Manual release
 
@@ -43,8 +57,10 @@ Use this procedure when you need to exercise installed packages on your own Mac 
    the Paseo archive includes its manifest, runtime entries, `npm-shrinkwrap.json`, `OVERVIEW.md`,
    icon and synthetic screenshot. Both carry the dashboard runtime, bundled dependencies and license notices.
 3. Open or create the GitHub draft titled **Agent Productivity HQ v1.0.0**. Set `v1.0.0` to the reviewed
-   commit SHA and attach the three verified files. Summarize host prerequisites and known limits
-   in the notes. [GitHub release instructions](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
+   commit SHA and attach the three verified files. For a new release, use its reviewed
+   [What's new Markdown](#draft-whats-new) as the release body, include its checksum in
+   `SHA256SUMS`, and attach the Markdown file with the archives.
+   [GitHub release instructions](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
 4. Once the distribution hold is cleared, make `kelvicthrust/agent-productivity-hq` public
    under **Settings → General → Danger Zone → Change repository visibility**. Verify that
@@ -114,7 +130,7 @@ dist-tags. Preserve the `v1.0.0` tag and any published assets.
 [npm dist-tag guide](https://docs.npmjs.com/adding-dist-tags-to-packages/)
 
 Publish the GitHub draft as the stable release. In a signed-out session, confirm that the
-`v1.0.0` release is visible and all three assets download. Verify the tag resolves to the
+`v1.0.0` release is visible and all its assets download. Verify the tag resolves to the
 recorded commit and run `shasum -a 256 -c SHA256SUMS` on the downloaded assets.
 
 ## Submit and verify the Paseo listing

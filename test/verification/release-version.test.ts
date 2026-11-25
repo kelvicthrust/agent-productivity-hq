@@ -10,7 +10,12 @@ const manifests = [
   'plugins/paseo-agent-productivity/package.json',
 ];
 
-function check(version: string, previous?: string, pluginVersion = version) {
+function check(
+  version: string,
+  previous?: string,
+  pluginVersion = version,
+  notes: string | null = `# What's new in v${version}\n\n- Added the workspace indicator.\n`,
+) {
   const root = mkdtempSync(join(tmpdir(), 'release-version-'));
   try {
     const script = join(root, 'scripts/check-release-version.ts');
@@ -24,6 +29,11 @@ function check(version: string, previous?: string, pluginVersion = version) {
         JSON.stringify({ version: manifest === manifests[2] ? pluginVersion : version }),
       );
     }
+    if (notes !== null) {
+      const path = join(root, 'docs/releases', `v${version}.md`);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, notes);
+    }
     return spawnSync(process.execPath, previous === undefined ? [script] : [script, previous], {
       encoding: 'utf8',
     });
@@ -33,7 +43,10 @@ function check(version: string, previous?: string, pluginVersion = version) {
 }
 
 it('reports the current version for a build-only run', () => {
-  expect(check('1.0.3')).toMatchObject({ status: 0, stdout: '1.0.3\n' });
+  expect(check('1.0.3', undefined, '1.0.3', null)).toMatchObject({
+    status: 0,
+    stdout: '1.0.3\n',
+  });
 });
 
 it.each([
@@ -45,7 +58,18 @@ it.each([
 });
 
 it('skips publication when the version is unchanged', () => {
-  expect(check('1.0.3', '1.0.3')).toMatchObject({ status: 0, stdout: '' });
+  expect(check('1.0.3', '1.0.3', '1.0.3', null)).toMatchObject({ status: 0, stdout: '' });
+});
+
+it.each([
+  null,
+  '',
+  "# What's new in v1.0.3\n\n",
+  "# What's new in v1.0.2\n\n- Added the workspace indicator.",
+])('blocks a version bump with absent or invalid release notes (%j)', (notes) => {
+  const result = check('1.0.3', '1.0.2', '1.0.3', notes);
+  expect(result).toMatchObject({ status: 1, stdout: '' });
+  expect(result.stderr).toContain('docs/releases/v1.0.3.md');
 });
 
 it('rejects a lower version', () => {
