@@ -2,8 +2,10 @@ import type {
   PluginClientContext,
   PluginScreenProps,
   PluginSidebarItemProps,
+  PluginWorkspaceRowBadgeItemProps,
 } from '@getpaseo/plugin/client';
-import { SettingsAction, SidebarRow } from '@getpaseo/plugin/client/ui';
+import { useWorkspace } from '@getpaseo/plugin/client';
+import { SettingsAction, SidebarRow, WorkspaceRowBadge } from '@getpaseo/plugin/client/ui';
 import { useState } from 'react';
 import {
   createLaunchRequests,
@@ -18,6 +20,13 @@ import { ConfigureLauncher } from './client/settings.tsx';
 
 const launcherId = 'dashboard';
 const title = 'Agent HQ';
+const needsAnswer = 'Needs your answer';
+
+function WorkspaceAnswerBadge({ workspaceId }: PluginWorkspaceRowBadgeItemProps) {
+  // The daemon's status gives pending input priority over ongoing work.
+  const waiting = useWorkspace(workspaceId, (workspace) => workspace.status === 'needs_input');
+  return waiting ? <WorkspaceRowBadge label={needsAnswer} tone="warning" /> : null;
+}
 
 function ProductivityScreen({
   requests,
@@ -97,7 +106,14 @@ export default function contribute(client: PluginClientContext) {
     title,
     Component: ProductivitySidebarItem,
   });
+  const removeBadge = client.addWorkspaceRowBadgeItem?.({
+    id: 'needs-your-answer',
+    title: needsAnswer,
+    icon: 'MessageCircleQuestion',
+    Component: WorkspaceAnswerBadge,
+  });
   return () => {
+    removeBadge?.();
     removeRow();
     removeScreen();
     removeSettings();
