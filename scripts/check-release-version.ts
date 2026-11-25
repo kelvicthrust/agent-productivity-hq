@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const manifests = [
   '../package.json',
@@ -33,6 +33,17 @@ if (previous !== undefined) {
       throw new Error(`Package version ${version} must be newer than ${previous}.`);
     }
     break;
+  }
+
+  const notesPath = `docs/releases/v${version}.md`;
+  const notes = new URL(`../${notesPath}`, import.meta.url);
+  const heading = `# What's new in v${version}`;
+  if (!existsSync(notes)) {
+    throw new Error(`Create ${notesPath} before releasing v${version}.`);
+  }
+  const [firstLine, ...body] = readFileSync(notes, 'utf8').trim().split(/\r?\n/);
+  if (firstLine !== heading || !body.some((line) => line.trim() !== '')) {
+    throw new Error(`${notesPath} needs the heading "${heading}" and release notes below it.`);
   }
 }
 console.log(version);

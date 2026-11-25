@@ -7,6 +7,12 @@ on:
       - package.json
       - packages/cli/package.json
       - plugins/paseo-agent-productivity/package.json
+  pull_request:
+    branches: [main]
+    paths:
+      - package.json
+      - packages/cli/package.json
+      - plugins/paseo-agent-productivity/package.json
   workflow_dispatch:
 
 permissions: {}
@@ -26,7 +32,7 @@ env:
 jobs:
   version:
     name: Check release version
-    if: github.event_name == 'workflow_dispatch' || (github.repository == 'kelvicthrust/agent-productivity-hq' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.repository == 'kelvicthrust/agent-productivity-hq' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -45,30 +51,32 @@ jobs:
       - name: Check release version
         id: version
         env:
-          BEFORE: ${{ github.event.before }}
+          BEFORE: ${{ github.event.before || github.event.pull_request.base.sha }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            version=$(node scripts/check-release-version.ts)
+          else
             previous=$(git show "$BEFORE:package.json" | jq -er '.version')
             version=$(node scripts/check-release-version.ts "$previous")
             if [[ -z "$version" ]]; then
               echo "Package version did not change."
               exit 0
             fi
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             tag="refs/tags/v$version"
             if git show-ref --verify --quiet "$tag" &&
               [[ "$(git rev-parse "$tag^{commit}")" != "$GITHUB_SHA" ]]; then
               echo "Tag v$version already points to another commit." >&2
               exit 1
             fi
-          else
-            version=$(node scripts/check-release-version.ts)
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build and test release packages
     needs: version
-    if: needs.version.outputs.version != ''
+    if: github.event_name != 'pull_request' && needs.version.outputs.version != ''
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
@@ -105,8 +113,14 @@ jobs:
           paseo="kelvicthrust-paseo-agent-productivity-hq-$VERSION.tgz"
           mkdir dist/release
           cp "dist/cli/$cli" "dist/paseo/$paseo" dist/release/
+          assets=("$cli" "$paseo")
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            notes="v$VERSION.md"
+            cp "docs/releases/$notes" dist/release/
+            assets+=("$notes")
+          fi
           cd dist/release
-          shasum -a 256 "$cli" "$paseo" > SHA256SUMS
+          shasum -a 256 "${assets[@]}" > SHA256SUMS
           shasum -a 256 -c SHA256SUMS
       - name: Upload verified release assets
         id: upload
@@ -183,7 +197,7 @@ jobs:
             echo "Tag v$VERSION does not point to the built commit." >&2
             exit 1
           fi
-          gh release create "v$VERSION" --verify-tag --generate-notes \
+          gh release create "v$VERSION" --verify-tag --notes-file "v$VERSION.md" \
             --title "Agent Productivity HQ v$VERSION" \
             "kelvicthrust-agent-productivity-hq-$VERSION.tgz" \
-            "kelvicthrust-paseo-agent-productivity-hq-$VERSION.tgz" SHA256SUMS
+            "kelvicthrust-paseo-agent-productivity-hq-$VERSION.tgz" "v$VERSION.md" SHA256SUMS
