@@ -19,6 +19,7 @@ const {
   native,
   installNativeRuntime,
   usePaseo,
+  useWorkspace,
   listWorkspaces,
   externalBrowser,
 } = vi.hoisted(() => ({
@@ -29,6 +30,7 @@ const {
   native: vi.fn(),
   installNativeRuntime: vi.fn(),
   usePaseo: vi.fn(),
+  useWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
   externalBrowser: { open: undefined as ((url: string) => Promise<void>) | undefined },
 }));
@@ -51,6 +53,7 @@ vi.mock('@getpaseo/plugin/client', () => ({
     }
   },
   usePaseo,
+  useWorkspace,
   useWorkspaces: () => {
     throw new Error('Plugin state hooks must run inside a plugin host');
   },
@@ -63,6 +66,9 @@ vi.mock('@getpaseo/plugin/client/ui', () => ({
     <a href={href}>{children}</a>
   ),
   Icon: () => null,
+  WorkspaceRowBadge: ({ label, tone }: { label: string; tone: string }) => (
+    <span data-tone={tone}>{label}</span>
+  ),
   SidebarRow: ({ onPress }: { onPress: () => void }) => <button onClick={onPress}>Agent HQ</button>,
   SettingsAction: ({
     actionLabel,
@@ -178,6 +184,39 @@ const handoffUrl = `${privateUrl}/paseo/#ticket=${ticket}`;
 const readyHandoff = () => ({ ok: true, url: privateUrl, ticket, validForMs: 120_000 });
 const theme = { colors: {} } as PluginScreenProps['theme'];
 const layout = { compact: false, platform: 'web' } as const;
+
+it('marks a workspace that needs input until the pending request clears', () => {
+  const removeBadge = vi.fn();
+  const addWorkspaceRowBadgeItem = vi.fn<PluginClientContext['addWorkspaceRowBadgeItem']>(
+    () => removeBadge,
+  );
+  const dispose = contribute({
+    addSidebarHeaderItem: () => () => {},
+    addScreen: () => () => {},
+    addSettingsScreen: () => () => {},
+    addWorkspaceRowBadgeItem,
+  } as unknown as PluginClientContext);
+  expect(addWorkspaceRowBadgeItem).toHaveBeenCalledOnce();
+  const { Component: Badge } = addWorkspaceRowBadgeItem.mock.calls[0]![0];
+  useWorkspace.mockImplementation((id, select) =>
+    id === workspaceId ? select({ status: 'needs_input', indicator: 'running' }) : null,
+  );
+  const row = (id: string) => <Badge host={host} layout={layout} theme={theme} workspaceId={id} />;
+  const { rerender } = render(row('another-workspace'));
+  expect(screen.queryByText('Needs your answer')).toBeNull();
+
+  rerender(row(workspaceId));
+  expect(screen.getByText('Needs your answer').getAttribute('data-tone')).toBe('warning');
+
+  useWorkspace.mockImplementation((_, select) =>
+    select({ status: 'running', indicator: 'running' }),
+  );
+  rerender(row(workspaceId));
+  expect(screen.queryByText('Needs your answer')).toBeNull();
+
+  dispose?.();
+  expect(removeBadge).toHaveBeenCalledOnce();
+});
 
 type BrowserTarget = Parameters<
   NonNullable<NonNullable<PluginScreenProps['navigation']>['openBrowser']>

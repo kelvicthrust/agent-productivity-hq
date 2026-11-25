@@ -74,6 +74,10 @@ sign-in in a browser on the Mac running HQ. The first sign-in registers this ins
 with OpenAI and keeps its connection in macOS Keychain. You can disconnect or choose a
 different account from Work Review.
 
+In Paseo, use **Overview → Open Work Review** to carry your selected filters into the owner
+dashboard. If you already opened the full browser dashboard from Paseo, use **Open owner Work
+Review**. Open Work Review with the [Mac owner's browser unlock code](#unlock-the-owner-browser).
+
 Select a period and choose **Generate update** to confirm which evidence goes to OpenAI.
 Opening a saved review uses no plan allowance. If GPT-6 Luna is unavailable to the
 connected account, HQ shows the reason and keeps your last successful review.
@@ -140,7 +144,9 @@ HQ serves the private HTTPS dashboard on port 4317.
 The launch expires after two minutes if you leave it unopened. A dashboard tab can be reloaded
 for up to eight hours or until the share closes. Launch a fresh browser session from Paseo.
 
-For **Open owner settings**, open `paseo-browser-code.txt` as the macOS account running Paseo.
+#### Unlock the owner browser
+
+For **Open owner settings** or **Open Work Review**, open `paseo-browser-code.txt` as the macOS account running Paseo.
 The default location is `~/Library/Application Support/agent-productivity/paseo-browser-code.txt`.
 Enter its current code in the unlock form. Use an owner-only HQ data directory without macOS
 access-control list entries for browser sharing. Closing the share removes the code file and
@@ -232,8 +238,9 @@ existing setup. Select an empty directory for a fresh start.
 
 After Setup, normal startup reads the installation host's Codex and Claude Code history and starts
 the configured integrations. GitHub can reuse an existing `gh` sign-in, and ChatGPT can reuse Codex
-sign-in. In Setup or Sources, search by repository name or owner, then choose **Track**. You can
-also paste a GitHub URL. The GitHub App can only suggest repos available to that installation.
+sign-in. In **Sources & repos**, open **Add repository** to search by repository name or owner.
+Choose **Track** on a result, or paste a GitHub URL. Repository search is also available during
+Setup. The GitHub App can suggest repos available to that installation.
 
 ### Check Claude plan limits
 
