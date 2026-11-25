@@ -685,7 +685,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
           })
         : undefined;
       const account = reviewAuth;
-      workReview = createWorkReviewService({
+      const review = createWorkReviewService({
         db,
         timezone,
         now,
@@ -700,6 +700,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
               })
             : undefined,
       });
+      workReview = review;
       const reset = createResetService({
         db,
         runner: activeRunner,
@@ -781,6 +782,19 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
                         },
                       },
                     ]),
+                ...(account
+                  ? [
+                      {
+                        name: 'work_review',
+                        nextDelay: () => REFRESH_INTERVAL_MS,
+                        run: async () => {
+                          if (closing || reset.running() || !review.getAutomation().enabled) return;
+                          await activeRunner.idle();
+                          if (!closing && !reset.running()) await review.tick();
+                        },
+                      },
+                    ]
+                  : []),
               ],
             });
       step('scheduler', { started: scheduler !== null });

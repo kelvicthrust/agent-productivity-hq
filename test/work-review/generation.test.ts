@@ -1,15 +1,53 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { WorkReviewState } from '../../src/shared/contracts/work-review.ts';
+import { boot, REFRESH_INTERVAL_MS } from '../../src/server/boot.ts';
 import type { NetFetch } from '../../src/server/collectors/github/ports.ts';
 import { WORK_REVIEW_MODELS_URL, WORK_REVIEW_RESPONSES_URL } from '../../src/server/lib/net.ts';
 import { setMeta } from '../../src/server/db/queries/meta.ts';
+import { upsertPullRequests } from '../../src/server/db/queries/prs.ts';
+import { workReviewKeyring } from '../../src/server/services/work-review/keyring.ts';
 import { createWorkReviewWorker } from '../../src/server/services/work-review/worker.ts';
 import { createWorkReviewService } from '../../src/server/services/work-review/service.ts';
-import { call, HOST, memoryDb, NOW, tempDir, testApp, TZ, WRITE } from '../server/helpers.ts';
-import { addEvent, addSession } from '../server/usage/helpers.ts';
+import { createMemoryKeyring } from '../fixtures/github/scripted-github.ts';
+import { gate, scriptedAdapter, succeeds } from '../fixtures/scripted-adapters/scripted.ts';
+import {
+  call,
+  HOST,
+  memoryDb,
+  memoryLogger,
+  NOW,
+  tempConfig,
+  tempDir,
+  testApp,
+  TZ,
+  WRITE,
+} from '../server/helpers.ts';
+import { addEvent, addRepo, addSession } from '../server/usage/helpers.ts';
+
+function modelResponse(result: unknown) {
+  return new Response(
+    'data: ' +
+      JSON.stringify({
+        type: 'response.completed',
+        response: {
+          model: 'gpt-6-luna',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: JSON.stringify(result) }],
+            },
+          ],
+        },
+      }) +
+      '\n\n',
+    { headers: { 'content-type': 'text/event-stream' } },
+  );
+}
 
 it('generates a cited non-PR update from a mixed imported session through the normal HTTP path', async () => {
   const home = tempDir();
@@ -72,25 +110,7 @@ it('generates a cited non-PR update from a mixed imported session through the no
             ids: ['0'],
             bullets: [{ kind: 'progress', text: note, ids: ['0'] }],
           };
-    return new Response(
-      'data: ' +
-        JSON.stringify({
-          type: 'response.completed',
-          response: {
-            model: 'gpt-6-luna',
-            status: 'completed',
-            output: [
-              {
-                type: 'message',
-                role: 'assistant',
-                content: [{ type: 'output_text', text: JSON.stringify(result) }],
-              },
-            ],
-          },
-        }) +
-        '\n\n',
-      { headers: { 'content-type': 'text/event-stream' } },
-    );
+    return modelResponse(result);
   };
   const service = createWorkReviewService({
     db,
@@ -140,4 +160,97 @@ it('generates a cited non-PR update from a mixed imported session through the no
   expect((await generate()).status).toBe(200);
   expect(requests).toHaveLength(2);
   db.close();
+});
+
+it('boot schedules opted-in Work Review after the source refresh finishes', async () => {
+  const config = tempConfig();
+  const keyring = createMemoryKeyring();
+  const releaseImport = gate();
+  const adapter = scriptedAdapter('github', [
+    async ({ db }) => {
+      await releaseImport.promise;
+      upsertPullRequests(db, [
+        {
+          nodeId: 'scheduled-pr',
+          repoId: 'me/app',
+          number: 5,
+          title: 'Repair import retries',
+          url: 'https://github.com/me/app/pull/5',
+          authorLogin: 'me',
+          mergedByLogin: 'me',
+          mergedAt: NOW,
+          headRef: null,
+          baseRef: null,
+          mergeCommitSha: null,
+          commits: [],
+          commitsComplete: true,
+        },
+      ]);
+      return succeeds({ imported: 1 });
+    },
+  ]);
+  const modelNet = vi.fn<NetFetch>(async (url, init) => {
+    if (url === WORK_REVIEW_MODELS_URL)
+      return Response.json({ models: [{ slug: 'gpt-6-luna', visibility: 'list' }] });
+    expect(url).toBe(WORK_REVIEW_RESPONSES_URL);
+    expect(init?.body).toContain('Repair import retries');
+    return modelResponse({
+      headline: 'I fixed a retry issue in the importer.',
+      ids: ['0'],
+      bullets: [],
+    });
+  });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  vi.setSystemTime(NOW);
+  let server: Awaited<ReturnType<typeof boot>> | undefined;
+  try {
+    server = await boot(config, {
+      timezone: TZ,
+      adapters: [adapter],
+      logger: memoryLogger().logger,
+      listen: async () => ({ close: (done) => done?.() }),
+      workReview: { keyring, modelNet, authNet: vi.fn() },
+    });
+    const db = server.db!;
+    setMeta(db, 'setup_completed_at', '1');
+    setMeta(db, 'github_login', 'me');
+    addRepo(db, 'me/app');
+    workReviewKeyring(db, keyring).set(
+      'agent-productivity-work-review',
+      createHash('sha256').update(config.dataDir).digest('hex'),
+      JSON.stringify({
+        hostId: 'urn:uuid:12345678-1234-1234-1234-123456789abc',
+        profile: { clientId: 'oaiapp_fixture', subject: 'fixture-owner', email: null },
+        credentials: {
+          access: 'synthetic-test-grant',
+          refresh: null,
+          accessExpiresAt: NOW + 24 * 3_600_000,
+          refreshExpiresAt: NOW + 24 * 3_600_000,
+          scopes: ['resource.invoke', 'chatgpt.tokens.use.direct'],
+        },
+      }),
+    );
+    const optedIn = await call(server.app, '/api/work-review/automation', {
+      method: 'POST',
+      headers: WRITE,
+      body: JSON.stringify({ enabled: true }),
+    });
+    expect(optedIn.status).toBe(200);
+    await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS);
+    expect(adapter.calls).toBe(1);
+    expect(modelNet).not.toHaveBeenCalled();
+
+    releaseImport.release();
+    await vi.advanceTimersByTimeAsync(1);
+    const report = await call(server.app, '/api/work-review', { headers: HOST });
+    expect(WorkReviewState.parse(await report.json()).review).toMatchObject({
+      version: 1,
+      headlineEvidence: [{ id: 'scheduled-pr', kind: 'pr' }],
+    });
+    expect(modelNet).toHaveBeenCalledTimes(2); // Catalog read and summary.
+  } finally {
+    releaseImport.release();
+    await server?.shutdown();
+    vi.useRealTimers();
+  }
 });

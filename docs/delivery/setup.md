@@ -78,6 +78,10 @@ Select a period and choose **Generate update** to confirm which evidence goes to
 Opening a saved review uses no plan allowance. If GPT-6 Luna is unavailable to the
 connected account, HQ shows the reason and keeps your last successful review.
 
+Turn on **Keep this week up to date** to allow recurring use of your ChatGPT plan for
+this week’s review. Turn it off in the same section to stop background generation.
+Disconnecting Work Review also turns it off.
+
 ## Open Agent HQ from Paseo Desktop
 
 Click **Agent HQ** in the Paseo sidebar. A new installation opens Setup inside Paseo.

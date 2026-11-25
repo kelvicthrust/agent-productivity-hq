@@ -24,6 +24,7 @@ import { FilterQuery, LimitQuery } from './filters.ts';
 import { ClaudeHooksRequest, ClaudeHooksStatus, HqClaudeHookEvent, HqResponse } from './hq.ts';
 import {
   GenerateWorkReview,
+  WorkReviewAutomation,
   WorkReviewState,
   WorkReviewAccount,
   WorkReviewConnect,
@@ -127,6 +128,14 @@ export const ROUTES: readonly RouteContract[] = [
     query: filters('start', 'end', 'repos', 'provider', 'author'),
     errors: ['400'],
   }),
+  get('/api/work-review/automation', WorkReviewAutomation),
+  {
+    method: 'post',
+    path: '/api/work-review/automation',
+    csrf: true,
+    body: { schema: WorkReviewAutomation, required: true },
+    responses: { '200': WorkReviewAutomation, '400': E, '502': E },
+  },
   get('/api/work-review/account', WorkReviewAccount),
   {
     method: 'post',

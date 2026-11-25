@@ -11,7 +11,7 @@ import { todayIn, utcBounds } from '../../../shared/domain/periods.ts';
 import type { RawFilters } from '../../../shared/domain/scope.ts';
 import type { DiscoveryInput } from '../../collectors/discovery.ts';
 import type { Db } from '../../db/open.ts';
-import { getMeta } from '../../db/queries/meta.ts';
+import { getMeta, setMeta } from '../../db/queries/meta.ts';
 import { readSetupState } from '../../db/queries/setup.ts';
 import {
   readVersion,
@@ -33,12 +33,19 @@ const WORKER_ERRORS: Record<string, string> = {
   timeout: 'The request to OpenAI timed out. You can retry this update.',
   unavailable: 'OpenAI could not complete the request. Check your connection and try again.',
 };
+const AUTOMATION_ENABLED = 'work_review_automatic_refresh';
+const LAST_AUTOMATIC_ATTEMPT = 'work_review_last_automatic_attempt';
+const AUTOMATIC_INTERVAL_MS = 6 * 60 * 60_000;
 type Evidence = ReturnType<typeof collectWorkReviewEvidence>;
 interface Item {
   kind: WorkReviewBullet['kind'];
   text: string;
   group: string;
   evidence: WorkReviewEvidence[];
+}
+interface ReviewRun {
+  signal: AbortSignal;
+  check(at?: number): void;
 }
 interface Options {
   db: Db;
@@ -70,8 +77,9 @@ async function summarizeBatch(
   worker: WorkReviewWorker,
   scope: Scope,
   batch: Item[],
-  signal: AbortSignal,
+  run: ReviewRun,
 ) {
+  run.check();
   const entries = batch.map((item, index) => ({
     id: String(index),
     kind: item.kind,
@@ -80,7 +88,7 @@ async function summarizeBatch(
   }));
   const summary = await worker.summarize(
     { startDate: scope.start, endDate: scope.end, items: entries },
-    signal,
+    run.signal,
   );
   const resolve = (ids: string[], kind?: Item['kind']) => {
     if (!ids.length) throw new Error('Missing citation');
@@ -105,7 +113,7 @@ async function summarizeBatch(
   return { headline: summary.headline, headlineEvidence, bullets };
 }
 
-async function compose(worker: WorkReviewWorker, scope: Scope, items: Item[], signal: AbortSignal) {
+async function compose(worker: WorkReviewWorker, scope: Scope, items: Item[], run: ReviewRun) {
   // Team PRs never enter a first-person writing prompt.
   let personal = items.filter((item) => item.kind !== 'team');
   const team = items.filter((item) => item.kind === 'team');
@@ -116,9 +124,8 @@ async function compose(worker: WorkReviewWorker, scope: Scope, items: Item[], si
     for (const kind of ['shipped', 'progress', 'open'] as const) {
       const section = personal.filter((item) => item.kind === kind);
       for (let offset = 0; offset < section.length; offset += 80) {
-        signal.throwIfAborted();
         const batch = section.slice(offset, offset + 80);
-        const result = await summarizeBatch(worker, scope, batch, signal);
+        const result = await summarizeBatch(worker, scope, batch, run);
         // A short batch can be expressed entirely in its headline. Its sources all share this kind.
         if (result.bullets.length) next.push(...result.bullets);
         else
@@ -133,7 +140,7 @@ async function compose(worker: WorkReviewWorker, scope: Scope, items: Item[], si
     personal = next;
   }
   const result = personal.length
-    ? await summarizeBatch(worker, scope, personal, signal)
+    ? await summarizeBatch(worker, scope, personal, run)
     : {
         headline: team.length
           ? `The team merged ${team.length} pull request${team.length === 1 ? '' : 's'} in this period.`
@@ -166,11 +173,16 @@ export function createWorkReviewService({
   worker,
   accountStatus,
 }: Options) {
-  let active: { key: string; controller: AbortController; done: Promise<void> } | null = null;
+  let active: {
+    key: string;
+    automatic: boolean;
+    controller: AbortController;
+    done: Promise<void>;
+  } | null = null;
   let failure: { key: string; message: string } | null = null;
   let closed = false;
-  function selection(raw: RawFilters) {
-    const scope = resolveUsageScope(db, raw, { nowMs: now(), timezone });
+  function selection(raw: RawFilters, nowMs = now()) {
+    const scope = resolveUsageScope(db, raw, { nowMs, timezone });
     if (scope.ignoredRepos?.length)
       throw new ApiError('invalid_input', 'Select a known repository for this review.');
     const key = JSON.stringify([
@@ -210,8 +222,9 @@ export function createWorkReviewService({
     key: string,
     inputs: Evidence,
     version: number,
-    signal: AbortSignal,
+    run: ReviewRun,
   ) {
+    run.check();
     if (!worker) throw new Error('unavailable');
     const items: Item[] = [];
     const prs = new Map<string, WorkReviewEvidence>();
@@ -235,12 +248,13 @@ export function createWorkReviewService({
     }
     let partialDays = 0;
     for (const unit of inputs.sessionDays) {
-      signal.throwIfAborted();
+      run.check();
       let saved = readWorkNotes(db, unit.cacheKey, unit.fingerprint, unit.sourceHash);
       if (!saved) {
         const result = local
-          ? await readWorkReviewTurns(unit, local, signal)
+          ? await readWorkReviewTurns(unit, local, run.signal)
           : { turns: [], partial: true };
+        run.check();
         const notes =
           unit.title || result.turns.length
             ? await worker.extract(
@@ -249,10 +263,10 @@ export function createWorkReviewService({
                   title: result.turns.length ? null : unit.title,
                   turns: result.turns,
                 },
-                signal,
+                run.signal,
               )
             : [];
-        signal.throwIfAborted();
+        run.check();
         saved = { notes, partial: result.partial || !result.turns.length };
         saveWorkNotes(
           db,
@@ -281,8 +295,9 @@ export function createWorkReviewService({
           evidence: [{ ...session, notes: [note.text] }, ...linked],
         });
     }
-    const result = await compose(worker, scope, items, signal);
-    signal.throwIfAborted();
+    const result = await compose(worker, scope, items, run);
+    const completedAt = now();
+    run.check(completedAt);
     const coverage = [...inputs.coverage];
     if (partialDays)
       coverage.push(
@@ -291,7 +306,7 @@ export function createWorkReviewService({
     const review: WorkReviewVersion = {
       ...result,
       version,
-      createdAt: new Date(now()).toISOString(),
+      createdAt: new Date(completedAt).toISOString(),
       coverage,
     };
     saveVersion(db, key, utcBounds(scope.start, timezone).start, inputs.fingerprint, review);
@@ -300,6 +315,47 @@ export function createWorkReviewService({
   function read(raw: RawFilters, version?: number) {
     const { key, scope } = selection(raw);
     return state(scope, key, version);
+  }
+
+  function start(
+    scope: Scope,
+    key: string,
+    evidence: Evidence,
+    version: number,
+    automatic: boolean,
+  ) {
+    const controller = new AbortController();
+    const deadline = automatic ? utcBounds(scope.end, timezone).end : null;
+    const timer =
+      deadline === null
+        ? undefined
+        : setTimeout(() => controller.abort(), deadline - now()).unref();
+    const run: ReviewRun = {
+      signal: controller.signal,
+      check(at) {
+        if (deadline !== null && (at ?? now()) >= deadline) controller.abort();
+        controller.signal.throwIfAborted();
+      },
+    };
+    failure = null;
+    const done = Promise.resolve()
+      .then(() => generateVersion(scope, key, evidence, version, run))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+        const message =
+          typeof code === 'string' && Object.hasOwn(WORKER_ERRORS, code)
+            ? WORKER_ERRORS[code]!
+            : 'The review could not be completed. Try again to reuse the notes already prepared.';
+
+        failure = { key, message };
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        active = null;
+      });
+    active = { key, automatic, controller, done };
+    return done;
   }
 
   function generate(raw: RawFilters, revision: boolean) {
@@ -322,28 +378,48 @@ export function createWorkReviewService({
         'upstream_unavailable',
         'Continue with ChatGPT in Work Review before generating an update.',
       );
-    const controller = new AbortController();
-    failure = null;
-    const done = Promise.resolve()
-      .then(() =>
-        generateVersion(scope, key, evidence, (current.versions[0] ?? 0) + 1, controller.signal),
-      )
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
-        const message =
-          typeof code === 'string' && Object.hasOwn(WORKER_ERRORS, code)
-            ? WORKER_ERRORS[code]!
-            : 'The review could not be completed. Try again to reuse the notes already prepared.';
-
-        failure = { key, message };
-      })
-      .finally(() => {
-        active = null;
-      });
-    active = { key, controller, done };
+    void start(scope, key, evidence, (current.versions[0] ?? 0) + 1, false);
     return { ...current, status: 'running' as const, message: null };
   }
+
+  function getAutomation() {
+    return { enabled: getMeta(db, AUTOMATION_ENABLED) === '1' };
+  }
+
+  async function setAutomation(enabled: boolean) {
+    if (enabled) {
+      if (closed || !readSetupState(db).complete)
+        throw new ApiError('invalid_input', 'Finish setup before enabling automatic Work Review.');
+      if (!worker || accountStatus?.() !== 'connected')
+        throw new ApiError(
+          'upstream_unavailable',
+          'Continue with ChatGPT in Work Review before enabling automatic refresh.',
+        );
+    }
+    setMeta(db, AUTOMATION_ENABLED, enabled ? '1' : '0');
+    if (!enabled && active?.automatic) await cancel();
+    return getAutomation();
+  }
+
+  async function tick() {
+    if (closed || active || !worker || !getAutomation().enabled || !readSetupState(db).complete)
+      return;
+    const at = now();
+    const previous = getMeta(db, LAST_AUTOMATIC_ATTEMPT);
+    if (previous !== null && at - Number(previous) < AUTOMATIC_INTERVAL_MS) return;
+    if (accountStatus?.() !== 'connected') return;
+
+    // The dashboard's default scope stays fixed through Sunday. The collector stops at today.
+    const { scope, key } = selection({}, at);
+    const evidence = collectWorkReviewEvidence(db, scope, at);
+    const version = reviewVersions(db, key)[0] ?? 0;
+    if (version === 0 && !evidence.prs.length && !evidence.sessionDays.length) return;
+    if (version > 0 && readVersion(db, key, version)?.hash === evidence.fingerprint) return;
+    // Claim the window before any outbound call, including attempts interrupted by a restart.
+    setMeta(db, LAST_AUTOMATIC_ATTEMPT, String(at));
+    await start(scope, key, evidence, version + 1, true);
+  }
+
   async function cancel() {
     active?.controller.abort();
     await active?.done;
@@ -352,6 +428,13 @@ export function createWorkReviewService({
   return {
     read,
     generate,
+    getAutomation,
+    setAutomation,
+    tick,
+    disconnect: () => {
+      setMeta(db, AUTOMATION_ENABLED, '0');
+      return cancel();
+    },
     idle: async () => {
       await active?.done;
     },

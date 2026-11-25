@@ -131,8 +131,8 @@ function fixture(realListener = false) {
     advance: (milliseconds: number) => {
       clock += milliseconds;
     },
-    async begin(auth: WorkReviewAuth, newProfile?: boolean) {
-      const result = await auth.connect(newProfile);
+    async begin(auth: WorkReviewAuth, newProfile?: boolean, clear?: () => Promise<void>) {
+      const result = await auth.connect(newProfile, clear);
       const url = new URL(result.url);
       nonce = url.searchParams.get('nonce')!;
       return url;
@@ -265,7 +265,12 @@ describe('Work Review ChatGPT authorization', () => {
     const auth = world.open();
     expect(auth.status()).toMatchObject({ status: 'disconnected' });
     expect(world.storage).toBeNull();
-    const authorize = await world.begin(auth);
+    let cleared = 0;
+    const clear = async () => {
+      cleared++;
+    };
+    const authorize = await world.begin(auth, false, clear);
+    expect(cleared).toBe(1);
     expect(auth.status()).toMatchObject({ status: 'pending' });
     expect(authorize.origin + authorize.pathname).toBe(
       'https://auth.openai.com/api/accounts/authorize',
@@ -299,7 +304,8 @@ describe('Work Review ChatGPT authorization', () => {
     await auth.close();
     const restart = world.open();
     expect(await restart.accessToken(signal())).toBe(accessToken);
-    const next = await world.begin(restart);
+    const next = await world.begin(restart, false, clear);
+    expect(cleared).toBe(1);
     expect(next.searchParams.get('client_id')).toBe(clientId);
     expect(next.searchParams.get('ext_agent_host_id')).toBe(
       authorize.searchParams.get('ext_agent_host_id'),

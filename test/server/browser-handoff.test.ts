@@ -170,6 +170,8 @@ it('grants the usual reports and management operations with owner-only routes de
       ['PUT', '/api/hq/claude-hooks'],
       ['GET', '/api/accounts/claude/usage-capture/preview'],
       ['PUT', '/api/accounts/claude/usage-capture'],
+      ['GET', '/api/work-review/automation'],
+      ['POST', '/api/work-review/automation'],
       ['POST', '/api/setup/reset'],
       ['POST', '/api/setup/complete'],
       ['POST', '/api/hq/hooks/claude'],

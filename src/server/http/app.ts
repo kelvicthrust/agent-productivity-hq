@@ -181,7 +181,7 @@ export function createApp(deps: AppDeps): Hono<HttpEnv> {
   // PR links (M8): a PR's evidence and the owner's decisions about it.
   app.route('/', linksRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   app.route('/', workReviewRoutes(workReview));
-  app.route('/', workReviewAccountRoutes(deps.db, deps.reviewAuth, workReview.cancel));
+  app.route('/', workReviewAccountRoutes(deps.db, deps.reviewAuth, workReview.disconnect));
   app.route('/', yearRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   app.route('/', usageRoutes({ db: deps.db, now: deps.now, timezone: deps.timezone }));
   // The review surfaces (M7): one clock and one report timezone for every figure on a page.

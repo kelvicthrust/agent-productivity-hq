@@ -222,6 +222,7 @@ describe('what the server serves against the document', () => {
       'GET /api/usage/groups/{groupKey}/roots',
       'GET /api/work-review',
       'GET /api/work-review/account',
+      'GET /api/work-review/automation',
       'GET /api/year',
       'POST /api/accounts/claude/plan-limits/check',
       'POST /api/accounts/{account}/connect',
@@ -236,6 +237,7 @@ describe('what the server serves against the document', () => {
       'POST /api/setup/reset',
       'POST /api/work-review/account/connect',
       'POST /api/work-review/account/disconnect',
+      'POST /api/work-review/automation',
       'POST /api/work-review/generate',
       'PUT /api/accounts/claude/usage-capture',
       'PUT /api/accounts/github/app',
@@ -484,7 +486,9 @@ describe('what the server serves against the document', () => {
                     ? '{"hook_event_name":"Stop","session_id":"contract-session"}'
                     : key === 'POST /api/setup/reset'
                       ? '{"confirmed":true}'
-                      : '{}';
+                      : key === 'POST /api/work-review/automation'
+                        ? '{"enabled":false}'
+                        : '{}';
     const path = key === 'GET /api/repos/discover' ? url + '?login=octo-kelvin&via=gh' : url;
     const res = await call(target, path, {
       method,
