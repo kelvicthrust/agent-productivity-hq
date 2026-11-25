@@ -53,6 +53,7 @@ Install and open Agent Productivity HQ on the Mac that holds my agent activity. 
 The Terminal command opens HQ in your browser. If needed, copy the address it prints into your browser. [Downloadable releases](https://github.com/kelvicthrust/agent-productivity-hq/releases/latest)
 
 In Paseo, a fresh installation opens Setup. After setup, **Agent HQ** opens the illustrated HQ.
+Workspaces with pending input can show **Needs your answer** in the Paseo sidebar.
 
 In Paseo, choose **Open full dashboard** to open HQ in your browser using the host owner's
 Tailscale account. Use **Sources & repos → Open owner settings** and the Mac owner's unlock code
@@ -80,11 +81,13 @@ HQ refreshes about every two seconds while the view is open. **A quiet one** mea
 - **Usage** shows how many tokens each tool, project, and conversation used. **Trends** shows changes over time and which models used those tokens.
 - **Sources & repos** shows which sources are available and lets you manage accounts, projects, and collection settings.
 
+In the browser, open **About Agent Productivity HQ** from the app bar to check your version or find release notes and troubleshooting.
+
 ### Generate a work update
 
-In **Overview**, choose your date range and select the **Work Review** card. The full update opens over Overview. Use **Manage review** to open the same period in **Delivery → Work Review**. On first use, the link is labeled **Manage ChatGPT connection**. Choose **Continue with ChatGPT** in Delivery and finish sign-in in a browser on the Mac running HQ. This separate connection authorizes ChatGPT plan usage for Work Review. In native Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. In the limited browser view, use **Open owner Work Review**.
+In **Overview**, choose your date range and select the **Work Review** card to read the full update. Use **Manage review** to open the same period in **Delivery → Work Review**. On first use, choose **Manage ChatGPT connection** to set up the separate sign-in. In Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. [Work Review setup and owner access](docs/delivery/setup.md#connect-work-review)
 
-Choose **Generate update** to send selected session excerpts and PR metadata to OpenAI. Check the evidence on a bullet, or use **Copy update** for a team update. Opening saved reviews uses no model allowance. If new evidence arrives after a period closes, **Create revision** saves a new version. The pilot runs on demand.
+Choose **Generate update** and confirm to send selected session excerpts and PR metadata to OpenAI. Check the evidence on a bullet, or use **Copy update** for a team update. Opening saved reviews uses no model allowance. If new evidence arrives after a period closes, **Create revision** saves a new version. The pilot runs on demand.
 
 ## Data and compatibility
 

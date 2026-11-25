@@ -4,6 +4,10 @@ Open Agent HQ in Paseo to see the illustrated building fill with live coding age
 
 Click **Agent HQ** in Paseo 0.16.1 or later. A fresh installation opens Setup. Use **Overview**, **Trends**, **Delivery**, and **Usage** to explore reports, merged pull requests, and token history. Use **Sources & repos** to manage accounts and choose repositories. HQ runs on the Paseo daemon's Apple Silicon Mac, and clients with daemon management permission can read and manage its HQ data.
 
+In the Paseo sidebar, **Needs your answer** marks workspaces with pending input on clients that support workspace badges. Open the workspace to respond. The badge clears when the input is resolved.
+
+Use **Overview → Open Work Review** to open the owner dashboard with your selected dates and filters. Connect ChatGPT separately for on-demand work updates that link back to session and pull request evidence.
+
 **Open full dashboard** opens HQ in your browser using your existing Paseo permissions and the host owner's Tailscale identity. Use **Sources & repos → Open owner settings** and the Mac owner's unlock code to reset HQ or change Claude Code settings.
 
 The launcher uses an installed compatible Node runtime. If it cannot find one, **Install runtime** downloads the official ARM64 archive from nodejs.org after you choose that action. The launcher verifies the pinned SHA-256 before installing a private copy.
