@@ -1,3 +1,4 @@
+import { liveTitle } from '../../lib/liveText.ts';
 import { classifySource } from '../codex/rollout.ts';
 import { asRecord, asString, parseTimestamp } from '../ingest/index.ts';
 import type { ProjectedLine } from './claudeActivity.ts';
@@ -8,7 +9,7 @@ import { codexToolInfo } from './toolCategory.ts';
 //
 // Read: `type`, `timestamp`, `payload.type`; of a `response_item` its `role` (a message's), `call_id` and, for a call, `name` (mapped to
 // a category at once and dropped); of `session_meta` its `id`, `timestamp`, `cwd`, `forked_from_id` and `source` (only to tell a
-// spawned thread and name its parent, as the batch importer does).
+// spawned thread and name its parent, as the batch importer does). For spawned threads read the recorded nickname and role only.
 //
 // Never read: a message's or reasoning item's `content` or `summary`, a call's `arguments` or `input`, a call's `output`, `base_instructions`,
 // `git`, `item_completed`'s item, token counts, or anything else.
@@ -20,6 +21,7 @@ export interface CodexMeta {
   cwd: string | null;
   /** The thread that spawned this one (or that it was forked from): the native parent. */
   parentId: string | null;
+  subagentTitle?: string;
 }
 
 export interface CodexProjectedLine extends ProjectedLine {
@@ -49,13 +51,23 @@ export function projectCodexLine(line: unknown): CodexProjectedLine | null {
     const id = asString(payload['id']);
     if (id === null) return projected;
     const forkedFrom = asString(payload['forked_from_id']);
-    const source = classifySource(payload['source'], id);
+    const rawSource = payload['source'];
+    const source = classifySource(rawSource, id);
     const parent = forkedFrom ?? (source.kind === 'spawned' ? source.parentId : null);
+    const spawn = asRecord(asRecord(asRecord(rawSource)?.['subagent'])?.['thread_spawn']);
+    const subagentTitle =
+      source.kind === 'spawned'
+        ? (liveTitle(payload['agent_nickname']) ??
+          liveTitle(spawn?.['agent_nickname']) ??
+          liveTitle(payload['agent_role']) ??
+          liveTitle(spawn?.['agent_role']))
+        : null;
     projected.meta = {
       id,
       startedAt: parseTimestamp(payload['timestamp']) ?? at,
       cwd: asString(payload['cwd']),
       parentId: parent !== null && parent !== id ? parent : null,
+      ...(subagentTitle !== null && { subagentTitle }),
     };
     projected.cwd = projected.meta.cwd;
     return projected;

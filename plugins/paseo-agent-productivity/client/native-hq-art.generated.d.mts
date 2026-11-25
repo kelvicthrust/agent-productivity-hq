@@ -8,6 +8,7 @@ export interface SceneCharacter {
 export interface SceneRoom {
   id: string;
   slot: number;
+  name: string;
   characters: SceneCharacter[];
   bench: number;
 }
@@ -54,7 +55,11 @@ export function groupSessions(agents: readonly RosterAgent[]): {
   focus: Session[];
   recentIdle: Session[];
 };
-export const HQ_COPY: { recentIdle: string; quiet: string; sessions: string };
+export const HQ_COPY: { recentIdle: string; quiet: string; sessions: string; noName: string };
+export function agentDisplayTitle(agent: Pick<RosterAgent, 'id' | 'kind' | 'title'>): string | null;
+export function agentMeta(
+  agent: Pick<RosterAgent, 'provider' | 'repo' | 'workspace' | 'parentAway' | 'title'>,
+): string;
 export function recentIdleLabel(count: number): string;
 export function stateWords(agent: RosterAgent, nowMs: number): string;
 export function summaryLine(agents: readonly RosterAgent[]): string;

@@ -7,6 +7,8 @@ import { colors as palette } from '../shared/reporting-palette.ts';
 import {
   groupSessions,
   HQ_COPY,
+  agentDisplayTitle,
+  agentMeta,
   recentIdleLabel,
   stateWords,
   summaryLine,
@@ -63,8 +65,7 @@ function RosterRow({
 }) {
   const { agent } = node;
   const { paseoAgentId } = agent;
-  const place = agent.repo ?? agent.workspace;
-  const title = agent.title?.trim() || 'No name recorded';
+  const title = agentDisplayTitle(agent) ?? HQ_COPY.noName;
   return (
     <View role="listitem" style={{ gap: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 5 }}>
@@ -93,9 +94,7 @@ function RosterRow({
           <View style={{ maxWidth: '100%' }}>
             <NativeText heading>{title}</NativeText>
             <NativeText size={12} tone="foregroundMuted">
-              {providers[agent.provider]}
-              {place ? ` · ${place}` : ''}
-              {agent.parentAway ? ' · Started by an agent that isn’t listed' : ''}
+              {agentMeta(agent)}
             </NativeText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -184,7 +183,7 @@ function RosterList({ sessions, now, openAgent, label }: RosterListProps & { lab
         >
           <View
             role="list"
-            accessibilityLabel={`${session.root.agent.title ?? 'No name recorded'}: ${session.size} ${session.size === 1 ? 'agent' : 'agents'}`}
+            accessibilityLabel={`${agentDisplayTitle(session.root.agent) ?? HQ_COPY.noName}: ${session.size} ${session.size === 1 ? 'agent' : 'agents'}`}
           >
             <RosterRow node={session.root} depth={0} now={now} openAgent={openAgent} />
           </View>

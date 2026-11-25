@@ -718,7 +718,12 @@ export function buildRoster(input: RosterInput): Roster {
       parentId: linked ? (idOf.get(parent) ?? null) : null,
       parentBasis: hasClaim ? claim.basis : null,
       parentAway: claim !== undefined && parent === undefined,
-      title: paseo?.title ?? label?.title ?? null,
+      title:
+        (hasClaim ? null : paseo?.workspaceName) ??
+        paseo?.title ??
+        label?.title ??
+        transcript?.subagentTitle ??
+        null,
       repo: label?.repo ?? repoFor(cwd),
       workspace: paseo?.workspaceName ?? lastSegment(cwd) ?? label?.workspace ?? null,
       state: entity.shown.state,

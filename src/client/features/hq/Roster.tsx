@@ -3,9 +3,8 @@ import { Buddy, type BuddyKind, type BuddyMood } from '../../components/Buddy';
 import { statusAppearance, type StatusKind } from '../../components/StatusTag';
 import { Icon } from '../../components/Icon';
 import type { HqAgent } from '../../../shared/contracts/hq';
-import { SESSION_COPY } from '../../lib/copy';
 import { cx } from '../../lib/cx';
-import { HQ_COPY, agentMeta, recentIdleLabel, stateWords } from './copy';
+import { HQ_COPY, agentDisplayTitle, agentMeta, recentIdleLabel, stateWords } from './copy';
 import type { AgentNode, Session } from './sessions';
 
 // The roster: the accessible account of who is running, as real nested lists. One card per session; inside it the root first, its
@@ -68,7 +67,7 @@ function Row({ node, nowMs, depth = 0 }: { node: AgentNode; nowMs: number; depth
         <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
           <div className="min-w-0">
             <p className="text-copy font-semibold text-ink [overflow-wrap:anywhere]">
-              {agent.title ?? SESSION_COPY.noNameRecorded}
+              {agentDisplayTitle(agent) ?? HQ_COPY.noName}
             </p>
             <p className="text-caption text-ink-muted [overflow-wrap:anywhere]">
               {agentMeta(agent)}
@@ -95,7 +94,7 @@ function Row({ node, nowMs, depth = 0 }: { node: AgentNode; nowMs: number; depth
 }
 
 function SessionCard({ session, nowMs }: { session: Session; nowMs: number }) {
-  const name = session.root.agent.title ?? SESSION_COPY.noNameRecorded;
+  const name = agentDisplayTitle(session.root.agent) ?? HQ_COPY.noName;
   return (
     <li
       className={cx(

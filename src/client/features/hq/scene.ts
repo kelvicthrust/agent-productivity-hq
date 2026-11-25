@@ -1,7 +1,6 @@
 import type { HqActivity, HqAgent, HqProvider } from '../../../shared/contracts/hq';
-import { SESSION_COPY } from '../../lib/copy';
 import { dotJoin } from '../../lib/format';
-import { SCENE_COPY, elapsed, sceneCaption } from './copy';
+import { HQ_COPY, SCENE_COPY, agentDisplayTitle, elapsed, sceneCaption } from './copy';
 import { isReadyToReview, type AgentNode, type Session } from './sessions';
 
 // The scene's layout model, pure and React-free: which session sits in which room, who stands in it and what they are doing. The
@@ -125,8 +124,8 @@ function placeOf(root: HqAgent): string | null {
 /** The sign's two lines of name: the root's title (one line of text) and where it runs, else the place alone and nothing to repeat. */
 function signNames(root: HqAgent): Pick<SceneRoom, 'name' | 'place'> {
   const place = placeOf(root);
-  const title = root.title?.replace(/\s+/g, ' ').trim();
-  if (!title) return { name: place ?? SESSION_COPY.noNameRecorded, place: null };
+  const title = agentDisplayTitle(root)?.replace(/\s+/g, ' ');
+  if (!title) return { name: place ?? HQ_COPY.noName, place: null };
   return { name: title, place: title === place ? null : place };
 }
 

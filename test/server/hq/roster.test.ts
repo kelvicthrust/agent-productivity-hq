@@ -63,7 +63,7 @@ describe('buildRoster', () => {
         parentId: null,
         parentBasis: null,
         parentAway: false,
-        title: 'Fix the thing',
+        title: 'widgets main',
         repo: 'acme/widgets',
         workspace: 'widgets main',
         state: 'working',
@@ -87,10 +87,33 @@ describe('buildRoster', () => {
       { id: 'c', title: 'windows', cwd: 'C:\\code\\thing' },
       { id: 'd', title: 'neither', cwd: null },
     ]);
-    expect(byTitle(roster, 'with name').workspace).toBe('Named');
+    expect(byTitle(roster, 'Named').workspace).toBe('Named');
     expect(byTitle(roster, 'from folder').workspace).toBe('project');
     expect(byTitle(roster, 'windows').workspace).toBe('thing');
     expect(byTitle(roster, 'neither').workspace).toBeNull();
+  });
+
+  it('uses the latest Paseo workspace title for the main agent and keeps individual child titles', () => {
+    const memo = createKeyMemo();
+    const agents = (workspaceName: string | null) => [
+      { id: 'main', title: 'First message', workspaceName, status: 'running' },
+      { id: 'child', title: 'Reviewer', workspaceName, parentAgentId: 'main', status: 'running' },
+      {
+        id: 'away',
+        title: 'Researcher',
+        workspaceName,
+        parentAgentId: 'missing',
+        status: 'running',
+      },
+    ];
+    const initial = build(agents('Assess PDLC workflow'), { memo });
+    const renamed = build(agents('Review PDLC workflow'), { memo });
+    expect(byTitle(renamed, 'Review PDLC workflow').id).toBe(
+      byTitle(initial, 'Assess PDLC workflow').id,
+    );
+    expect(byTitle(renamed, 'Reviewer').parentId).toBe(byTitle(renamed, 'Review PDLC workflow').id);
+    expect(byTitle(renamed, 'Researcher').parentAway).toBe(true);
+    expect(byTitle(build(agents(null)), 'First message').kind).toBe('root');
   });
 
   it('maps unknown providers to other, and leaves repo null without a resolver', () => {

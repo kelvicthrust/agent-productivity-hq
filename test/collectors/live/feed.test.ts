@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClaudeFeed } from '../../../src/server/collectors/live/claudeFeed.ts';
@@ -88,6 +88,47 @@ const byId = (feed: TranscriptFeed, id: string): TranscriptAgent | undefined =>
   feed.read().agents.find((agent) => agent.sessionId === id);
 
 describe('the Claude Code feed', () => {
+  it('names a followed child when its metadata becomes readable without new transcript lines', async () => {
+    const id = `${S1}:agent-a1`;
+    const sidecar = join(
+      homes.claudeDir,
+      'projects/-work-invented-project',
+      S1,
+      'subagents',
+      'agent-a1.meta.json',
+    );
+    const outside = join(homes.root, 'outside.meta.json');
+    writeFileSync(outside, '{"agentType":"Wrong agent"}');
+    const feed = await started(claude());
+    try {
+      expect(byId(feed, id)).not.toHaveProperty('subagentTitle');
+      writeFileSync(sidecar, '{');
+      await tick();
+      expect(byId(feed, id)).not.toHaveProperty('subagentTitle');
+      rmSync(sidecar);
+      symlinkSync(outside, sidecar);
+      await tick();
+      expect(byId(feed, id)).not.toHaveProperty('subagentTitle');
+      rmSync(sidecar);
+      writeFileSync(
+        sidecar,
+        JSON.stringify({ agentType: 'Oversized', description: 'X'.repeat(16 * 1024) }),
+      );
+      await tick();
+      expect(byId(feed, id)).not.toHaveProperty('subagentTitle');
+      writeFileSync(
+        sidecar,
+        JSON.stringify({ agentType: 'Explore', description: 'SENTINEL_TASK' }),
+      );
+      await tick();
+      expect(byId(feed, id)).toMatchObject({ subagentTitle: 'Explore' });
+      expect(JSON.stringify({ snapshot: feed.read(), logs: log.entries })).not.toContain(
+        'SENTINEL_TASK',
+      );
+    } finally {
+      await feed.stop();
+    }
+  });
   it('is starting, then live, and shows main sessions and subagents with their inferred states', async () => {
     const feed = claude();
     expect(feed.status()).toBe('stopped');
@@ -293,13 +334,16 @@ describe('the Codex feed', () => {
     await feed.stop();
   });
 
-  it('does not take identity from a session_meta inside the tail window (a fork replays its parent’s)', async () => {
+  it('keeps the first record’s identity and nickname when a fork replays its parent’s metadata', async () => {
     const day = join(homes.codexHome, 'sessions/2026/11/19');
     const child = '99999999-9999-4999-8999-999999999999';
     writeFileSync(
       join(day, `rollout-2026-11-19T10-00-20-${child}.jsonl`),
       [
-        codexSessionMeta(clock - 5000, { id: child, forkedFrom: R1 }),
+        codexSessionMeta(clock - 5000, {
+          id: child,
+          source: { subagent: { thread_spawn: { parent_thread_id: R1, agent_nickname: 'Atlas' } } },
+        }),
         codexSessionMeta(clock - 4000, { id: R1 }),
         codexTaskStarted(clock - 1000),
         codexTaskComplete(clock - 500),
@@ -309,7 +353,11 @@ describe('the Codex feed', () => {
     );
     stamp(day, clock - 500);
     const feed = await started(codex());
-    expect(byId(feed, child)).toMatchObject({ parentSessionId: R1, state: 'finished' });
+    expect(byId(feed, child)).toMatchObject({
+      parentSessionId: R1,
+      state: 'finished',
+      subagentTitle: 'Atlas',
+    });
     await feed.stop();
   });
 });
@@ -507,7 +555,7 @@ function cpSyncProjects(dir: string): void {
 }
 
 describe('what is kept, said and dropped', () => {
-  it('keeps no text: nothing the lines held is in what a feed returns or logs, and no path is logged', async () => {
+  it('keeps only allowlisted data and leaves labels, paths and conversation text out of logs', async () => {
     const claudeFeed = await started(claude());
     const codexFeed = await started(codex());
     clock += PERMISSION_GUESS_MS;
@@ -519,6 +567,7 @@ describe('what is kept, said and dropped', () => {
     }
     expect(logged).not.toContain(homes.root);
     expect(logged).not.toContain('.jsonl');
+    expect(logged).not.toContain('Atlas');
     // What a record holds is exactly these fields.
     for (const agent of [...claudeFeed.read().agents, ...codexFeed.read().agents]) {
       expect(Object.keys(agent).sort()).toEqual(
@@ -532,6 +581,7 @@ describe('what is kept, said and dropped', () => {
           'since',
           'startedAt',
           'state',
+          ...(agent.sessionId === R2 ? ['subagentTitle'] : []),
           'waitReason',
         ].sort(),
       );

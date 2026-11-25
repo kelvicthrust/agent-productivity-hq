@@ -1204,15 +1204,6 @@ function upperFirst(text) {
 	return text === "" ? text : text[0].toUpperCase() + text.slice(1);
 }
 ({ ...PROVIDER_NAMES });
-var SESSION_COPY = {
-	noNameRecorded: "No name recorded",
-	paseo: "Paseo",
-	/** Read before the technical id so it is not taken for a stray string. Visually hidden. */
-	idPrefix: "Session ID:",
-	started: "Started",
-	/** The accessible description of "Started" when the source records no start time and the first usage event stands in. */
-	firstEventNote: "First recorded activity; this source doesn’t record a start time"
-};
 /** "failed" for the first failure in a row, "failed again" after that (`SourceStatus.consecutiveFailures`). */
 function failureWord(consecutiveFailures) {
 	return consecutiveFailures > 1 ? "failed again" : "failed";
@@ -1380,6 +1371,16 @@ var HQ_COPY = {
 	}
 };
 var recentIdleLabel = (count) => `${HQ_COPY.recentIdle} (${int(count)})`;
+/** Use the roster's opaque identity to distinguish a child with a generic or missing label. */
+function agentDisplayTitle(agent) {
+	const title = agent.title?.trim() || null;
+	if (agent.kind === "child" && (title === null || /^(default|general-purpose|worker)$/i.test(title))) return `${title ?? "Subagent"} · ${agent.id.slice(-6)}`;
+	return title;
+}
+/** "Claude Code", "Codex", "Other agent". */
+function providerName(provider) {
+	return provider === "other" ? HQ_COPY.otherProvider : PROVIDER_NAMES[provider];
+}
 var WORKING = {
 	thinking: "Thinking",
 	responding: "Responding",
@@ -1424,6 +1425,14 @@ function stateWords(agent, nowMs) {
 		case "error": return "Something went wrong";
 		case "finished": return "Finished";
 	}
+}
+/** The line under an agent's name: provider, then where it works. */
+function agentMeta(agent) {
+	return dotJoin([
+		providerName(agent.provider),
+		agent.repo ?? (agent.workspace === agent.title ? null : agent.workspace),
+		agent.parentAway && HQ_COPY.parentAway
+	]);
 }
 function summaryLine(agents) {
 	const count = (predicate) => agents.filter(predicate).length;
@@ -2099,9 +2108,9 @@ function placeOf(root) {
 /** The sign's two lines of name: the root's title (one line of text) and where it runs, else the place alone and nothing to repeat. */
 function signNames(root) {
 	const place = placeOf(root);
-	const title = root.title?.replace(/\s+/g, " ").trim();
+	const title = agentDisplayTitle(root)?.replace(/\s+/g, " ");
 	if (!title) return {
-		name: place ?? SESSION_COPY.noNameRecorded,
+		name: place ?? HQ_COPY.noName,
 		place: null
 	};
 	return {
@@ -2961,4 +2970,4 @@ function CrewArt({ mood = "awake", className }) {
 		]
 	});
 }
-export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, HQ_COPY, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, buildSessions, captionsCollide, groupSessions, layoutScene, planStage, recentIdleLabel, stateWords, summaryLine };
+export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, HQ_COPY, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, agentDisplayTitle, agentMeta, buildSessions, captionsCollide, groupSessions, layoutScene, planStage, recentIdleLabel, stateWords, summaryLine };

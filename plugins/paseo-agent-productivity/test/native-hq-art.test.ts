@@ -65,6 +65,17 @@ test('outlined lettering fits wide names and keeps the session state on the sign
   assert.ok(measure(secondLine) <= room);
 });
 
+test('a narrow scene labels workspace rooms and subagents whose parent is absent', () => {
+  const workspace = agent('paseo', { title: 'Assess PDLC workflow' });
+  const child = agent('a123456789abc', { kind: 'child', parentAway: true, title: null });
+  const scene = layoutScene(null, buildSessions([workspace, child]), {
+    columns: 1,
+    nowMs: Date.parse(workspace.since),
+  });
+  assert.equal(scene.rooms.find((room) => room.id === workspace.id)?.name, 'Assess PDLC workflow');
+  assert.equal(scene.rooms.find((room) => room.id === child.id)?.name, 'Subagent · 789abc');
+});
+
 test('the embedded roof and ground loops each have three distinct transparent frames', () => {
   for (const [kind, frames] of Object.entries(inkFrames)) {
     assert.equal(new Set(frames).size, 3);

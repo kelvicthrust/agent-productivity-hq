@@ -1,7 +1,7 @@
 import type { Db } from '../open.ts';
 
 // HQ's one read of the database: the name and repo already stored for sessions the live transcript feeds have found. Read-only (a
-// SELECT and nothing else), and it reads only the columns named here; the transcript's own text is never a source of a name.
+// SELECT and nothing else), and it reads only the columns named here.
 
 export type LiveSessionProvider = 'claude' | 'codex';
 
@@ -34,8 +34,8 @@ interface Row {
 }
 
 /**
- * The stored label of each session in `keys` that has been imported; a session that has not been is absent from the result (its title is
- * null and its repo comes from its working directory). Keyed by `liveSessionKey`.
+ * The stored label of each imported session in `keys`. The roster also has current workspace and provider metadata.
+ * Keyed by `liveSessionKey`.
  */
 export function readLiveSessionLabels(
   db: Db,

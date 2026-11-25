@@ -53,6 +53,17 @@ export const HQ_COPY = {
 
 export const recentIdleLabel = (count: number): string => `${HQ_COPY.recentIdle} (${int(count)})`;
 
+/** Use the roster's opaque identity to distinguish a child with a generic or missing label. */
+export function agentDisplayTitle(agent: Pick<HqAgent, 'id' | 'kind' | 'title'>): string | null {
+  const title = agent.title?.trim() || null;
+  if (
+    agent.kind === 'child' &&
+    (title === null || /^(default|general-purpose|worker)$/i.test(title))
+  )
+    return `${title ?? 'Subagent'} · ${agent.id.slice(-6)}`;
+  return title;
+}
+
 /** "Claude Code", "Codex", "Other agent". */
 export function providerName(provider: HqProvider): string {
   return provider === 'other' ? HQ_COPY.otherProvider : PROVIDER_NAMES[provider];
@@ -133,10 +144,12 @@ export function stateWords(
 }
 
 /** The line under an agent's name: provider, then where it works. */
-export function agentMeta(agent: Pick<HqAgent, 'provider' | 'repo' | 'workspace' | 'parentAway'>) {
+export function agentMeta(
+  agent: Pick<HqAgent, 'provider' | 'repo' | 'workspace' | 'parentAway' | 'title'>,
+) {
   return dotJoin([
     providerName(agent.provider),
-    agent.repo ?? agent.workspace,
+    agent.repo ?? (agent.workspace === agent.title ? null : agent.workspace),
     agent.parentAway && HQ_COPY.parentAway,
   ]);
 }

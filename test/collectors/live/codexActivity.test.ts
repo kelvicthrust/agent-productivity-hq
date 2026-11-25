@@ -107,6 +107,22 @@ describe('what a line means', () => {
     expect(project({ type: 'event_msg', timestamp: iso0() })).toMatchObject({ events: [] });
   });
 
+  it('uses the recorded nickname of a native child, then its role', () => {
+    const source = (agent_nickname: string | null) => ({
+      subagent: {
+        thread_spawn: { parent_thread_id: 'parent', agent_nickname, agent_role: 'explorer' },
+      },
+    });
+    const meta = (source: unknown, nickname?: string) => {
+      const row = codexSessionMeta(at(0), { id: 'child', source });
+      return project({ ...row, payload: { ...row.payload, agent_nickname: nickname } })?.meta;
+    };
+    expect(meta(source('  Atlas  '))).toMatchObject({ subagentTitle: 'Atlas' });
+    expect(meta(source(null), 'Mercury')).toMatchObject({ subagentTitle: 'Mercury' });
+    expect(meta(source(' '))).toMatchObject({ subagentTitle: 'explorer' });
+    expect(meta('vscode', 'Mercury')).not.toHaveProperty('subagentTitle');
+  });
+
   it('keeps nothing of the line: no sentinel appears in what it returns, for any line', () => {
     const rows = [
       codexSessionMeta(at(0), { id: 'thread-1', source: spawnedSource('thread-0') }),

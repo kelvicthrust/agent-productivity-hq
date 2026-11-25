@@ -35,7 +35,7 @@ export { Buddy } from ${JSON.stringify(resolve(root, 'src/client/components/Budd
 export { CrewArt } from ${JSON.stringify(resolve(root, 'src/client/components/CrewArt.tsx'))};
 export { layoutScene } from ${JSON.stringify(`${feature}/scene.ts`)};
 export { buildSessions, groupSessions } from ${JSON.stringify(`${feature}/sessions.ts`)};
-export { HQ_COPY, recentIdleLabel, stateWords, summaryLine } from ${JSON.stringify(`${feature}/copy.ts`)};
+export { HQ_COPY, agentDisplayTitle, agentMeta, recentIdleLabel, stateWords, summaryLine } from ${JSON.stringify(`${feature}/copy.ts`)};
 export { captionsCollide, planStage } from ${JSON.stringify(`${feature}/stage.ts`)};`
           : undefined,
     },
