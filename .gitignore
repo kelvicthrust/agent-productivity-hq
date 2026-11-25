@@ -22,6 +22,7 @@ coverage/
 
 # OS and editor noise
 .DS_Store
+.lavish/
 
 # Local fidelity captures; documentation images already tracked remain versioned.
 docs/implementation/evidence/m*/*.png
