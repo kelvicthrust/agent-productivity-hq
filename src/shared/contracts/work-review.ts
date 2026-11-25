@@ -38,6 +38,9 @@ export const WorkReviewState = z.object({
 });
 export type WorkReviewState = z.infer<typeof WorkReviewState>;
 
+export const WorkReviewAutomation = z.strictObject({ enabled: z.boolean() });
+export type WorkReviewAutomation = z.infer<typeof WorkReviewAutomation>;
+
 export const GenerateWorkReview = z.strictObject({
   consent: z.literal(true),
   revision: z.boolean().optional(),

@@ -22,6 +22,7 @@ import {
   WorkReviewState,
   WorkReviewBullet,
   WorkReviewAccount,
+  WorkReviewAutomation,
 } from './work-review.ts';
 import { LinkHealth } from './link-health.ts';
 import { PaseoQuotaResponse } from './paseo-quota.ts';
@@ -41,6 +42,7 @@ export const COMPONENTS = {
   WorkReviewState,
   WorkReviewBullet,
   WorkReviewAccount,
+  WorkReviewAutomation,
   ErrorEnvelope,
   Provider,
   Scope,

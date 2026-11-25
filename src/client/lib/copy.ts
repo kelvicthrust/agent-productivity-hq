@@ -287,7 +287,7 @@ export const SOURCES_COPY = {
   dataKept: {
     title: 'Data kept on this machine',
     scope: 'Stored on this computer only',
-    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. HQ keeps raw prompts, responses, tool output and credentials out of dashboard history. Generating a Work Review with its separate ChatGPT connection sends selected session excerpts and pull request metadata to OpenAI for cloud processing. HQ saves the generated notes, reviews and evidence links on this machine and protects the Work Review credentials in macOS Keychain. Checking Claude plan limits contacts Anthropic using your existing Claude Code sign-in and saves the limit percentages, reset times and check status.',
+    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. HQ keeps raw prompts, responses, tool output and credentials out of dashboard history. Generating a Work Review with its separate ChatGPT connection sends selected session excerpts and pull request metadata to OpenAI for cloud processing. This happens when you confirm generation or opt in to automatic refresh. HQ saves the generated notes, reviews and evidence links on this machine and protects the Work Review credentials in macOS Keychain. Checking Claude plan limits contacts Anthropic using your existing Claude Code sign-in and saves the limit percentages, reset times and check status.',
   },
   reset: {
     title: 'Reset Agent Productivity HQ',
@@ -394,6 +394,6 @@ export const SOURCES_COPY = {
   },
   data: {
     title: 'Data kept on this machine',
-    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Work Review sends selected session excerpts and PR metadata to OpenAI when you confirm generation. HQ keeps the resulting notes and reviews locally.',
+    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Work Review sends selected session excerpts and PR metadata to OpenAI when you confirm generation or opt in to automatic refresh. HQ keeps the resulting notes and reviews locally.',
   },
 } as const;

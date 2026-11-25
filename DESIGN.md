@@ -18,7 +18,9 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
   **Manage review** selects **Work Review** within Delivery. Delivery opens on **Merged PRs**
   by default. Show a Work Review shortcut beneath Delivery in the desktop sidebar and offer
   both sections within Delivery at every width.
-  Generation asks for confirmation before sending data to OpenAI. Keep a saved review readable
+  Manual generation asks for confirmation before sending data to OpenAI. In the management
+  section, a separate **Keep this week up to date** setting explains the scope, cadence and
+  ChatGPT allowance before the owner enables recurring generation. Keep a saved review readable
   if generation fails.
 - **App bar** shows Refresh on the dashboard and an About info icon at every width. About opens a
   dialog with the app version, project and support links, and the creator credit. The Sources &

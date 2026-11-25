@@ -1,11 +1,18 @@
 import { Hono } from 'hono';
 import { ApiError } from '../../../shared/contracts/errors.ts';
-import { GenerateWorkReview } from '../../../shared/contracts/work-review.ts';
+import { GenerateWorkReview, WorkReviewAutomation } from '../../../shared/contracts/work-review.ts';
 import type { WorkReviewService } from '../../services/work-review/service.ts';
 import type { HttpEnv } from '../errors.ts';
 
 export function workReviewRoutes(service: WorkReviewService) {
   const app = new Hono<HttpEnv>();
+  app.get('/api/work-review/automation', (c) => c.json(service.getAutomation()));
+  app.post('/api/work-review/automation', async (c) => {
+    const body = WorkReviewAutomation.safeParse(await c.req.json().catch(() => null));
+    if (!body.success)
+      throw new ApiError('invalid_input', 'Choose whether to keep this week up to date.');
+    return c.json(await service.setAutomation(body.data.enabled));
+  });
   app.get('/api/work-review', (c) => {
     const raw = c.req.query('version');
     const version = raw === undefined ? undefined : Number(raw);

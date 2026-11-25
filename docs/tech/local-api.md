@@ -197,6 +197,11 @@ components:
       description: Error envelope
       content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
   schemas:
+    WorkReviewAutomation:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties: {enabled: {type: boolean}}
     WorkReviewAccount:
       type: object
       required: [status, account, message]
@@ -715,6 +720,19 @@ paths:
                   greetingName: { type: [string, "null"], description: GitHub profile name's first word if set, else null (UI then greets without a name) }
                   paseoManaged: { const: true, description: The session uses Paseo provider quota reports }
                   issues: { type: array, items: { type: object, properties: { kind: { type: string, enum: [source, account, repo] }, id: { type: string }, label: { type: string } } } }
+  /api/work-review/automation:
+    get:
+      description: Read the persisted installation preference. Defaults to off. Reading never starts generation.
+      responses:
+        "200": {description: Automatic refresh setting, content: {application/json: {schema: {$ref: "#/components/schemas/WorkReviewAutomation"}}}}
+    post:
+      description: Opt in to or stop recurring current-week generation. Enabling requires completed setup and a connected Work Review account.
+      parameters: [{name: X-Agent-Productivity-Request, in: header, required: true, schema: {type: string, const: "1"}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/WorkReviewAutomation"}}}}
+      responses:
+        "200": {description: Saved setting, content: {application/json: {schema: {$ref: "#/components/schemas/WorkReviewAutomation"}}}}
+        "400": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
   /api/work-review/account:
     get:
       description: Check the status of the separate Work Review plan-use permission.

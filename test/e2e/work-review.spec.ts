@@ -7,6 +7,7 @@ import type {
   WorkReviewState,
   WorkReviewVersion,
 } from '../../src/shared/contracts/work-review.ts';
+import { FIXED_NOW } from '../fixtures/seed.ts';
 import { expect, test } from './fixtures';
 import { ORIGIN } from './helpers/virtualOrigin';
 import { openWorld } from './helpers/world';
@@ -89,6 +90,7 @@ const CONNECTED: WorkReviewAccount = {
   message: null,
 };
 const DISCONNECTED: WorkReviewAccount = { status: 'disconnected', account: null, message: null };
+const AUTOMATION_PATH = `${ORIGIN}/api/work-review/automation`;
 
 type Generation = { body: unknown; scope: Record<string, string> };
 
@@ -106,6 +108,8 @@ async function mockReview(
       await route.fulfill({ json: read(searchParams) });
     } else if (request.method() === 'GET' && pathname === '/api/work-review/account') {
       await route.fulfill({ json: account() });
+    } else if (request.method() === 'GET' && pathname === '/api/work-review/automation') {
+      await route.fulfill({ json: { enabled: false } });
     } else if (request.method() === 'POST' && pathname === '/api/work-review/generate') {
       generations.push({
         body: request.postDataJSON() as unknown,
@@ -118,6 +122,156 @@ async function mockReview(
   });
   return generations;
 }
+
+test('weekly automation needs separate consent and can be turned off @a11y @responsive', async ({
+  page,
+}) => {
+  await openWorld(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  let account = DISCONNECTED;
+  let enabled = false;
+  let refuseRead = true;
+  let refuseWrite = false;
+  const writes: unknown[] = [];
+  const generations = await mockReview(
+    page,
+    () => ({ ...EMPTY, review: REVIEW, versions: [1] }),
+    () => EMPTY,
+    () => account,
+  );
+  await page.route(AUTOMATION_PATH, async (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      await route.fulfill(refuseRead ? { status: 500, json: {} } : { json: { enabled } });
+    } else {
+      expect(request.method()).toBe('POST');
+      const body = request.postDataJSON() as { enabled: boolean };
+      writes.push(body);
+      if (refuseWrite) {
+        await route.fulfill({ status: 500, json: {} });
+      } else {
+        enabled = body.enabled;
+        await route.fulfill({ json: { enabled } });
+      }
+    }
+  });
+
+  await page.goto(
+    `${ORIGIN}/delivery?section=work-review&start=2026-10-26&end=2026-11-01&author=all&provider=codex`,
+  );
+  const setting = page.getByRole('region', { name: 'Keep this week up to date' });
+  const turnOn = setting.getByRole('button', { name: 'Turn on automatic refresh' });
+  const turnOff = setting.getByRole('button', { name: 'Turn off automatic refresh' });
+  await expect(setting.getByRole('alert')).toContainText('Couldn’t read');
+  refuseRead = false;
+  await setting.getByRole('button', { name: 'Try again' }).click();
+  await expect(turnOn).toBeDisabled();
+  await expect(setting).toContainText('Connect ChatGPT');
+  expect(writes).toEqual([]);
+
+  account = CONNECTED;
+  await page.reload();
+  await acknowledgePlan(page);
+  await expect(
+    page.getByRole('heading', { name: 'Delivery', exact: true, level: 1 }),
+  ).toBeVisible();
+  await expect(turnOn).toBeEnabled();
+  await expect(turnOn).toHaveAccessibleDescription(
+    /selected session excerpts and pull request metadata/,
+  );
+  await expect(setting).toContainText('OpenAI');
+  await expect(setting).toContainText('allowance');
+  await expect(setting).toContainText('every 6 hours');
+  await expect(setting).toContainText('continues each week until you turn it off');
+  await expect(setting).toContainText('My PRs');
+  await expect(setting).toContainText('all repos');
+  await expect(setting).toContainText('both providers');
+  await setting.screenshot({ path: test.info().outputPath('weekly-automation-off-desktop.png') });
+  expect(writes).toEqual([]);
+
+  await turnOn.press('Enter');
+  await expect(turnOff).toBeEnabled();
+  expect(writes).toEqual([{ enabled: true }]);
+  await page.reload();
+  await expect(turnOff).toBeEnabled();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await setting.screenshot({ path: test.info().outputPath('weekly-automation-on-phone.png') });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  refuseWrite = true;
+  await turnOff.click();
+  await expect(setting.getByRole('alert')).toContainText('Couldn’t turn off');
+  await expect(turnOff).toBeEnabled();
+
+  account = { ...DISCONNECTED, status: 'needs_consent' };
+  await page.reload();
+  await expect(turnOff).toBeEnabled();
+  await expect(setting).toContainText('Connect ChatGPT');
+  refuseWrite = false;
+  await turnOff.click();
+  await expect(turnOn).toBeDisabled();
+  await expect(page.getByRole('article', { name: REVIEW.headline })).toBeVisible();
+  expect(writes).toEqual([{ enabled: true }, { enabled: false }, { enabled: false }]);
+  expect(generations).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('the open default week shows an automatic update without polling other scopes', async ({
+  page,
+}) => {
+  await openWorld(page);
+  await page.clock.install({ time: new Date(FIXED_NOW) });
+  let enabled = true;
+  let reads = 0;
+  let saved: WorkReviewVersion | null = null;
+  const generations = await mockReview(
+    page,
+    (query) => {
+      reads++;
+      const locked = query.get('end') === '2026-11-01';
+      return {
+        ...EMPTY,
+        locked,
+        review: saved,
+        versions: saved ? [saved.version] : [],
+      };
+    },
+    () => EMPTY,
+  );
+  await page.route(AUTOMATION_PATH, (route) => route.fulfill({ json: { enabled } }));
+
+  const card = page.getByRole('button', { name: /^Work Review/ });
+  async function openDefaultWeek() {
+    const settings = page.waitForResponse(AUTOMATION_PATH);
+    await page.goto(ORIGIN);
+    await settings;
+  }
+  await openDefaultWeek();
+  await expect(card).toHaveText(/No review has been saved/);
+  saved = REVIEW;
+  await page.clock.fastForward('05:10');
+  await expect(card).toContainText(REVIEW.headline);
+  expect(reads).toBe(2);
+  expect(generations).toEqual([]);
+
+  for (const scope of ['?provider=codex', '?start=2026-10-26&end=2026-11-01']) {
+    await page.goto(ORIGIN + scope);
+    await expect(card).toContainText(REVIEW.headline);
+    const initialReads = reads;
+    await page.clock.fastForward('06:00');
+    expect(reads).toBe(initialReads);
+  }
+
+  enabled = false;
+  await openDefaultWeek();
+  await expect(card).toContainText(REVIEW.headline);
+  const initialReads = reads;
+  await page.clock.fastForward('06:00');
+  expect(reads).toBe(initialReads);
+});
 
 test('Work Review offers sign-in again after a rejected grant', async ({ page }) => {
   await openWorld(page);
@@ -526,6 +680,13 @@ test('ChatGPT connection gates generation and preserves previously saved reviews
     account: null,
     message: 'Sign-in is unavailable in this installation.',
   };
+  let automatic = false;
+  await page.route(AUTOMATION_PATH, (route) => {
+    if (route.request().method() === 'POST') {
+      automatic = (route.request().postDataJSON() as { enabled: boolean }).enabled;
+    }
+    return route.fulfill({ json: { enabled: automatic } });
+  });
   const authUrl = 'https://auth.openai.com/api/accounts/authorize?state=example';
   let requestedUrl = 'https://auth.openai.com/api/accounts/oauth/token?state=example';
   await page.route(`${ORIGIN}/api/work-review/account`, (route) =>
@@ -541,6 +702,7 @@ test('ChatGPT connection gates generation and preserves previously saved reviews
   await page.route(`${ORIGIN}/api/work-review/account/disconnect`, async (route) => {
     expect(route.request().method()).toBe('POST');
     account = { ...DISCONNECTED, account: CONNECTED.account };
+    automatic = false;
     await route.fulfill({ json: account });
   });
   const connect = page.getByRole('button', { name: 'Continue with ChatGPT' });
@@ -578,7 +740,11 @@ test('ChatGPT connection gates generation and preserves previously saved reviews
   await page.reload();
   await expect(generate).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'You’re using your ChatGPT plan' })).toHaveCount(0);
+  const turnOn = page.getByRole('button', { name: 'Turn on automatic refresh' });
+  await turnOn.click();
+  await expect(page.getByRole('button', { name: 'Turn off automatic refresh' })).toBeEnabled();
   await page.getByRole('button', { name: 'Disconnect ChatGPT' }).click();
+  await expect(turnOn).toBeDisabled();
   await expect(generate).toHaveCount(0);
   await expect(review).toBeVisible();
   await page.getByRole('button', { name: 'Use a different ChatGPT account' }).click();

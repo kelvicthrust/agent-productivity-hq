@@ -79,7 +79,10 @@ export const workReviewAccountUnavailable: WorkReviewAccount = {
 
 export interface WorkReviewAuth {
   status(): WorkReviewAccount;
-  connect(newProfile?: boolean): Promise<WorkReviewConnect>;
+  connect(
+    newProfile?: boolean,
+    clearReviewConsent?: () => Promise<void>,
+  ): Promise<WorkReviewConnect>;
   disconnect(cancelReview?: () => Promise<void>): Promise<WorkReviewAccount>;
   reset(): Promise<void>;
   close(): Promise<void>;
@@ -165,7 +168,10 @@ export function createWorkReviewAuth({
     );
   }
 
-  async function connect(newProfile = false): Promise<WorkReviewConnect> {
+  async function connect(
+    newProfile = false,
+    clearReviewConsent?: () => Promise<void>,
+  ): Promise<WorkReviewConnect> {
     if (closed || discarding)
       throw new WorkReviewAuthError('Work Review sign-in is unavailable right now.');
     if (pending)
@@ -304,6 +310,8 @@ export function createWorkReviewAuth({
     pending = attempt;
     try {
       const listener = await attempt.callback;
+      // A new registration may authorize a different account, including after losing the Keychain entry.
+      if (!selected) await clearReviewConsent?.();
       if (controller.signal.aborted) throw new WorkReviewAuthError(EXPIRED_SIGN_IN);
       return {
         url: authorizationUrl({

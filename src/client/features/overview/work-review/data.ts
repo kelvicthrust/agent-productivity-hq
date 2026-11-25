@@ -1,17 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   WorkReviewAccount,
+  WorkReviewAutomation,
   WorkReviewConnect,
   WorkReviewState,
 } from '../../../../shared/contracts/work-review';
 import { overviewQuery } from '../../../lib/analytics';
 import { apiGet, apiSend, queryString } from '../../../lib/api';
-import type { Filters } from '../../../lib/filters';
+import { useBootstrap } from '../../../lib/bootstrap';
+import { weekEnd, weekStart, type Filters } from '../../../lib/filters';
 import { queryKeys } from '../../../lib/queryClient';
 
 const PATH = '/api/work-review';
 const ACCOUNT_PATH = `${PATH}/account`;
 const ACCOUNT_KEY = ['work-review-account'] as const;
+const AUTOMATION_PATH = `${PATH}/automation`;
+const AUTOMATION_KEY = ['work-review-automation'] as const;
+// An open view can discover background updates without repeatedly collecting a week's evidence.
+const AUTOMATION_READ_INTERVAL_MS = 5 * 60_000;
 
 export const reviewScopeKey = (filters: Filters): string => queryString(overviewQuery(filters));
 
@@ -21,6 +27,17 @@ function reviewKey(filters: Filters, version?: number) {
 
 export function useWorkReview(filters: Filters, version?: number) {
   const client = useQueryClient();
+  const today = useBootstrap().data?.today;
+  const automationScope =
+    today !== undefined &&
+    version === undefined &&
+    filters.start === weekStart(today) &&
+    filters.end === weekEnd(today) &&
+    filters.author === 'mine' &&
+    filters.provider === 'all' &&
+    filters.repos.length === 0;
+  const automation = useReviewAutomation(automationScope);
+  const followAutomaticUpdates = automationScope && !automation.isError && automation.data?.enabled;
   return useQuery({
     queryKey: reviewKey(filters, version),
     queryFn: async ({ signal }) => {
@@ -32,7 +49,12 @@ export function useWorkReview(filters: Filters, version?: number) {
         void client.invalidateQueries({ queryKey: ACCOUNT_KEY, exact: true });
       return state;
     },
-    refetchInterval: (query) => (query.state.data?.status === 'running' ? 1_500 : false),
+    refetchInterval: ({ state }) => {
+      if (state.data?.status === 'running') return 1_500;
+      return followAutomaticUpdates && state.data?.locked === false
+        ? AUTOMATION_READ_INTERVAL_MS
+        : false;
+    },
   });
 }
 
@@ -71,6 +93,26 @@ export function useReviewAccount(pollPending = false) {
   });
 }
 
+export function useReviewAutomation(enabled = true) {
+  return useQuery({
+    queryKey: AUTOMATION_KEY,
+    queryFn: ({ signal }) => apiGet(AUTOMATION_PATH, WorkReviewAutomation, { signal }),
+    enabled,
+    refetchInterval: ({ state }) => (state.data?.enabled ? AUTOMATION_READ_INTERVAL_MS : false),
+  });
+}
+
+export function useChangeReviewAutomation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiSend('POST', AUTOMATION_PATH, WorkReviewAutomation, { enabled }),
+    onError: () => client.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+    // A disconnect or lost response may have changed the setting while this request was in flight.
+    onSettled: () => client.invalidateQueries({ queryKey: AUTOMATION_KEY }),
+  });
+}
+
 export function useConnectReviewAccount() {
   const client = useQueryClient();
   return useMutation({
@@ -81,7 +123,12 @@ export function useConnectReviewAccount() {
         WorkReviewConnect,
         newProfile ? { newProfile } : {},
       ),
-    onSettled: () => client.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+    onSettled: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+        client.invalidateQueries({ queryKey: AUTOMATION_KEY }),
+      ]);
+    },
   });
 }
 
@@ -94,5 +141,6 @@ export function useDisconnectReviewAccount() {
       client.setQueryData(ACCOUNT_KEY, account);
     },
     onError: () => client.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+    onSettled: () => client.invalidateQueries({ queryKey: AUTOMATION_KEY }),
   });
 }

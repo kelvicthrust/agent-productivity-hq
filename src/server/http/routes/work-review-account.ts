@@ -35,7 +35,7 @@ function authorizationError(error: unknown): never {
 export function workReviewAccountRoutes(
   db: Db,
   auth?: WorkReviewAuth,
-  cancelReview?: () => Promise<void>,
+  clearReviewConsent?: () => Promise<void>,
 ) {
   const app = new Hono<HttpEnv>();
   app.get('/api/work-review/account', (c) =>
@@ -48,7 +48,7 @@ export function workReviewAccountRoutes(
       throw new ApiError('invalid_input', 'Finish setup before connecting Work Review.');
     const account = demand(auth);
     try {
-      return c.json(await account.connect(input.data.newProfile));
+      return c.json(await account.connect(input.data.newProfile, clearReviewConsent));
     } catch (error) {
       authorizationError(error);
     }
@@ -59,7 +59,7 @@ export function workReviewAccountRoutes(
       throw new ApiError('invalid_input', 'Use the Work Review sign-out control.');
     const account = demand(auth);
     try {
-      return c.json(await account.disconnect(cancelReview));
+      return c.json(await account.disconnect(clearReviewConsent));
     } catch (error) {
       authorizationError(error);
     }

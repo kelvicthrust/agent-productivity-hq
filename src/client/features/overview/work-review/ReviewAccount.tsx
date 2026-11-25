@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ApiRequestError } from '../../../lib/api';
 import { markShown, wasShown } from '../../../lib/shownOnce';
 import { REVIEW_LINK } from './Preview';
+import { ReviewAutomation } from './ReviewAutomation';
 import { useConnectReviewAccount, useDisconnectReviewAccount, useReviewAccount } from './data';
 
 const USAGE_SETTINGS = 'https://chatgpt.com/settings/usage';
@@ -99,7 +100,7 @@ export function ReviewAccount() {
     if (pending && authUrl) signInLink.current?.focus();
   }, [pending, authUrl]);
 
-  return (
+  const plan = (
     <section
       aria-labelledby={`${id}-title`}
       className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-border bg-surface p-4 shadow-card"
@@ -222,5 +223,12 @@ export function ReviewAccount() {
       )}
       {status === 'connected' && <PlanWelcome />}
     </section>
+  );
+
+  return (
+    <>
+      {plan}
+      <ReviewAutomation connected={status === 'connected' && !result.isError} accountBusy={busy} />
+    </>
   );
 }
