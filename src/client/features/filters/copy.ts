@@ -1,5 +1,6 @@
 import type { AuthorFilter, Granularity, ProviderFilter } from '../../../shared/contracts/common';
-import type { Period, PeriodPreset } from '../../lib/filters';
+import { PERIOD_LABEL } from '../../lib/copy';
+import type { PeriodPreset } from '../../lib/filters';
 
 // The words only the filter bar uses. They are the D7 prototype's (docs/design/prototype/app.js), kept in one place so
 // a wording change is one edit. Strings shared with other screens belong in the shared copy module, not here.
@@ -13,21 +14,12 @@ export const GROUPS = {
   author: { label: 'Author', scope: 'delivery only' },
 } as const;
 
-/** The period named in the summary and on the Custom button. */
-export const PERIOD_LABEL: Record<Period, string> = {
-  today: 'Today',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'last-90': 'Last 90 days',
-  'last-12m': 'Last 12 months',
-  custom: 'Custom range',
-};
-
 /** The three presets that have a segment of their own; the rest live under Custom. */
 export const SEGMENT_PRESETS: readonly PeriodPreset[] = ['today', 'this-week', 'this-month'];
 
 export const QUICK_RANGES: ReadonlyArray<{ preset: PeriodPreset; label: string }> = [
+  { preset: 'last-week', label: PERIOD_LABEL['last-week'] },
+  { preset: 'last-month', label: PERIOD_LABEL['last-month'] },
   { preset: 'last-30', label: PERIOD_LABEL['last-30'] },
   { preset: 'last-90', label: PERIOD_LABEL['last-90'] },
   { preset: 'last-12m', label: PERIOD_LABEL['last-12m'] },

@@ -116,7 +116,9 @@ test.describe('URL codec', () => {
     const presets: PeriodPreset[] = [
       'today',
       'this-week',
+      'last-week',
       'this-month',
+      'last-month',
       'last-30',
       'last-90',
       'last-12m',
@@ -129,9 +131,11 @@ test.describe('URL codec', () => {
       expect(periodOf(decode(searchFor('', next, CTX)), CTX), preset).toBe(preset);
     }
     expect(presetRange('this-month', CTX)).toEqual({ start: '2026-11-01', end: '2026-11-30' });
+    expect(presetRange('last-week', CTX)).toEqual({ start: '2026-10-26', end: '2026-11-01' });
+    expect(presetRange('last-month', CTX)).toEqual({ start: '2026-10-01', end: '2026-10-31' });
     expect(presetRange('last-30', CTX)).toEqual({ start: '2026-10-06', end: TODAY });
     expect(presetRange('last-12m', CTX)).toEqual({ start: CTX.lookbackStart, end: TODAY });
-    expect(periodOf({ start: '2026-10-01', end: '2026-10-31' }, CTX)).toBe('custom');
+    expect(periodOf({ start: '2026-09-01', end: '2026-09-30' }, CTX)).toBe('custom');
   });
 
   test('a new range takes the default grouping for its length; other changes keep the grouping', () => {
@@ -294,7 +298,9 @@ test.describe('URL codec', () => {
       const ctx = { today: d, lookbackStart: shared.lookbackStart(d) };
       for (const [mine, theirs] of [
         ['this-week', 'this-week'],
+        ['last-week', 'last-week'],
         ['this-month', 'this-month'],
+        ['last-month', 'last-month'],
         ['last-30', 'last-30'],
         ['last-90', 'last-90'],
         ['last-12m', 'last-12m'],
@@ -666,16 +672,17 @@ test.describe('on a desktop', () => {
       await expect(dialog.getByRole('alert')).toContainText('Choose dates between');
       expect(search(page)).toBe('');
 
+      await from.fill('2026-10-02'); // A custom range distinct from the Last month preset.
       await to.fill('2026-10-31');
       await expect(dialog.getByRole('alert')).toHaveCount(0); // editing clears the message
       await dialog.getByRole('button', { name: 'Apply' }).click();
-      await expect(page).toHaveURL(`${ORIGIN}/?start=2026-10-01&end=2026-10-31`);
+      await expect(page).toHaveURL(`${ORIGIN}/?start=2026-10-02&end=2026-10-31`);
       await expect(dialog).toBeHidden();
       await expect(page.getByRole('button', { name: 'Custom range' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
-      await expect(bar(page)).toContainText('Oct 1 – Oct 31, 2026');
+      await expect(bar(page)).toContainText('Oct 2 – Oct 31, 2026');
     });
 
     test('Cancel and Escape close it without changing anything, and focus returns to the button', async ({

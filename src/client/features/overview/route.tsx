@@ -9,11 +9,11 @@ import { RefreshBanner } from '../../components/RefreshBanner';
 import { ScopeLine } from '../../components/ScopeLine';
 import { useOverview, type Overview } from '../../lib/analytics';
 import { useBootstrap } from '../../lib/bootstrap';
-import { PROVIDER_NAMES, RANGE_NOTICES, linkHealthNotice } from '../../lib/copy';
+import { PERIOD_LABEL, PROVIDER_NAMES, RANGE_NOTICES, linkHealthNotice } from '../../lib/copy';
 import { useFilters } from '../../lib/filters';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import { AccountCards } from './AccountCards';
-import { OVERVIEW_COPY, PERIOD_LABEL } from './copy';
+import { OVERVIEW_COPY } from './copy';
 import { greeting } from './greeting';
 import { Kpis, KpiRowSkeleton } from './Kpis';
 import { Notice } from './Notice';
@@ -21,6 +21,7 @@ import { OverviewChart } from './OverviewChart';
 import { CardSkeleton, OverviewFailed, QuietOne } from './Panels';
 import { RecentMerged } from './RecentMerged';
 import { RepoTable } from './RepoTable';
+import { WorkReviewPreview } from './work-review/Preview';
 
 // Overview: greeting, summary metrics and the activity stack. Notices follow the metrics at every width, so that a collection
 // problem never pushes the headline counts down. From 1280px the chart and the account-reported usage share the first row (the
@@ -65,7 +66,7 @@ function rangeNotices(data: Overview) {
 }
 
 export function OverviewRoute() {
-  const { filters, period } = useFilters();
+  const { filters, ctx, period } = useFilters();
   const bootstrap = useBootstrap().data;
   const overview = useOverview(filters);
   const phone = useMediaQuery('(max-width: 719px)');
@@ -107,7 +108,7 @@ export function OverviewRoute() {
         }
       />
 
-      {!filters || !bootstrap || !timeZone ? (
+      {!filters || !ctx || !bootstrap || !timeZone ? (
         <p role="status" className="text-copy text-ink-muted">
           {COPY.loading}
         </p>
@@ -136,6 +137,8 @@ export function OverviewRoute() {
               </Notice>
             ))}
           {data?.trueZero && <QuietOne />}
+
+          <WorkReviewPreview filters={filters} ctx={ctx} timeZone={timeZone} />
 
           <div className="grid grid-cols-12 items-start gap-4">
             <div className="col-span-12 min-w-0 min-[1280px]:col-span-8 min-[1280px]:row-start-1">

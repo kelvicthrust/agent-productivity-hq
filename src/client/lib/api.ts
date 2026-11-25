@@ -224,7 +224,7 @@ export function apiSend<T>(
   path: string,
   schema: ZodType<T> | null,
   body?: unknown,
-  options: { signal?: AbortSignal } = {},
+  options: { query?: Query; signal?: AbortSignal } = {},
 ): Promise<T> {
   return request(method, path, schema, { body, ...options });
 }

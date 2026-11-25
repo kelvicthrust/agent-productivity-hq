@@ -27,14 +27,14 @@ const TAB_BAR_CLEARANCE = 'calc(var(--bottomnav-h) + env(safe-area-inset-bottom,
  * does not zoom the page when it takes focus (a field a screen draws smaller is raised here, the one place that sees them all).
  */
 export function ShellLayout() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { state } = useNavigation();
   const phone = useMediaQuery('(max-width: 719px)');
   // The shell mounts the bar for the route it is showing; the screen draws it under its title (PageHeader), through this slot.
   const filterBar = useMemo(() => {
-    const groups = filterGroupsFor(pathname);
+    const groups = filterGroupsFor(pathname, search);
     return groups.length > 0 ? <FilterBar groups={groups} /> : null;
-  }, [pathname]);
+  }, [pathname, search]);
   const layerInset = useMemo(() => (phone ? { blockEnd: TAB_BAR_CLEARANCE } : undefined), [phone]);
   // A first launch goes to Setup (TECH J1: "router redirects to /setup"). Only the server's own word moves the owner: while the
   // bootstrap is loading, or the app cannot be reached, nothing is decided and the page stays where it is. A finished setup never

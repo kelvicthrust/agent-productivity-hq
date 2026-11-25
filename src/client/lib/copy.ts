@@ -1,4 +1,5 @@
 import { PROVIDER_NAMES } from '../../shared/domain/scope';
+import type { Period } from '../../shared/domain/dashboard-filters';
 import type { LinkHealth } from '../../shared/contracts/link-health';
 import { count, int, plural, upperFirst } from './format';
 
@@ -13,6 +14,19 @@ import { count, int, plural, upperFirst } from './format';
 // stays in that feature. Typographic apostrophes (’) are the product's.
 
 export { PROVIDER_NAMES };
+
+/** Shared by the filter controls and page subtitles. */
+export const PERIOD_LABEL: Record<Period, string> = {
+  today: 'Today',
+  'this-week': 'This week',
+  'last-week': 'Last week',
+  'this-month': 'This month',
+  'last-month': 'Last month',
+  'last-30': 'Last 30 days',
+  'last-90': 'Last 90 days',
+  'last-12m': 'Last 12 months',
+  custom: 'Custom range',
+};
 
 /** Source rows by id: the two providers, Paseo (which adds identity to their sessions and is not a provider) and the GitHub sync (M6). */
 export const SOURCE_NAMES = { ...PROVIDER_NAMES, paseo: 'Paseo', github: 'GitHub' } as const;
@@ -268,13 +282,12 @@ export const SOURCES_COPY = {
   subtitle: 'Setup and upkeep. Everyday review lives in Overview.',
   /**
    * "Data kept on this machine" (the D7 card, requirements P-29 to P-31). D7's own scope line reads "Design intent … not yet
-   * verified", which is review scaffolding, so the scope line here says where the data is. The body is D7's: what is kept, what is
-   * never stored, and the only network requests.
+   * verified", which is review scaffolding, so the scope line here says where the data is.
    */
   dataKept: {
     title: 'Data kept on this machine',
     scope: 'Stored on this computer only',
-    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Prompts, responses, tool output and credentials aren’t stored. GitHub and account-report reads are the only network requests. Checking Claude plan limits contacts Anthropic using your existing Claude Code sign-in and saves the limit percentages, reset times and check status.',
+    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. HQ keeps raw prompts, responses, tool output and credentials out of dashboard history. Generating a Work Review with its separate ChatGPT connection sends selected session excerpts and pull request metadata to OpenAI for cloud processing. HQ saves the generated notes, reviews and evidence links on this machine and protects the Work Review credentials in macOS Keychain. Checking Claude plan limits contacts Anthropic using your existing Claude Code sign-in and saves the limit percentages, reset times and check status.',
   },
   reset: {
     title: 'Reset Agent Productivity HQ',
@@ -381,6 +394,6 @@ export const SOURCES_COPY = {
   },
   data: {
     title: 'Data kept on this machine',
-    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Prompts, responses, tool output and credentials aren’t stored. GitHub and account-report reads are the only network requests.',
+    body: 'Usage metrics and link metadata are kept for 12 months on this machine so history survives log cleanup. Work Review sends selected session excerpts and PR metadata to OpenAI when you confirm generation. HQ keeps the resulting notes and reviews locally.',
   },
 } as const;

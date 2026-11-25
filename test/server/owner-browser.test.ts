@@ -38,6 +38,35 @@ function browser(dataDir = tempDir(), now = () => Date.now()) {
 
 const fields = (code: string, next = '/sources') => new URLSearchParams({ code, next });
 
+it.each(['/work-review', '/delivery?section=work-review'])(
+  'unlocks %s with its report filters',
+  async (path) => {
+    const { app, code, close } = browser();
+    try {
+      const search = '?start=2026-11-09&end=2026-11-15&provider=codex&author=all';
+      const link = path + (path.includes('?') ? '&' + search.slice(1) : search);
+      const start = await app.request(link + '&ignore=ignored', {
+        headers: owner,
+      });
+      expect(start.status).toBe(401);
+      const form = await start.text();
+      expect(form).toContain('value="/work-review"');
+      expect(form).toContain('action="/unlock' + search.replaceAll('&', '&amp;') + '"');
+      expect(form).not.toContain('ignored');
+      const granted = await app.request('/unlock' + search, {
+        method: 'POST',
+        headers: { ...owner, ...formHeaders },
+        body: fields(code, '/work-review'),
+      });
+      expect(granted.status).toBe(303);
+      expect(granted.headers.get('location')).toBe('/work-review' + search);
+      expect(granted.headers.get('set-cookie')).toBeTruthy();
+    } finally {
+      close();
+    }
+  },
+);
+
 it('requires the daemon owner and a browser session before dispatching any dashboard data', async () => {
   const { app, code, unlock } = browser();
   expect((await app.request('/')).status).toBe(403);

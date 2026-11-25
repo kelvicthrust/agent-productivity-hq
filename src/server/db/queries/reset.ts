@@ -9,6 +9,8 @@ export function clearAppData(db: Db, timezone: string): void {
   db.exec('PRAGMA secure_delete = ON');
   inTransaction(db, () => {
     db.exec(`
+      DELETE FROM work_review_version;
+      DELETE FROM work_review_note;
       DELETE FROM owner_link_decision;
       DELETE FROM pr_session_link;
       DELETE FROM pr_commit;

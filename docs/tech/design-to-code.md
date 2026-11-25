@@ -19,6 +19,11 @@ External links open in a separate tab.
 The [current design brief](../../DESIGN.md#product-follow-up) specifies the following production
 composition. The earlier prototype comparisons below remain evidence for their captured revisions.
 
+- Overview places the Work Review card between the headline metrics and the aligned chart.
+  Its modal keeps the management link on the left and the primary action on the right.
+  Management opens the Work Review section in Delivery with the current filter scope. The
+  desktop sidebar links directly to that section. On phones, the Delivery tab contains both
+  the merged PR list and Work Review.
 - Overview renders the aligned chart, Recently merged and By repository, then Account-reported
   usage, in that DOM and reading order. At viewport widths of 1280px and above (D9) the grid
   places the chart in eight of twelve columns and the account section in the other four,

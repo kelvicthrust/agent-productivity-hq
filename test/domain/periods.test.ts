@@ -262,6 +262,14 @@ describe('presets and validation', () => {
   it('resolves the period presets', () => {
     expect(presetRange('this-week', today)).toEqual({ start: '2026-11-02', end: '2026-11-08' });
     expect(presetRange('this-month', today)).toEqual({ start: '2026-11-01', end: '2026-11-30' });
+    expect(presetRange('last-week', '2024-01-04')).toEqual({
+      start: '2023-12-25',
+      end: '2023-12-31',
+    });
+    expect(presetRange('last-month', '2024-03-01')).toEqual({
+      start: '2024-02-01',
+      end: '2024-02-29',
+    });
     expect(presetRange('last-30', today)).toEqual({ start: '2026-10-06', end: today });
     expect(presetRange('last-90', today)).toEqual({ start: '2026-08-07', end: today });
     expect(presetRange('last-12m', today)).toEqual({ start: '2025-11-04', end: today });
@@ -278,7 +286,15 @@ describe('presets and validation', () => {
   });
 
   it('accepts every preset and rejects dates outside the lookback or the current period', () => {
-    for (const preset of ['this-week', 'this-month', 'last-30', 'last-90', 'last-12m'] as const) {
+    for (const preset of [
+      'this-week',
+      'last-week',
+      'this-month',
+      'last-month',
+      'last-30',
+      'last-90',
+      'last-12m',
+    ] as const) {
       const range = presetRange(preset, today);
       expect(checkRange(range.start, range.end, today)).toEqual({ ok: true });
     }

@@ -16,6 +16,13 @@ import {
   HqFeed,
   HqResponse,
 } from './hq.ts';
+import {
+  WorkReviewEvidence,
+  WorkReviewVersion,
+  WorkReviewState,
+  WorkReviewBullet,
+  WorkReviewAccount,
+} from './work-review.ts';
 import { LinkHealth } from './link-health.ts';
 import { PaseoQuotaResponse } from './paseo-quota.ts';
 import { EvidenceItem, PullRequest } from './prs.ts';
@@ -29,6 +36,11 @@ import { ModelShare, ProviderKpi, Session } from './usage.ts';
  * after it), by their documented name. The contract test checks each one against the document.
  */
 export const COMPONENTS = {
+  WorkReviewEvidence,
+  WorkReviewVersion,
+  WorkReviewState,
+  WorkReviewBullet,
+  WorkReviewAccount,
   ErrorEnvelope,
   Provider,
   Scope,

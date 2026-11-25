@@ -157,6 +157,12 @@ test('Open full dashboard enters a fresh browser without the owner code @a11y @r
     await expect(page.getByRole('heading', { name: /^Overview:/ })).toBeVisible();
     await page.getByRole('link', { name: 'Delivery' }).click();
     await expect(page.getByRole('heading', { name: 'Delivery', exact: true })).toBeVisible();
+    await page.getByRole('radio', { name: 'Work Review' }).click();
+    await expect(page.getByRole('link', { name: 'Open owner Work Review' })).toHaveAttribute(
+      'href',
+      '/work-review',
+    );
+    await expect(page.getByRole('region', { name: 'ChatGPT plan' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Sources & repos' }).click();
     await expect(page.getByRole('heading', { name: 'Sources & repos', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open owner settings' })).toHaveAttribute(

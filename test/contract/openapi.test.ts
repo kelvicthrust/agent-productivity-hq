@@ -13,6 +13,8 @@ import {
 import { servedRoutes } from '../../src/server/http/app.ts';
 import { createBrowserHandoff } from '../../src/server/http/browser-handoff.ts';
 import { PASEO_HANDOFF_PATH } from '../../src/shared/contracts/browser-handoff.ts';
+import { createWorkReviewService } from '../../src/server/services/work-review/service.ts';
+import { setMeta } from '../../src/server/db/queries/meta.ts';
 import { resolveScope } from '../../src/shared/domain/scope.ts';
 import { claudePlanProfile } from '../../src/server/integrations/claudePlan/credentials.ts';
 import { createClaudeCapture } from '../../src/server/integrations/claudeCapture/index.ts';
@@ -218,6 +220,8 @@ describe('what the server serves against the document', () => {
       'GET /api/usage/categories',
       'GET /api/usage/groups',
       'GET /api/usage/groups/{groupKey}/roots',
+      'GET /api/work-review',
+      'GET /api/work-review/account',
       'GET /api/year',
       'POST /api/accounts/claude/plan-limits/check',
       'POST /api/accounts/{account}/connect',
@@ -230,6 +234,9 @@ describe('what the server serves against the document', () => {
       'POST /api/setup/complete',
       'POST /api/setup/discover',
       'POST /api/setup/reset',
+      'POST /api/work-review/account/connect',
+      'POST /api/work-review/account/disconnect',
+      'POST /api/work-review/generate',
       'PUT /api/accounts/claude/usage-capture',
       'PUT /api/accounts/github/app',
       'PUT /api/hq/claude-hooks',
@@ -344,6 +351,7 @@ describe('what the server serves against the document', () => {
 
   /** The status each served route answers with when it works (everything else is 200). */
   const SUCCESS: Record<string, number> = {
+    'POST /api/work-review/generate': 202,
     'POST /api/refresh': 202,
     'POST /api/setup/complete': 202,
     'POST /api/setup/reset': 204,
@@ -362,21 +370,61 @@ describe('what the server serves against the document', () => {
     const isRepoWrite = /\/api\/repos\/|^POST \/api\/repos$/.test(key);
     const pr = key.includes('/api/prs/{prId}') ? appWithPr() : null;
     const isHooks = key.includes('/api/hq/claude-hooks') || key === 'POST /api/hq/hooks/claude';
-    const target = pr
-      ? pr.app
-      : isHooks
-        ? appWithHooks()
-        : isClaude
-          ? appWithClaude()
-          : isAccount
-            ? await appWithGithub(false)
-            : isRepoWrite
-              ? await appWithGithub(true)
-              : key === 'POST /api/setup/reset'
-                ? testApp().app
-                : key.includes('/api/paseo-quota')
-                  ? managed
-                  : app;
+    const workReviewApp = () => {
+      const db = memoryDb();
+      setMeta(db, 'setup_completed_at', '1');
+      const unexpected = async (): Promise<never> => {
+        throw new Error('Empty review should use no model');
+      };
+      return testApp({
+        db,
+        workReview: createWorkReviewService({
+          db,
+          now: () => NOW,
+          timezone: 'UTC',
+          worker: { extract: unexpected, summarize: unexpected },
+        }),
+      }).app;
+    };
+    const accountApp = () => {
+      const db = memoryDb();
+      setMeta(db, 'setup_completed_at', '1');
+      const status = () => ({ status: 'disconnected' as const, account: null, message: null });
+      const noop = async () => {};
+      return testApp({
+        db,
+        reviewAuth: {
+          status,
+          connect: async () => ({ url: 'https://auth.openai.com/api/accounts/authorize' }),
+          disconnect: async () => status(),
+          reset: noop,
+          close: noop,
+          invalidateAccessToken: noop,
+          accessToken: async () => {
+            throw new Error('No inference in contract test');
+          },
+        },
+      }).app;
+    };
+    const target = key.startsWith('POST /api/work-review/account/')
+      ? accountApp()
+      : key === 'POST /api/work-review/generate'
+        ? workReviewApp()
+        : pr
+          ? pr.app
+          : isHooks
+            ? appWithHooks()
+            : isClaude
+              ? appWithClaude()
+              : isAccount
+                ? await appWithGithub(false)
+                : isRepoWrite
+                  ? await appWithGithub(true)
+                  : key === 'POST /api/setup/reset'
+                    ? testApp().app
+                    : key.includes('/api/paseo-quota')
+                      ? managed
+                      : app;
     // A run has to exist before it can be read: start one (the app has no adapters, so every source is skipped).
     if (key === 'GET /api/refresh/{runId}')
       await call(app, '/api/refresh', { method: 'POST', headers: WRITE, body: '{}' });
@@ -412,29 +460,31 @@ describe('what the server serves against the document', () => {
     const body =
       key === 'PUT /api/accounts/github/app'
         ? '{"clientId":"Iv1.testclient"}'
-        : key === 'POST /api/repos'
-          ? '{"input":"kelvin/atlas-api"}'
-          : key === 'PUT /api/prs/{prId}/links/{sessionId}'
-            ? '{"decision":"confirmed"}'
-            : key === 'PUT /api/accounts/claude/usage-capture'
-              ? '{"action":"begin_remove"}'
-              : key === 'PUT /api/hq/claude-hooks'
-                ? JSON.stringify({
-                    enabled: true,
-                    // The change carries the fingerprint of the preview, read the way the page reads it.
-                    preview: (
-                      (await (
-                        await call(target, '/api/hq/claude-hooks', { headers: HOST })
-                      ).json()) as {
-                        preview: string;
-                      }
-                    ).preview,
-                  })
-                : key === 'POST /api/hq/hooks/claude'
-                  ? '{"hook_event_name":"Stop","session_id":"contract-session"}'
-                  : key === 'POST /api/setup/reset'
-                    ? '{"confirmed":true}'
-                    : '{}';
+        : key === 'POST /api/work-review/generate'
+          ? '{"consent":true}'
+          : key === 'POST /api/repos'
+            ? '{"input":"kelvin/atlas-api"}'
+            : key === 'PUT /api/prs/{prId}/links/{sessionId}'
+              ? '{"decision":"confirmed"}'
+              : key === 'PUT /api/accounts/claude/usage-capture'
+                ? '{"action":"begin_remove"}'
+                : key === 'PUT /api/hq/claude-hooks'
+                  ? JSON.stringify({
+                      enabled: true,
+                      // The change carries the fingerprint of the preview, read the way the page reads it.
+                      preview: (
+                        (await (
+                          await call(target, '/api/hq/claude-hooks', { headers: HOST })
+                        ).json()) as {
+                          preview: string;
+                        }
+                      ).preview,
+                    })
+                  : key === 'POST /api/hq/hooks/claude'
+                    ? '{"hook_event_name":"Stop","session_id":"contract-session"}'
+                    : key === 'POST /api/setup/reset'
+                      ? '{"confirmed":true}'
+                      : '{}';
     const path = key === 'GET /api/repos/discover' ? url + '?login=octo-kelvin&via=gh' : url;
     const res = await call(target, path, {
       method,

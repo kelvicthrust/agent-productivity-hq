@@ -1,4 +1,3 @@
-import type { Period } from '../../lib/filters';
 import { int } from '../../lib/format';
 
 // The words only the Delivery screen uses, moved from the D7 prototype (docs/design/prototype/app.js pageDelivery) unchanged
@@ -6,17 +5,6 @@ import { int } from '../../lib/format';
 // (column headings, the toggle names) live with the table in src/client/components/DeliveryTable.tsx, which is drawn by this
 // screen only but may not import it. Words other screens share (the empty-repos state, link labels) are in lib/copy.ts.
 // Typographic apostrophes (’) are the product's.
-
-/** The period named in the page head. The same words as the filter bar's, which a feature may not import. */
-export const PERIOD_LABEL: Record<Period, string> = {
-  today: 'Today',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'last-90': 'Last 90 days',
-  'last-12m': 'Last 12 months',
-  custom: 'Custom range',
-};
 
 export const DELIVERY_COPY = {
   title: 'Delivery',

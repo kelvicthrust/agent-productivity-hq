@@ -72,18 +72,21 @@ export const PRODUCT_NAME = 'Agent Productivity HQ';
 /** The page name for a path, used for the document title. */
 export function pageNameFor(pathname: string): string {
   if (pathname === SETUP_PATH) return 'Setup';
+  if (pathname === '/work-review') return 'Delivery';
   const hit = NAV.find((item) =>
     item.end ? pathname === item.path : pathname.startsWith(item.path),
   );
   return hit?.label ?? 'Page not found';
 }
 
-/** The filter groups of the screen at `pathname`: none for Sources & repos, Setup and a path that is not a screen. */
-export function filterGroupsFor(pathname: string): readonly FilterGroupId[] {
-  return (
-    NAV.find((item) => (item.end ? pathname === item.path : pathname.startsWith(item.path)))
-      ?.filterGroups ?? []
+/** The filter groups for the current screen and section. */
+export function filterGroupsFor(pathname: string, search = ''): readonly FilterGroupId[] {
+  const item = NAV.find((item) =>
+    item.end ? pathname === item.path : pathname.startsWith(item.path),
   );
+  if (item?.id === 'delivery' && new URLSearchParams(search).get('section') === 'work-review')
+    return ['period', 'repos', 'provider', 'author'];
+  return item?.filterGroups ?? [];
 }
 
 /** Whether the screen at `pathname` carries the filter bar. */

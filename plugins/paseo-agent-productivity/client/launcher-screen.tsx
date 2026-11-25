@@ -19,6 +19,7 @@ import type { DashboardDestination, LaunchRequests } from './launch.ts';
 interface LauncherScreenProps extends paseoClient.PluginScreenProps {
   requests: LaunchRequests;
   destination?: DashboardDestination;
+  search?: string;
 }
 
 const expiredHandoff = 'This browser handoff expired. Retry to open the dashboard.';
@@ -30,12 +31,13 @@ export function LauncherScreen({
   params,
   requests,
   destination,
+  search,
   theme,
 }: LauncherScreenProps) {
   const launch = paseoClient.useRpc(launchDashboard);
   const handoff = paseoClient.useRpc(browserHandoff);
   const install = paseoClient.useRpc(runtimeInstall);
-  const ownerSettings = destination === 'sources';
+  const ownerView = destination === 'sources' || destination === 'work-review';
   const externalOpen =
     typeof paseoClient.openExternalUrl === 'function' ? paseoClient.openExternalUrl : undefined;
   // Paseo Desktop also reports `web`. Only Desktop supplies workspace browser navigation.
@@ -129,10 +131,10 @@ export function LauncherScreen({
           : 'Starting the dashboard and checking private access…',
       );
       try {
-        const request = () => (ownerSettings ? launch({}) : handoff({}));
+        const request = () => (ownerView ? launch({}) : handoff({}));
         const finishInstall = async (action: 'start' | 'status') => {
           const result = await waitForRuntime(action);
-          return result?.ok && active.current && !ownerSettings ? request() : result;
+          return result?.ok && active.current && !ownerView ? request() : result;
         };
         let result = installRuntime ? await finishInstall('start') : await request();
         if (active.current && result?.ok === false && result.reason === 'runtime-installing') {
@@ -153,8 +155,13 @@ export function LauncherScreen({
           );
           return;
         }
-        if (ownerSettings) {
-          const target = new URL('/sources', result.url).href;
+        if (ownerView) {
+          const page = new URL(
+            destination === 'work-review' ? '/work-review' : '/sources',
+            result.url,
+          );
+          if (destination === 'work-review' && search) page.search = search;
+          const target = page.href;
           if (browserNeedsClick && externalOpen) {
             setPrivateUrl(target);
             setStatus('Open the dashboard in your browser or copy the private address.');
@@ -192,7 +199,9 @@ export function LauncherScreen({
       launch,
       handoff,
       browserNeedsClick,
-      ownerSettings,
+      ownerView,
+      destination,
+      search,
       externalOpen,
       openInBrowser,
       waitForRuntime,

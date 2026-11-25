@@ -1,21 +1,9 @@
-import type { Period } from '../../lib/filters';
 import { plural } from '../../lib/format';
 
 // The words only the Usage screen uses, moved from the D7 prototype (docs/design/prototype/app.js pageUsage, catCard,
 // usageTree) unchanged except where a label carries a number: those go through `count`/`plural` in the caller, so they
 // agree with it. Words other screens share (ledger rows, link labels, coverage phrases, range notices) are in lib/copy.ts.
 // Typographic apostrophes (’) are the product's.
-
-/** The period named in the page head. The same words as the filter bar's, which a feature may not import. */
-export const PERIOD_LABEL: Record<Period, string> = {
-  today: 'Today',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'last-90': 'Last 90 days',
-  'last-12m': 'Last 12 months',
-  custom: 'Custom range',
-};
 
 export const USAGE_COPY = {
   title: 'Usage',

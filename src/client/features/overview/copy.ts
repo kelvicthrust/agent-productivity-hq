@@ -1,21 +1,9 @@
-import type { Period } from '../../lib/filters';
 import { int } from '../../lib/format';
 
 // The words only the Overview uses, moved from the D7 prototype (docs/design/prototype/app.js pageOverview, kpis, acctCard,
 // repoTable, recentList) unchanged except where a label carries a number (those go through `int`/`plural`, so they agree
 // with it) and where the fixture's fixed wording is replaced by what the API says. Words other screens share (coverage
 // phrases, range notices, the empty-repos state, status tags) are in lib/copy.ts. Typographic apostrophes (’) are the product's.
-
-/** The period named in the page head. The same words as the filter bar's, which a feature may not import. */
-export const PERIOD_LABEL: Record<Period, string> = {
-  today: 'Today',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'last-90': 'Last 90 days',
-  'last-12m': 'Last 12 months',
-  custom: 'Custom range',
-};
 
 export const OVERVIEW_COPY = {
   /** The page's name. The visible heading is the greeting, so this is what a screen reader hears first. */

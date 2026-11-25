@@ -63,6 +63,12 @@ Use a calm, readable analytical interface. Provider and attribution labels must 
 
 Example guided copy for review: “Recorded usage,” “Linked sessions,” “Suggested association,” and “History unavailable before [date].” Avoid “agent-produced PR,” “hours saved,” and “more productive” unless the underlying claim has separately been established. Visual approval does not establish these claims’ correctness.
 
+## Work Review
+
+Overview shows one compact Work Review card for the selected dates and filters. Opening the card shows the full update in a dialog where the owner can read, inspect evidence, and copy the text. Owners can also open **Delivery → Work Review** to manage the connection, generate an update, or browse saved versions. **Manage review** opens that section with the Overview filters. The report distinguishes personal merges, other authors’ merges, substantive session work, and explicitly recorded open work. Claims link to dated local evidence. A short unrelated exchange in a work session does not belong in the update. Missing excerpts are a coverage limitation.
+
+Generation requires consent to send selected conversation excerpts and work metadata to OpenAI using a separate Work Review sign-in with ChatGPT. Account-report connections remain independent. HQ retains derived notes and versioned reviews within its history window. Opening an existing review uses no model allowance. Revising a closed period requires an explicit request. Automatic updates are deferred until the owner evaluates a real weekly pilot.
+
 ## Metrics and interpretation
 
 | Metric | Definition and limits |
@@ -158,8 +164,8 @@ Each row is an independently assessable obligation for the selected slice, not a
 | P-27 | Persist owner link corrections. | A corrected association survives restart and a source refresh without being silently replaced by a suggestion. |
 | P-28 | Preserve provider token semantics. | Sample totals reconcile under the documented provider definitions; cached/reasoning subsets are not counted twice. |
 | P-29 | Retain imported metric history for the lookback. | After restart and loss of original sample logs, previously imported in-window metrics remain reviewable, with retained identifiers supporting recorded links. |
-| P-30 | Keep collected dashboard data on the installation host. | Network inspection finds no local usage/transcript upload to an analytics or hosted dashboard service; GitHub and permitted subscription-source reads are identified separately. |
-| P-31 | Exclude conversation bodies and secrets from persisted dashboard records. | Inspecting stored dashboard data and error output finds only required metrics/link metadata, without prompts, responses, tool bodies, or credentials. |
+| P-30 | Except for an owner-requested Work Review, keep collected dashboard data on the installation host. | Network inspection finds no local usage/transcript upload to an analytics or hosted dashboard service; GitHub and permitted subscription-source reads are identified separately. |
+| P-31 | Exclude conversation bodies and secrets from persisted dashboard records. | Inspecting stored dashboard data and error output finds only required metrics/link metadata, plus the derived notes and reports from an explicitly requested Work Review, without conversation bodies, tool bodies, or credentials. |
 | P-32 | Provide readable alternatives to charts and color. | The review journeys can be completed by keyboard with labeled controls, visible focus, and equivalent tabular values. |
 | P-33 | Support subscription-reported overall usage when available. | An accessible supported account sample supplies the provider overall summary with provenance; an unavailable source leaves local coverage labeled as local. |
 | P-34 | Preserve subscription usage units. | Plan windows display utilization as percentages. Recorded local tokens retain their token unit. |

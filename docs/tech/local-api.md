@@ -197,6 +197,50 @@ components:
       description: Error envelope
       content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
   schemas:
+    WorkReviewAccount:
+      type: object
+      required: [status, account, message]
+      properties:
+        status: {type: string, enum: [unavailable, disconnected, pending, connected, needs_consent]}
+        account: {type: [string, "null"]}
+        message: {type: [string, "null"]}
+    WorkReviewEvidence:
+      type: object
+      required: [kind, id, label, date, repo]
+      properties:
+        kind: {type: string, enum: [pr, session]}
+        id: {type: string}
+        label: {type: string}
+        date: {type: string, format: date}
+        repo: {type: [string, "null"]}
+        notes: {type: array, items: {type: string}}
+    WorkReviewBullet:
+      type: object
+      required: [kind, text, evidence]
+      properties:
+        kind: {type: string, enum: [shipped, team, progress, open]}
+        text: {type: string}
+        evidence: {type: array, items: {$ref: "#/components/schemas/WorkReviewEvidence"}}
+    WorkReviewVersion:
+      type: object
+      required: [version, createdAt, headline, headlineEvidence, bullets, coverage]
+      properties:
+        version: {type: integer, exclusiveMinimum: 0}
+        createdAt: {type: string, format: date-time}
+        headline: {type: string}
+        headlineEvidence: {type: array, items: {$ref: "#/components/schemas/WorkReviewEvidence"}}
+        bullets: {type: array, items: {$ref: "#/components/schemas/WorkReviewBullet"}}
+        coverage: {type: array, items: {type: string}}
+    WorkReviewState:
+      type: object
+      required: [status, message, review, versions, changed, locked]
+      properties:
+        status: {type: string, enum: [idle, running, failed]}
+        message: {type: [string, "null"]}
+        review: {anyOf: [{$ref: "#/components/schemas/WorkReviewVersion"}, {type: "null"}]}
+        versions: {type: array, items: {type: integer, exclusiveMinimum: 0}}
+        changed: {type: boolean}
+        locked: {type: boolean}
     ErrorEnvelope:
       type: object
       required: [error]
@@ -671,6 +715,62 @@ paths:
                   greetingName: { type: [string, "null"], description: GitHub profile name's first word if set, else null (UI then greets without a name) }
                   paseoManaged: { const: true, description: The session uses Paseo provider quota reports }
                   issues: { type: array, items: { type: object, properties: { kind: { type: string, enum: [source, account, repo] }, id: { type: string }, label: { type: string } } } }
+  /api/work-review/account:
+    get:
+      description: Check the status of the separate Work Review plan-use permission.
+      responses:
+        "200": {description: Local connection status, content: {application/json: {schema: {$ref: "#/components/schemas/WorkReviewAccount"}}}}
+  /api/work-review/account/connect:
+    post:
+      description: Begin a local PKCE registration or reauthorization. Finish in a browser on the Mac running HQ.
+      parameters: [{name: X-Agent-Productivity-Request, in: header, required: true, schema: {type: string, const: "1"}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {newProfile: {type: boolean}}}}}}
+      responses:
+        "200": {description: OpenAI authorization URL, content: {application/json: {schema: {type: object, required: [url], properties: {url: {type: string, format: uri}}}}}}
+        "400": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /api/work-review/account/disconnect:
+    post:
+      description: Stop generation and disconnect the Work Review account.
+      parameters: [{name: X-Agent-Productivity-Request, in: header, required: true, schema: {type: string, const: "1"}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {}}}}}
+      responses:
+        "200": {description: Connection status, content: {application/json: {schema: {$ref: "#/components/schemas/WorkReviewAccount"}}}}
+        "400": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /api/work-review:
+    get:
+      description: Read or poll a scoped review from local data. An optional version selects a saved revision. This read never starts a model run.
+      parameters:
+        - { $ref: "#/components/parameters/start" }
+        - { $ref: "#/components/parameters/end" }
+        - { $ref: "#/components/parameters/gran" }
+        - { $ref: "#/components/parameters/repos" }
+        - { $ref: "#/components/parameters/provider" }
+        - { $ref: "#/components/parameters/author" }
+        - { name: version, in: query, schema: {type: integer, exclusiveMinimum: 0} }
+      responses:
+        "200": {description: Review state, content: { application/json: {schema: {$ref: "#/components/schemas/WorkReviewState"}}}}
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/work-review/generate:
+    post:
+      description: Owner explicitly requests generation for these filters. Updating a changed, closed period requires revision true.
+      parameters:
+        - { $ref: "#/components/parameters/start" }
+        - { $ref: "#/components/parameters/end" }
+        - { $ref: "#/components/parameters/gran" }
+        - { $ref: "#/components/parameters/repos" }
+        - { $ref: "#/components/parameters/provider" }
+        - { $ref: "#/components/parameters/author" }
+        - { name: X-Agent-Productivity-Request, in: header, required: true, schema: {type: string, const: "1"} }
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [consent], properties: {consent: {const: true}, revision: {type: boolean}}}}}}
+      responses:
+        "200": {description: Cached review, content: { application/json: {schema: {$ref: "#/components/schemas/WorkReviewState"}}}}
+        "202": {description: Generating, content: { application/json: {schema: {$ref: "#/components/schemas/WorkReviewState"}}}}
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
   /api/overview:
     get:
       description: The standalone ChatGPT entry in accounts contains one verified general Codex quota window of 10080 minutes with unit percent. The report is independent of the filters and is omitted when no verified weekly reading is available. If the refresh leaves the general weekly window unreadable, the last verified reading keeps its original fetch time and becomes stale. Managed sessions use /api/paseo-quota and receive an empty accounts array here.

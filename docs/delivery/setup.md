@@ -67,6 +67,17 @@ the corresponding empty states.
 `pnpm start` serves `dist/client` in the foreground. Stop with Ctrl+C and restart from the same
 checkout with the same settings. Run `pnpm build` again after client changes.
 
+## Connect Work Review
+
+After setup, open **Delivery → Work Review → Continue with ChatGPT**. Complete
+sign-in in a browser on the Mac running HQ. The first sign-in registers this installation
+with OpenAI and keeps its connection in macOS Keychain. You can disconnect or choose a
+different account from Work Review.
+
+Select a period and choose **Generate update** to confirm which evidence goes to OpenAI.
+Opening a saved review uses no plan allowance. If GPT-6 Luna is unavailable to the
+connected account, HQ shows the reason and keeps your last successful review.
+
 ## Open Agent HQ from Paseo Desktop
 
 Click **Agent HQ** in the Paseo sidebar. A new installation opens Setup inside Paseo.

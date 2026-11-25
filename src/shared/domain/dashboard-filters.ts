@@ -43,7 +43,14 @@ export interface Filters {
 }
 
 export type PeriodPreset =
-  'today' | 'this-week' | 'this-month' | 'last-30' | 'last-90' | 'last-12m';
+  | 'today'
+  | 'this-week'
+  | 'last-week'
+  | 'this-month'
+  | 'last-month'
+  | 'last-30'
+  | 'last-90'
+  | 'last-12m';
 export type Period = PeriodPreset | 'custom';
 
 // ---- calendar dates ----------------------------------------------------------------------------------------------
@@ -129,8 +136,16 @@ export function presetRange(
       return { start: today, end: today };
     case 'this-week':
       return { start: weekStart(today), end: weekEnd(today) };
+    case 'last-week': {
+      const start = weekStart(today);
+      return { start: addDays(start, -7), end: addDays(start, -1) };
+    }
     case 'this-month':
       return { start: monthStart(today), end: monthEnd(today) };
+    case 'last-month': {
+      const end = addDays(monthStart(today), -1);
+      return { start: monthStart(end), end };
+    }
     case 'last-30':
       return { start: addDays(today, -29), end: today };
     case 'last-90':
@@ -143,7 +158,9 @@ export function presetRange(
 const PRESETS: readonly PeriodPreset[] = [
   'today',
   'this-week',
+  'last-week',
   'this-month',
+  'last-month',
   'last-30',
   'last-90',
   'last-12m',

@@ -3,6 +3,7 @@ import { Popover } from '@astryxdesign/core/Popover';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { formatRange } from '../../../shared/domain/periods';
+import { PERIOD_LABEL } from '../../lib/copy';
 import type { FilterChange, FilterContext, Filters, Period, PeriodPreset } from '../../lib/filters';
 import type { FilterGroupId } from '../../lib/filterSlot';
 import { CustomRangePanel } from './CustomRangePanel';
@@ -11,7 +12,6 @@ import {
   COPY,
   GRAN_OPTIONS,
   GROUPS,
-  PERIOD_LABEL,
   PROVIDER_OPTIONS,
   SEGMENT_PRESETS,
   timezoneLine,

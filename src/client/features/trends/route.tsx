@@ -5,11 +5,11 @@ import { providersInScope } from '../../../shared/domain/scope';
 import { PageHeader } from '../../components/PageHeader';
 import { useSources } from '../../components/RefreshBanner';
 import { useBootstrap } from '../../lib/bootstrap';
-import { PROVIDER_NAMES, RANGE_NOTICES } from '../../lib/copy';
+import { PERIOD_LABEL, PROVIDER_NAMES, RANGE_NOTICES } from '../../lib/copy';
 import { useFilters, type Filters } from '../../lib/filters';
 import { ModelShares } from './ModelShares';
 import { Notice } from './Notice';
-import { PERIOD_LABEL, TRENDS_COPY } from './copy';
+import { TRENDS_COPY } from './copy';
 import { TrendsChart } from './TrendsChart';
 import { YearCard } from './YearCard';
 
