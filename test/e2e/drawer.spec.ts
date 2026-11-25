@@ -57,7 +57,7 @@ const bucket = (page: Page, index: number): Locator =>
   page.locator(`[data-bucket-index="${index}"]`).first();
 const drawerOf = (page: Page, name?: string | RegExp): Locator =>
   page.getByRole('dialog', name === undefined ? {} : { name });
-const dialogElement = (page: Page): Locator => page.locator('dialog');
+const dialogElement = (page: Page): Locator => page.locator('dialog.astryx-drawer');
 const prList = (drawer: Locator): Locator =>
   drawer.getByRole('list', { name: 'Merged pull requests' });
 const sessionList = (drawer: Locator): Locator => drawer.getByRole('list', { name: 'Sessions' });
@@ -1036,7 +1036,7 @@ test.describe('motion', () => {
       () =>
         new Promise<number[]>((resolve) => {
           const samples: number[] = [];
-          const panel = document.querySelector('dialog');
+          const panel = document.querySelector('dialog.astryx-drawer');
           document
             .querySelector('[data-bucket-index="1"]')!
             .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));

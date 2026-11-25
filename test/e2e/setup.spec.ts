@@ -158,6 +158,12 @@ test.describe('a first launch', () => {
     await expect(banner.getByRole('button', { name: /Refresh/ })).toHaveCount(0);
     // Arriving by the app's own redirect is not something the owner did: no heading holds the focus (and draws a ring around itself).
     await expect(page.getByRole('heading', { level: 1 })).not.toBeFocused();
+    await expect(page.getByText(/Made with ❤️ by/)).toHaveCount(0);
+    const about = banner.getByRole('button', { name: 'About Agent Productivity HQ' });
+    await about.click();
+    await expect(page.getByRole('dialog', { name: 'About Agent Productivity HQ' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(about).toBeFocused();
     await lookDone(page);
     await button(page, 'Continue').click();
     await expect(banner.getByText('Step 2 of 3', { exact: true })).toBeVisible();

@@ -138,7 +138,7 @@ export function OverviewRoute() {
             ))}
           {data?.trueZero && <QuietOne />}
 
-          <WorkReviewPreview filters={filters} ctx={ctx} />
+          <WorkReviewPreview filters={filters} ctx={ctx} timeZone={timeZone} />
 
           <div className="grid grid-cols-12 items-start gap-4">
             <div className="col-span-12 min-w-0 min-[1280px]:col-span-8 min-[1280px]:row-start-1">

@@ -8,14 +8,17 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
 
 ## Product follow-up
 
-- **Work Review** appears on Overview as a dated summary with a link to its full report.
-  The full view groups personal delivery, team merges, other progress and recorded open work,
-  omitting empty sections. Expand a claim to see its dated sources. The generation dialog
-  identifies what goes to OpenAI and asks for confirmation. When generation fails, keep the
-  saved review readable and show the recovery action alongside it.
-
-- **App bar** shows Refresh. The Sources & repos navigation item carries the issue count on desktop
-  and phones.
+- **Work Review** is a single compact card on browser Overview. Use the same neutral border,
+  corner radius and shadow as the surrounding panels. Show the headline for the
+  selected filters and make the whole card open the detailed review in a dialog. The dialog
+  shows the date range and groups personal delivery, team merges, other progress and recorded
+  open work. Omit empty sections. Expand a claim to see its dated sources. Keep **Copy update**
+  reachable while scrolling on a phone. Closing the dialog returns focus to the card.
+  Generation asks for confirmation before sending data to OpenAI. Keep a saved review readable
+  if generation fails.
+- **App bar** shows Refresh on the dashboard and an About info icon at every width. About opens a
+  dialog with the app version, project and support links, and the creator credit. The Sources &
+  repos navigation item carries the issue count on desktop and phones.
 - **Sources & repos** starts with a rectangular **Source coverage** section. At 720px and above,
   show On this machine, Delivery and Account reports in three columns. On phones collapse the
   groups behind one disclosure and indicate actionable issues. Keep refresh timestamps in its header.

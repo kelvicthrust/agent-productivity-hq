@@ -164,7 +164,7 @@ async function acknowledgePlan(page: Page) {
   await expect(welcome).toBeHidden();
 }
 
-test('Overview asks for consent, generates a scoped review, and copies its report', async ({
+test('Overview opens a scoped review in place, asks for consent, and copies the report @a11y @responsive', async ({
   page,
 }) => {
   await openWorld(page);
@@ -206,7 +206,14 @@ test('Overview asks for consent, generates a scoped review, and copies its repor
   );
 
   const preview = page.getByRole('region', { name: 'Work Review' });
-  const generate = preview.getByRole('button', { name: 'Generate update' });
+  const card = preview.getByRole('button', { name: /^Work Review/ });
+  await expect(preview.getByRole('button')).toHaveCount(1);
+  await expect(customRange).toBeHidden();
+  await card.click();
+  const modal = page.getByRole('dialog', { name: 'Weekly work review' });
+  const close = modal.getByRole('button', { name: 'Close', exact: true });
+  await expect(close).toBeFocused();
+  const generate = modal.getByRole('button', { name: 'Generate update' });
   const disclosure = page.getByRole('dialog', { name: /^Generate update/ });
   await generate.click();
   await expect(disclosure).toContainText('selected session excerpts and pull request metadata');
@@ -221,8 +228,8 @@ test('Overview asks for consent, generates a scoped review, and copies its repor
 
   await generate.click();
   await disclosure.getByRole('button', { name: 'Generate update' }).click();
-  await expect(preview.getByRole('button', { name: 'Generating update…' })).toBeVisible();
-  await expect(preview).toContainText(REVIEW.headline);
+  await expect(modal).toContainText(REVIEW.headline);
+  await expect(modal.getByRole('button', { name: 'Copy update' })).toBeFocused();
   expect(generations).toEqual([
     {
       body: { consent: true },
@@ -230,13 +237,14 @@ test('Overview asks for consent, generates a scoped review, and copies its repor
     },
   ]);
 
-  await preview.getByRole('link', { name: 'Open Work Review' }).click();
   await expect(page).toHaveURL(
-    `${ORIGIN}/work-review?start=2026-10-26&end=2026-11-01&provider=codex&author=all`,
+    `${ORIGIN}/?start=2026-10-26&end=2026-11-01&provider=codex&author=all`,
   );
-  await expect(page).toHaveTitle('Work Review · Agent Productivity HQ');
-  await acknowledgePlan(page);
-  const report = page.getByRole('article', { name: REVIEW.headline });
+  await expect(modal.getByRole('link', { name: 'Manage review' })).toHaveAttribute(
+    'href',
+    '/work-review?start=2026-10-26&end=2026-11-01&provider=codex&author=all',
+  );
+  const report = modal.getByRole('article', { name: REVIEW.headline });
   for (const heading of [
     'Shipped',
     'Team merges',
@@ -248,7 +256,7 @@ test('Overview asks for consent, generates a scoped review, and copies its repor
   }
   await expect(report).toContainText(REVIEW.coverage[0]!);
   await page.screenshot({
-    path: test.info().outputPath('work-review-desktop.png'),
+    path: test.info().outputPath('work-review-modal-desktop.png'),
     animations: 'disabled',
   });
   await report.locator('header summary').click();
@@ -271,8 +279,48 @@ test('Overview asks for consent, generates a scoped review, and copies its repor
   expect(clipboard).not.toContain(SESSION.label);
   expect(clipboard).not.toContain('Local session ·');
 
-  await page.getByRole('link', { name: 'Back to Overview' }).click();
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeHidden();
+  await expect(card).toBeFocused();
+  // Capture the card at rest after checking its keyboard focus state.
+  await card.evaluate((element: HTMLButtonElement) => {
+    element.scrollIntoView({ block: 'center', behavior: 'instant' });
+    element.blur();
+  });
+  await page.mouse.move(0, 0);
+  const panel = page.getByRole('region', { name: 'Recently merged' });
+  for (const property of [
+    'border-left-width',
+    'border-left-color',
+    'border-radius',
+    'box-shadow',
+  ]) {
+    const expected = await panel.evaluate(
+      (element, name) => getComputedStyle(element).getPropertyValue(name),
+      property,
+    );
+    await expect(card).toHaveCSS(property, expected);
+  }
+  await page.screenshot({
+    path: test.info().outputPath('work-review-overview.png'),
+    animations: 'disabled',
+  });
+  await card.press('Enter');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(report).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('work-review-modal-phone.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(modal.getByRole('button', { name: 'Copy update' })).toBeInViewport();
+  await expect(close).toBeInViewport();
+  expect(await modal.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(320);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await close.click();
+  await expect(card).toBeFocused();
   await expect(preview).toContainText(REVIEW.headline);
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('radio', { name: 'This week' }).click();
   await expect(preview).not.toContainText(REVIEW.headline);
   expect(generations).toHaveLength(1);

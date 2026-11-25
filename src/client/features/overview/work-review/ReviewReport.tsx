@@ -1,5 +1,5 @@
 import { Button } from '@astryxdesign/core/Button';
-import { useId, useState } from 'react';
+import { useId, useState, type Ref } from 'react';
 import type { WorkReviewVersion } from '../../../../shared/contracts/work-review';
 import { formatStarted } from '../../../lib/format';
 import { EvidenceList } from './Evidence';
@@ -11,7 +11,17 @@ const SECTIONS = [
   ['open', 'Still open'],
 ] as const;
 
-export function CopyReview({ review, range }: { review: WorkReviewVersion; range: string }) {
+export function CopyReview({
+  review,
+  range,
+  variant = 'secondary',
+  actionRef,
+}: {
+  review: WorkReviewVersion;
+  range: string;
+  variant?: 'primary' | 'secondary';
+  actionRef?: Ref<HTMLButtonElement>;
+}) {
   const [copy, setCopy] = useState<'ready' | 'done' | 'failed'>('ready');
   const id = useId();
   const plainText = [
@@ -35,10 +45,11 @@ export function CopyReview({ review, range }: { review: WorkReviewVersion; range
   return (
     <>
       <Button
+        ref={actionRef}
         label="Copy update"
         size="sm"
-        variant="secondary"
-        className="max-[719px]:min-h-11"
+        variant={variant}
+        className={variant === 'primary' ? 'min-h-10 max-[550px]:min-h-11' : 'max-[719px]:min-h-11'}
         onClick={() => void copyText()}
       />
       {copy === 'done' && (
@@ -68,21 +79,32 @@ export function CopyReview({ review, range }: { review: WorkReviewVersion; range
 export function ReviewReport({
   review,
   timeZone,
+  presentation = 'page',
 }: {
   review: WorkReviewVersion;
   timeZone: string;
+  presentation?: 'page' | 'dialog';
 }) {
+  const heading = useId();
+  const inDialog = presentation === 'dialog';
   return (
     <article
-      aria-labelledby="work-review-report"
-      className="flex min-w-0 flex-col gap-4 rounded-md border border-border bg-surface p-4 shadow-card [overflow-wrap:anywhere] min-[720px]:p-5"
+      aria-labelledby={heading}
+      className={`flex min-w-0 flex-col [overflow-wrap:anywhere] ${inDialog ? 'gap-3' : 'gap-4 rounded-md border border-border bg-surface p-4 shadow-card min-[720px]:p-5'}`}
     >
       <header>
-        <p className="text-caption text-ink-muted">
-          Version {review.version} · Saved{' '}
-          <time dateTime={review.createdAt}>{formatStarted(review.createdAt, timeZone)}</time>
-        </p>
-        <h2 id="work-review-report" className="mt-1 font-display text-title-section text-ink">
+        {!inDialog && (
+          <p className="text-caption text-ink-muted">
+            Version {review.version} · Saved{' '}
+            <time dateTime={review.createdAt}>{formatStarted(review.createdAt, timeZone)}</time>
+          </p>
+        )}
+        <h2
+          id={heading}
+          className={
+            inDialog ? 'text-copy text-ink' : 'mt-1 font-display text-title-section text-ink'
+          }
+        >
           {review.headline}
         </h2>
         <EvidenceList evidence={review.headlineEvidence} />
@@ -91,7 +113,7 @@ export function ReviewReport({
         const bullets = review.bullets.filter((bullet) => bullet.kind === kind);
         if (bullets.length === 0) return null;
         return (
-          <section key={kind} className="border-t border-border pt-3">
+          <section key={kind} className={inDialog ? undefined : 'border-t border-border pt-3'}>
             <h3 className="font-display text-title-section text-ink">{title}</h3>
             <ul className="mt-1 list-disc space-y-3 ps-5 text-copy text-ink">
               {bullets.map((bullet, index) => (
@@ -106,8 +128,16 @@ export function ReviewReport({
       })}
       {review.coverage.length > 0 && (
         <section className="border-t border-border pt-3">
-          <h3 className="font-display text-title-section text-ink">Source coverage</h3>
-          <ul className="mt-1 list-disc space-y-1 ps-5 text-copy text-ink-muted">
+          <h3 className={inDialog ? 'sr-only' : 'font-display text-title-section text-ink'}>
+            Source coverage
+          </h3>
+          <ul
+            className={
+              inDialog
+                ? 'space-y-1 text-caption text-ink-muted'
+                : 'mt-1 list-disc space-y-1 ps-5 text-copy text-ink-muted'
+            }
+          >
             {review.coverage.map((note, index) => (
               <li key={index}>{note}</li>
             ))}

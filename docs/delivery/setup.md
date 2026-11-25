@@ -69,7 +69,7 @@ checkout with the same settings. Run `pnpm build` again after client changes.
 
 ## Connect Work Review
 
-After setup, open **Overview → Open Work Review → Continue with ChatGPT**. Complete
+After setup, open **Overview → Work Review → Manage ChatGPT connection → Continue with ChatGPT**. Complete
 sign-in in a browser on the Mac running HQ. The first sign-in registers this installation
 with OpenAI and keeps its connection in macOS Keychain. You can disconnect or choose a
 different account from Work Review.
