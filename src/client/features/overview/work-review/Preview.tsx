@@ -22,7 +22,7 @@ export const REVIEW_LINK =
   'inline-flex w-fit items-center gap-1.5 rounded-sm text-label font-semibold text-action underline underline-offset-2 max-[719px]:min-h-11';
 
 const CARD =
-  'flex min-h-14 w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-surface px-3.5 py-2 text-left text-ink no-underline shadow-card hover:bg-sunken';
+  'flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-surface p-4 text-left text-ink no-underline shadow-card hover:bg-sunken focus-visible:rounded-md focus-visible:bg-sunken';
 
 export function WorkReviewPreview({
   filters,
@@ -33,18 +33,17 @@ export function WorkReviewPreview({
   ctx: FilterContext;
   timeZone: string;
 }) {
-  const href = `/work-review${searchFor('', filters, ctx)}`;
   return (
     <section aria-label="Work Review">
       {isPaseoBrowser() ? (
-        <a href={href} className={CARD}>
+        <a href={`/work-review${searchFor('', filters, ctx)}`} className={CARD}>
           <CardContent>Open owner Work Review</CardContent>
         </a>
       ) : (
         <PreviewContent
           key={reviewScopeKey(filters)}
           filters={filters}
-          href={href}
+          href={`/delivery${searchFor('section=work-review', filters, ctx)}`}
           timeZone={timeZone}
           period={periodOf(filters, ctx)}
         />
@@ -57,8 +56,10 @@ function CardContent({ children }: { children: ReactNode }) {
   return (
     <>
       <span className="min-w-0">
-        <span className="block font-display text-label font-extrabold text-ink">Work Review</span>
-        <span className="line-clamp-2 text-copy [overflow-wrap:anywhere]">{children}</span>
+        <span className="block font-display text-title-section text-ink">Work Review</span>
+        <span className="mt-0.5 line-clamp-2 text-copy text-ink-muted [overflow-wrap:anywhere]">
+          {children}
+        </span>
       </span>
       <span className="shrink-0 text-action">
         <Icon name="chevronRight" size={19} />
@@ -88,6 +89,7 @@ function PreviewContent({
 }) {
   const result = useWorkReview(filters);
   const [open, setOpen] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<HTMLDivElement | null>(null);
   const id = useId();
   const state = result.data;
   const review = state?.review;
@@ -132,13 +134,10 @@ function PreviewContent({
           <>
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 min-[551px]:px-[22px] min-[551px]:py-[15px]">
               <div className="min-w-0">
-                <h2
-                  id={`${id}-title`}
-                  className="font-display text-title-page font-extrabold text-ink"
-                >
+                <h2 id={`${id}-title`} className="font-display text-title-section text-ink">
                   {title}
                 </h2>
-                <p id={`${id}-period`} className="text-caption text-ink-muted">
+                <p id={`${id}-period`} className="mt-0.5 text-caption text-ink-muted">
                   {range}
                 </p>
               </div>
@@ -146,7 +145,7 @@ function PreviewContent({
                 label="Close"
                 size="sm"
                 variant="secondary"
-                className="min-h-10 shrink-0 max-[550px]:min-h-11"
+                className="min-h-10 shrink-0 max-[719px]:min-h-11"
                 data-autofocus
                 onClick={() => setOpen(false)}
               />
@@ -173,7 +172,12 @@ function PreviewContent({
                 </p>
               ) : null}
               {review ? (
-                <ReviewReport review={review} timeZone={timeZone} presentation="dialog" />
+                <ReviewReport
+                  review={review}
+                  timeZone={timeZone}
+                  presentation="dialog"
+                  headingLevel={3}
+                />
               ) : !result.isError ? (
                 <div className="space-y-2">
                   <p className="text-caption text-ink-muted [overflow-wrap:anywhere]">
@@ -187,12 +191,17 @@ function PreviewContent({
                 </div>
               ) : null}
             </div>
+            <div
+              ref={setCopyFeedback}
+              className="max-h-[28dvh] shrink-0 overflow-y-auto px-4 py-2 empty:hidden min-[551px]:px-[22px]"
+            />
             <ReviewFooter
               state={state}
               loadFailed={result.isError}
               filters={filters}
               range={range}
               href={href}
+              copyFeedback={copyFeedback}
             />
           </>
         )}
@@ -207,12 +216,14 @@ function ReviewFooter({
   loadFailed,
   range,
   href,
+  copyFeedback,
 }: {
   filters: Filters;
   state: WorkReviewState | undefined;
   loadFailed: boolean;
   range: string;
   href: string;
+  copyFeedback: HTMLDivElement | null;
 }) {
   const account = useReviewAccount();
   const review = state?.review;
@@ -231,7 +242,10 @@ function ReviewFooter({
   const canGenerate = account.data?.status === 'connected' && !account.isError;
   const connect = !review && state && !loadFailed && !account.isPending && !canGenerate;
   return (
-    <footer className="flex max-h-[40dvh] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-y-auto border-t border-border px-4 py-3 min-[551px]:px-[22px] min-[551px]:py-[15px]">
+    <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-border px-4 py-3 min-[551px]:px-[22px] min-[551px]:py-[15px] [&>button]:justify-self-end [&>p]:col-span-full">
+      <Link to={href} className={`${REVIEW_LINK} max-w-full [overflow-wrap:anywhere]`}>
+        {connect ? 'Manage ChatGPT connection' : 'Manage review'}
+      </Link>
       {review ? (
         <CopyReview
           key={review.version}
@@ -239,13 +253,11 @@ function ReviewFooter({
           range={range}
           variant="primary"
           actionRef={copyButton}
+          feedbackContainer={copyFeedback}
         />
       ) : state && !loadFailed && canGenerate ? (
         <GenerateReview filters={filters} state={state} />
       ) : null}
-      <Link to={href} className={`${REVIEW_LINK} ms-auto`}>
-        {connect ? 'Manage ChatGPT connection' : 'Manage review'}
-      </Link>
       <p role="status" className="sr-only">
         {completed ? 'Work review ready.' : ''}
       </p>

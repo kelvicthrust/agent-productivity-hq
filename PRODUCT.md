@@ -65,7 +65,7 @@ Example guided copy for review: “Recorded usage,” “Linked sessions,” “
 
 ## Work Review
 
-Overview shows one compact Work Review card for the selected dates and filters. Opening the card shows the full update in a dialog where the owner can read, inspect evidence, and copy the text. The report distinguishes personal merges, other authors’ merges, substantive session work, and explicitly recorded open work. Claims link to dated local evidence. A short unrelated exchange in a work session does not belong in the update. Missing excerpts are a coverage limitation.
+Overview shows one compact Work Review card for the selected dates and filters. Opening the card shows the full update in a dialog where the owner can read, inspect evidence, and copy the text. Owners can also open **Delivery → Work Review** to manage the connection, generate an update, or browse saved versions. **Manage review** opens that section with the Overview filters. The report distinguishes personal merges, other authors’ merges, substantive session work, and explicitly recorded open work. Claims link to dated local evidence. A short unrelated exchange in a work session does not belong in the update. Missing excerpts are a coverage limitation.
 
 Generation requires consent to send selected conversation excerpts and work metadata to OpenAI using a separate Work Review sign-in with ChatGPT. Account-report connections remain independent. HQ retains derived notes and versioned reviews within its history window. Opening an existing review uses no model allowance. Revising a closed period requires an explicit request. Automatic updates are deferred until the owner evaluates a real weekly pilot.
 

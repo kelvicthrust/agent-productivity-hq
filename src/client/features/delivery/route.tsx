@@ -1,6 +1,6 @@
 import { Button } from '@astryxdesign/core/Button';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { PullRequest } from '../../../shared/contracts/prs';
 import { formatRange } from '../../../shared/domain/periods';
@@ -43,8 +43,45 @@ function withParam(params: URLSearchParams, key: string, value: string | null): 
   return next;
 }
 
-export function DeliveryRoute() {
-  const { filters, ctx, period } = useFilters();
+export function DeliveryRoute({ workReview }: { workReview: ReactNode }) {
+  const { filters, period } = useFilters();
+  const [params, setParams] = useSearchParams();
+  const section = params.get('section') === 'work-review' ? 'work-review' : 'merged';
+  const chooseSection = (value: string) => {
+    if (value !== section)
+      setParams((current) => withParam(current, 'section', value === 'work-review' ? value : null));
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={COPY.title}
+        subtitle={
+          filters && period
+            ? dotJoin([
+                PERIOD_LABEL[period],
+                formatRange(filters.start, filters.end),
+                section === 'merged' ? deliveryScopeLabel(filters) : null,
+              ])
+            : undefined
+        }
+      />
+      <SegmentedControl
+        label="Delivery section"
+        value={section}
+        onChange={chooseSection}
+        className="w-fit max-w-full max-[719px]:flex-wrap"
+      >
+        <SegmentedControlItem value="merged" label="Merged PRs" />
+        <SegmentedControlItem value="work-review" label="Work Review" />
+      </SegmentedControl>
+      {section === 'work-review' ? workReview : <MergedPullRequests />}
+    </div>
+  );
+}
+
+function MergedPullRequests() {
+  const { filters, ctx } = useFilters();
   const bootstrap = useBootstrap();
   const timeZone = bootstrap.data?.timezone;
   const login = bootstrap.data?.githubLogin ?? null;
@@ -97,19 +134,7 @@ export function DeliveryRoute() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={COPY.title}
-        subtitle={
-          filters && period
-            ? dotJoin([
-                PERIOD_LABEL[period],
-                formatRange(filters.start, filters.end),
-                deliveryScopeLabel(filters),
-              ])
-            : undefined
-        }
-      />
+    <>
       {!filters || !timeZone || repos.data === undefined ? (
         <p role="status" className="text-copy text-ink-muted">
           {COPY.loading}
@@ -225,6 +250,6 @@ export function DeliveryRoute() {
           </section>
         </>
       )}
-    </div>
+    </>
   );
 }

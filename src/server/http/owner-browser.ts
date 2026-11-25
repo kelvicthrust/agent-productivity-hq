@@ -240,7 +240,11 @@ export function createOwnerBrowserAccess({
   // The outer app checks the Tailnet owner, Host and response headers before this middleware.
   const middleware: MiddlewareHandler<HttpEnv> = async (c, next) => {
     if (!active) return c.json(denied, 401);
-    if ((c.req.path === '/unlock' || c.req.path === '/work-review') && c.req.url.length > 8192)
+    const reviewSection = c.req.path === '/delivery' && c.req.query('section') === 'work-review';
+    if (
+      (c.req.path === '/unlock' || c.req.path === '/work-review' || reviewSection) &&
+      c.req.url.length > 8192
+    )
       return c.text('The Work Review filter URL is too long.', 414);
     if (c.req.method === 'POST' && c.req.path === '/unlock') {
       // This form is the only POST handled before the normal dashboard CSRF guard.
@@ -278,7 +282,9 @@ export function createOwnerBrowserAccess({
     if (typeof expires === 'string' && /^\d{1,16}$/.test(expires) && Number(expires) > now()) {
       return next();
     }
-    const requested = c.req.method === 'GET' ? destination(c.req.path) : null;
+    // Bookmarks to the Delivery section use the same scoped owner handoff as native Paseo.
+    const requested =
+      c.req.method === 'GET' ? destination(reviewSection ? '/work-review' : c.req.path) : null;
     if (requested) return unlockForm(c, requested);
     return c.json(denied, 401);
   };

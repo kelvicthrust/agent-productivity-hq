@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, useLocation, type RouteObject } from 'react-router';
 import { OverviewRoute } from '../features/overview/route';
 import { SetupRoute } from '../features/setup/route';
 import { isPaseoBrowser, PASEO_BROWSER_BASENAME } from '../lib/paseoBrowser';
@@ -18,6 +18,13 @@ function deferredRoute(path: string, load: () => Promise<ComponentType>): RouteO
   };
 }
 
+function LegacyWorkReviewRedirect() {
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set('section', 'work-review');
+  return <Navigate replace to={{ pathname: '/delivery', search: `?${params}`, hash }} />;
+}
+
 export const appRoutes: RouteObject[] = [
   {
     // Pathless: it adds no segment, it only holds what both layouts share (the page title and route focus).
@@ -28,18 +35,20 @@ export const appRoutes: RouteObject[] = [
         Component: ShellLayout,
         children: [
           { index: true, Component: OverviewRoute },
-          deferredRoute(
-            'work-review',
-            async () => (await import('../features/overview/work-review/route')).WorkReviewRoute,
-          ),
+          { path: 'work-review', Component: LegacyWorkReviewRedirect },
           deferredRoute(
             'trends',
             async () => (await import('../features/trends/route')).TrendsRoute,
           ),
-          deferredRoute(
-            'delivery',
-            async () => (await import('../features/delivery/route')).DeliveryRoute,
-          ),
+          deferredRoute('delivery', async () => {
+            const [{ DeliveryRoute }, { WorkReviewSection }] = await Promise.all([
+              import('../features/delivery/route'),
+              import('../features/overview/work-review/Section'),
+            ]);
+            return function DeliveryWithWorkReview() {
+              return <DeliveryRoute workReview={<WorkReviewSection />} />;
+            };
+          }),
           deferredRoute('usage', async () => (await import('../features/usage/route')).UsageRoute),
           deferredRoute('hq', async () => (await import('../features/hq/route')).HqRoute),
           deferredRoute(

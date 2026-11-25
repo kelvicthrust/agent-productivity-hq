@@ -1,11 +1,9 @@
 import { Button } from '@astryxdesign/core/Button';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { formatRange } from '../../../../shared/domain/periods';
 import { deliveryScopeLabel, usageScopeLabel } from '../../../../shared/domain/scope';
-import { PageHeader } from '../../../components/PageHeader';
+import { ScopeLine } from '../../../components/ScopeLine';
 import { useBootstrap } from '../../../lib/bootstrap';
-import { PERIOD_LABEL } from '../../../lib/copy';
 import { searchFor, useFilters, type Filters } from '../../../lib/filters';
 import { isPaseoBrowser } from '../../../lib/paseoBrowser';
 import { GenerateReview } from './GenerateReview';
@@ -14,57 +12,41 @@ import { ReviewAccount } from './ReviewAccount';
 import { CopyReview, ReviewReport } from './ReviewReport';
 import { reviewScopeKey, useReviewAccount, useWorkReview } from './data';
 
-export function WorkReviewRoute() {
-  const { filters, ctx, period } = useFilters();
+export function WorkReviewSection() {
+  const { filters, ctx } = useFilters();
   const timeZone = useBootstrap().data?.timezone;
   const ownerLink = filters && ctx ? `/work-review${searchFor('', filters, ctx)}` : '/work-review';
-  if (isPaseoBrowser()) {
-    return (
-      <div className="flex flex-col gap-4">
-        <PageHeader title="Work Review" />
+  return (
+    <section aria-labelledby="delivery-review-title" className="flex min-w-0 flex-col gap-4">
+      <div className="min-w-0">
+        <h2 id="delivery-review-title" className="font-display text-title-section text-ink">
+          Work Review
+        </h2>
+        {filters && (
+          <ScopeLine className="[overflow-wrap:anywhere]">
+            PRs: {deliveryScopeLabel(filters)} · Sessions: {usageScopeLabel(filters)}
+          </ScopeLine>
+        )}
+      </div>
+      {isPaseoBrowser() ? (
         <a href={ownerLink} className={REVIEW_LINK}>
           Open owner Work Review
         </a>
-      </div>
-    );
-  }
-  if (!filters || !ctx || !period || !timeZone) {
-    return (
-      <div className="flex flex-col gap-4">
-        <PageHeader title="Work Review" />
+      ) : !filters || !timeZone ? (
         <p role="status" className="text-copy text-ink-muted">
           Loading work review…
         </p>
-      </div>
-    );
-  }
-  const range = formatRange(filters.start, filters.end);
-  return (
-    <div className="flex flex-col gap-4">
-      <PageHeader title="Work Review" subtitle={`${PERIOD_LABEL[period]} · ${range}`} />
-      <Link to={{ pathname: '/', search: searchFor('', filters, ctx) }} className={REVIEW_LINK}>
-        Back to Overview
-      </Link>
-      <ReviewAccount />
-      <ReviewScope
-        key={reviewScopeKey(filters)}
-        filters={filters}
-        range={range}
-        timeZone={timeZone}
-      />
-    </div>
+      ) : (
+        <>
+          <ReviewScope key={reviewScopeKey(filters)} filters={filters} timeZone={timeZone} />
+          <ReviewAccount />
+        </>
+      )}
+    </section>
   );
 }
 
-function ReviewScope({
-  filters,
-  range,
-  timeZone,
-}: {
-  filters: Filters;
-  range: string;
-  timeZone: string;
-}) {
+function ReviewScope({ filters, timeZone }: { filters: Filters; timeZone: string }) {
   const [version, setVersion] = useState<number>();
   const result = useWorkReview(filters, version);
   const account = useReviewAccount();
@@ -72,16 +54,17 @@ function ReviewScope({
   const canGenerate = account.data?.status === 'connected' && !account.isError;
 
   return (
-    <>
-      <p className="text-caption text-ink-muted [overflow-wrap:anywhere]">
-        PRs · {deliveryScopeLabel(filters)}. Sessions · {usageScopeLabel(filters)}.
-      </p>
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex min-w-0 flex-col gap-3 rounded-md border border-border bg-surface p-4 shadow-card">
+      <div className="flex flex-wrap items-center gap-3 empty:hidden">
         {version === undefined && state && canGenerate && (
           <GenerateReview filters={filters} state={state} />
         )}
         {state?.review && (
-          <CopyReview key={state.review.version} review={state.review} range={range} />
+          <CopyReview
+            key={state.review.version}
+            review={state.review}
+            range={formatRange(filters.start, filters.end)}
+          />
         )}
         {(version !== undefined || (state?.versions.length ?? 0) > 1) && (
           <label className="inline-flex flex-wrap items-center gap-2 text-label font-semibold text-ink">
@@ -134,14 +117,19 @@ function ReviewScope({
         </div>
       )}
       {state?.review ? (
-        <ReviewReport key={state.review.version} review={state.review} timeZone={timeZone} />
+        <ReviewReport
+          key={state.review.version}
+          review={state.review}
+          timeZone={timeZone}
+          headingLevel={3}
+        />
       ) : state?.status === 'idle' ? (
-        <p className="rounded-md border border-dashed border-border-strong bg-surface p-4 text-copy text-ink-muted">
+        <p className="text-copy text-ink-muted">
           No review has been saved for this scope.
           {canGenerate &&
             ' Generate an update to summarize merged pull requests and local session progress.'}
         </p>
       ) : null}
-    </>
+    </div>
   );
 }

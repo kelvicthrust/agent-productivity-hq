@@ -9,11 +9,15 @@ This is the experience brief and artifact index for the MVP defined in [PRODUCT.
 ## Product follow-up
 
 - **Work Review** is a single compact card on browser Overview. Use the same neutral border,
-  corner radius and shadow as the surrounding panels. Show the headline for the
-  selected filters and make the whole card open the detailed review in a dialog. The dialog
+  corner radius, shadow, padding and section-title typography as the surrounding panels. Show the headline
+  for the selected filters and make the whole card open the detailed review in a dialog. The dialog
   shows the date range and groups personal delivery, team merges, other progress and recorded
   open work. Omit empty sections. Expand a claim to see its dated sources. Keep **Copy update**
-  reachable while scrolling on a phone. Closing the dialog returns focus to the card.
+  on the right and the tertiary management link on the left, both reachable while scrolling on a phone.
+  Closing the dialog returns focus to the card.
+  **Manage review** selects **Work Review** within Delivery. Delivery opens on **Merged PRs**
+  by default. Show a Work Review shortcut beneath Delivery in the desktop sidebar and offer
+  both sections within Delivery at every width.
   Generation asks for confirmation before sending data to OpenAI. Keep a saved review readable
   if generation fails.
 - **App bar** shows Refresh on the dashboard and an About info icon at every width. About opens a

@@ -82,7 +82,7 @@ HQ refreshes about every two seconds while the view is open. **A quiet one** mea
 
 ### Generate a work update
 
-In **Overview**, choose your date range and select the **Work Review** card. The full update opens over Overview. For first-time setup, open **Manage ChatGPT connection**, choose **Continue with ChatGPT** and finish sign-in in a browser on the Mac running HQ. This separate connection authorizes ChatGPT plan usage for Work Review. In native Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. In the limited browser view, use **Open owner Work Review**.
+In **Overview**, choose your date range and select the **Work Review** card. The full update opens over Overview. Use **Manage review** to open the same period in **Delivery → Work Review**. On first use, the link is labeled **Manage ChatGPT connection**. Choose **Continue with ChatGPT** in Delivery and finish sign-in in a browser on the Mac running HQ. This separate connection authorizes ChatGPT plan usage for Work Review. In native Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. In the limited browser view, use **Open owner Work Review**.
 
 Choose **Generate update** to send selected session excerpts and PR metadata to OpenAI. Check the evidence on a bullet, or use **Copy update** for a team update. Opening saved reviews uses no model allowance. If new evidence arrives after a period closes, **Create revision** saves a new version. The pilot runs on demand.
 

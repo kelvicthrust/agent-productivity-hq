@@ -49,6 +49,12 @@ function mount(path: string, sourceIssues?: number) {
 const navs = () => screen.queryAllByRole('navigation', { name: 'Sections' });
 // The app bar is the first banner: a screen's own header counts as one in jsdom.
 const appBar = () => screen.getAllByRole('banner')[0] as HTMLElement;
+const useDesktopSidebar = () =>
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(min-width: 1024px)',
+    addEventListener() {},
+    removeEventListener() {},
+  }));
 
 describe('routes', () => {
   // Every screen is built: they are covered by their own specs, so here they only have to render their heading and title (their data
@@ -127,14 +133,23 @@ describe('navigation', () => {
     }
   });
 
-  it("lists six destinations in the side nav and the design's five on the phone tab bar", () => {
+  it('lists Work Review beneath Delivery in the desktop sidebar and keeps five phone tabs', () => {
+    useDesktopSidebar();
     mount('/');
     const [side, phone] = navs() as [HTMLElement, HTMLElement];
     const five = ['Overview', 'Trends', 'Delivery', 'Usage', 'Sources & repos'];
     // HQ follows Usage in the side nav; on a phone it is the app bar's link, never a sixth tab.
-    const six = ['Overview', 'Trends', 'Delivery', 'Usage', 'HQ', 'Sources & repos'];
+    const desktop = [
+      'Overview',
+      'Trends',
+      'Delivery',
+      'Work Review',
+      'Usage',
+      'HQ',
+      'Sources & repos',
+    ];
     for (const [nav, expected] of [
-      [side, six],
+      [side, desktop],
       [phone, five],
     ] as const) {
       const links = within(nav).getAllByRole('link');
@@ -143,7 +158,53 @@ describe('navigation', () => {
       expect(expected.map((name) => within(nav).getByRole('link', { name }))).toEqual(links);
     }
     expect(within(phone).queryByRole('link', { name: 'HQ' })).toBeNull();
+    expect(within(side).getByRole('link', { name: 'Work Review' }).getAttribute('href')).toBe(
+      '/delivery?section=work-review',
+    );
   });
+
+  it('carries shared filters and leaves page-specific state behind on the Work Review link', () => {
+    useDesktopSidebar();
+    mount(
+      '/delivery?start=2026-10-01&end=2026-10-31&repos=example%2Fone&provider=claude&author=all&gran=week&linkClass=suggested&q=cursor&sel=2026-10-10',
+    );
+    const side = navs()[0] as HTMLElement;
+    const link = within(side).getByRole('link', { name: 'Work Review' });
+    const url = new URL(link.getAttribute('href')!, 'http://example.test');
+    expect(url.pathname).toBe('/delivery');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      section: 'work-review',
+      start: '2026-10-01',
+      end: '2026-10-31',
+      repos: 'example/one',
+      provider: 'claude',
+      author: 'all',
+      gran: 'week',
+    });
+  });
+
+  it.each([true, false])(
+    'keeps one current navigation item in Work Review (desktop=%s)',
+    (desktop) => {
+      if (desktop) useDesktopSidebar();
+      mount('/delivery?section=work-review');
+      const [side, phone] = navs() as [HTMLElement, HTMLElement];
+      const selectedLinks = (nav: HTMLElement) =>
+        within(nav)
+          .getAllByRole('link')
+          .filter((link) => link.getAttribute('aria-current') === 'page');
+      const delivery = within(side).getByRole('link', { name: 'Delivery' });
+      const workReview = within(side).queryByRole('link', { name: 'Work Review' });
+      expect(selectedLinks(side)).toEqual([desktop ? workReview : delivery]);
+      expect(selectedLinks(phone)).toEqual([within(phone).getByRole('link', { name: 'Delivery' })]);
+      if (desktop) {
+        expect(delivery.className).toContain('font-semibold');
+        expect(delivery.className).not.toContain('bg-selection-surface');
+      } else {
+        expect(workReview).toBeNull();
+      }
+    },
+  );
 
   it('offers HQ as an app bar link named "HQ", visible only below 720px, marked current on /hq', () => {
     mount('/');

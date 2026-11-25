@@ -240,10 +240,26 @@ test('Overview opens a scoped review in place, asks for consent, and copies the 
   await expect(page).toHaveURL(
     `${ORIGIN}/?start=2026-10-26&end=2026-11-01&provider=codex&author=all`,
   );
-  await expect(modal.getByRole('link', { name: 'Manage review' })).toHaveAttribute(
-    'href',
-    '/work-review?start=2026-10-26&end=2026-11-01&provider=codex&author=all',
-  );
+  const manage = modal.getByRole('link', { name: 'Manage review' });
+  const copy = modal.getByRole('button', { name: 'Copy update' });
+  const target = new URL((await manage.getAttribute('href'))!, ORIGIN);
+  expect(target.pathname).toBe('/delivery');
+  expect(Object.fromEntries(target.searchParams)).toEqual({
+    start: '2026-10-26',
+    end: '2026-11-01',
+    provider: 'codex',
+    author: 'all',
+    section: 'work-review',
+  });
+  async function expectFooterOrder() {
+    const left = (await manage.boundingBox())!;
+    const right = (await copy.boundingBox())!;
+    expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+    await manage.focus();
+    await page.keyboard.press('Tab');
+    await expect(copy).toBeFocused();
+  }
+  await expectFooterOrder();
   const report = modal.getByRole('article', { name: REVIEW.headline });
   for (const heading of [
     'Shipped',
@@ -290,6 +306,10 @@ test('Overview opens a scoped review in place, asks for consent, and copies the 
   await page.mouse.move(0, 0);
   const panel = page.getByRole('region', { name: 'Recently merged' });
   for (const property of [
+    'padding-inline-start',
+    'padding-block-start',
+    'padding-inline-end',
+    'padding-block-end',
     'border-left-width',
     'border-left-color',
     'border-radius',
@@ -300,6 +320,15 @@ test('Overview opens a scoped review in place, asks for consent, and copies the 
       property,
     );
     await expect(card).toHaveCSS(property, expected);
+  }
+  const sectionTitle = panel.getByRole('heading');
+  const cardTitle = card.getByText('Work Review', { exact: true });
+  for (const property of ['font-family', 'font-size', 'font-weight', 'line-height']) {
+    const expected = await sectionTitle.evaluate(
+      (element, name) => getComputedStyle(element).getPropertyValue(name),
+      property,
+    );
+    await expect(cardTitle).toHaveCSS(property, expected);
   }
   await page.screenshot({
     path: test.info().outputPath('work-review-overview.png'),
@@ -315,6 +344,18 @@ test('Overview opens a scoped review in place, asks for consent, and copies the 
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(modal.getByRole('button', { name: 'Copy update' })).toBeInViewport();
   await expect(close).toBeInViewport();
+  await expectFooterOrder();
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => {
+      throw new Error('Clipboard access denied');
+    };
+  });
+  await copy.click();
+  const fallback = modal.getByRole('textbox', { name: /Clipboard access is unavailable/ });
+  await expect(fallback).toBeFocused();
+  await expect(copy).toBeInViewport();
+  await expect(manage).toBeInViewport();
+  await expect(fallback).toHaveValue(clipboard!);
   expect(await modal.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(320);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await close.click();
@@ -325,6 +366,81 @@ test('Overview opens a scoped review in place, asks for consent, and copies the 
   await expect(preview).not.toContainText(REVIEW.headline);
   expect(generations).toHaveLength(1);
   expect(errors).toEqual([]);
+});
+
+test('Manage review opens the same filtered section reachable from Delivery navigation @a11y @responsive', async ({
+  page,
+}) => {
+  await openWorld(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const generations = await mockReview(
+    page,
+    () => ({ ...EMPTY, review: REVIEW, versions: [1] }),
+    () => EMPTY,
+    () => DISCONNECTED,
+  );
+  const search = '?start=2026-10-26&end=2026-11-01&author=all&provider=codex';
+  await page.goto(ORIGIN + '/' + search);
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  const delivery = nav.getByRole('link', { name: 'Delivery' });
+  const sections = page.getByRole('radiogroup', { name: 'Delivery section' });
+  const workReview = sections.getByRole('radio', { name: 'Work Review' });
+  const merged = sections.getByRole('radio', { name: 'Merged PRs' });
+  await page.getByRole('button', { name: /^Work Review/ }).click();
+  await page.getByRole('link', { name: 'Manage review' }).click();
+  await expect(workReview).toBeChecked();
+  const sidebarReview = nav.getByRole('link', { name: 'Work Review', exact: true });
+  await expect(sidebarReview).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('heading', { name: 'Delivery', exact: true, level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole('article', { name: REVIEW.headline })).toBeVisible();
+  const active = new URL(page.url());
+  expect(active.pathname).toBe('/delivery');
+  expect(Object.fromEntries(active.searchParams)).toEqual({
+    start: '2026-10-26',
+    end: '2026-11-01',
+    provider: 'codex',
+    author: 'all',
+    section: 'work-review',
+  });
+  await page.screenshot({
+    path: test.info().outputPath('delivery-review-desktop.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: test.info().outputPath('delivery-review-phone.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /^Work Review/ })).toBeVisible();
+  await sidebarReview.click();
+  await expect(workReview).toBeChecked();
+  expect(Object.fromEntries(new URL(page.url()).searchParams)).toEqual(
+    Object.fromEntries(active.searchParams),
+  );
+  await delivery.click();
+  await expect(merged).toBeChecked();
+  await workReview.click();
+  await expect(
+    page.getByRole('heading', { name: 'Work Review', exact: true, level: 2 }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(workReview).toBeChecked();
+  await expect(nav.getByRole('link', { name: 'Delivery' })).toHaveAttribute('aria-current', 'page');
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(320);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.reload();
+  await expect(workReview).toBeChecked();
+  await merged.click();
+  await expect(page.getByRole('article', { name: REVIEW.headline })).toHaveCount(0);
+  await page.goBack();
+  await expect(workReview).toBeChecked();
+  expect(generations).toHaveLength(0);
 });
 
 test('a failed historical revision keeps the original and version history stays readable @a11y @responsive', async ({

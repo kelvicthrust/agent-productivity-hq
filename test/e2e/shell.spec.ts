@@ -106,13 +106,14 @@ test(
       await links.nth(0).boundingBox(),
       await links.nth(1).boundingBox(),
     ];
-    await expect(links).toHaveCount(6);
+    await expect(links).toHaveCount(7);
+    await expect(links.nth(3)).toHaveAccessibleName('Work Review');
     const [usage, hq, sources] = [
-      await links.nth(3).boundingBox(),
       await links.nth(4).boundingBox(),
       await links.nth(5).boundingBox(),
+      await links.nth(6).boundingBox(),
     ];
-    await expect(links.nth(4)).toHaveAccessibleName('HQ');
+    await expect(links.nth(5)).toHaveAccessibleName('HQ');
     const itemGap = (delivery?.y ?? 0) - ((overview?.y ?? 0) + (overview?.height ?? 0));
     const hqGap = (hq?.y ?? 0) - ((usage?.y ?? 0) + (usage?.height ?? 0));
     const sourcesGap = (sources?.y ?? 0) - ((hq?.y ?? 0) + (hq?.height ?? 0));

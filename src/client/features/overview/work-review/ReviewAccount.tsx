@@ -105,9 +105,9 @@ export function ReviewAccount() {
       className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-border bg-surface p-4 shadow-card"
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <h2 id={`${id}-title`} className="font-display text-title-section text-ink">
+        <h3 id={`${id}-title`} className="font-display text-title-section text-ink">
           ChatGPT plan
-        </h2>
+        </h3>
         <p role="status" className="text-copy text-ink-muted [overflow-wrap:anywhere]">
           {status === 'connected' ? (
             <>Using ChatGPT plan{result.data?.account ? ` · ${result.data.account}` : ''}</>
