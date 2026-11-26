@@ -172,6 +172,41 @@ export function createOwnFiles(paths: HookPaths): OwnFiles {
   const isMade = (stat: Stats, made: Made): boolean =>
     stat.ino === made.ino && stat.dev === made.dev;
 
+  function write(name: Artifact, bytes: Buffer | string, previous?: Made): Made {
+    const target = join(paths.dir, name);
+    const data = Buffer.from(typeof bytes === 'string' ? Buffer.from(bytes, 'utf8') : bytes);
+    let temp: StagedFile | null = null;
+    try {
+      if (!readableByHq(name, data)) return refuse();
+      folder(true);
+      sweepStaleTemps(paths.dir, [HOOK_SCRIPT, REGISTRY_FILE]);
+      temp = stageTemp(target, data);
+      // Seal the staged file, then check the destination immediately before renaming over it.
+      sealForRename(temp, FILE_MODE, undefined);
+      if (previous !== undefined) {
+        const stat = regular(name);
+        if (stat === null || !isMade(stat, previous) || !bytesOf(name).equals(previous.bytes))
+          return refuse();
+        const again = lstatSync(target);
+        if (!isMade(again, previous) || again.ctimeMs !== stat.ctimeMs) return refuse();
+      } else {
+        try {
+          if (lstatSync(target).isDirectory()) return refuse();
+        } catch (error) {
+          if (codeOf(error) !== 'ENOENT') throw error;
+        }
+      }
+      renameOver(temp.path, target);
+      const staged = temp;
+      temp = null;
+      if (!isInstalled(target, staged, FILE_MODE)) return refuse();
+      return { bytes: data, ino: staged.ino, dev: staged.dev };
+    } catch (error) {
+      if (temp !== null) removeMade(temp);
+      throw error instanceof ClaudeHooksError ? error : new ClaudeHooksError('not_writable');
+    }
+  }
+
   return {
     read(name) {
       try {
@@ -189,34 +224,7 @@ export function createOwnFiles(paths: HookPaths): OwnFiles {
         throw error instanceof ClaudeHooksError ? error : new ClaudeHooksError('not_writable');
       }
     },
-    write(name, bytes) {
-      const target = join(paths.dir, name);
-      const data = Buffer.from(typeof bytes === 'string' ? Buffer.from(bytes, 'utf8') : bytes);
-      let temp: StagedFile | null = null;
-      try {
-        if (!readableByHq(name, data)) return refuse();
-        folder(true);
-        sweepStaleTemps(paths.dir, [HOOK_SCRIPT, REGISTRY_FILE]);
-        temp = stageTemp(target, data);
-        // Order: the staged file is sealed completely, THEN the destination is looked at, THEN the rename, with nothing between those
-        // two (no await: this is all synchronous). A link or a file here is replaced by the rename (never written through); a folder
-        // is not ours to replace.
-        sealForRename(temp, FILE_MODE, undefined);
-        try {
-          if (lstatSync(target).isDirectory()) return refuse();
-        } catch (error) {
-          if (codeOf(error) !== 'ENOENT') throw error;
-        }
-        renameOver(temp.path, target);
-        const staged = temp;
-        temp = null;
-        if (!isInstalled(target, staged, FILE_MODE)) return refuse();
-        return { bytes: data, ino: staged.ino, dev: staged.dev };
-      } catch (error) {
-        if (temp !== null) removeMade(temp);
-        throw error instanceof ClaudeHooksError ? error : new ClaudeHooksError('not_writable');
-      }
-    },
+    write,
     remove(name, isOwn) {
       try {
         if (folder(false) === 'absent') return 'absent';
@@ -267,7 +275,7 @@ export function createOwnFiles(paths: HookPaths): OwnFiles {
         const stat = regular(name);
         if (stat === null || !isMade(stat, made) || !bytesOf(name).equals(made.bytes))
           return 'left';
-        return this.write(name, bytes);
+        return write(name, bytes, made);
       } catch {
         return 'left';
       }
@@ -307,20 +315,31 @@ export function createOwnFiles(paths: HookPaths): OwnFiles {
   };
 }
 
-/** The shape of a registry HQ writes: `{ v: 1, pid, port, token }` and nothing else. */
+/** The shape of a registry HQ writes, including the optional background-reporting flag. */
 export function parseRegistry(
   bytes: Buffer,
-): { v: 1; pid: number; port: number; token: string } | null {
+): { v: 1; pid: number; port: number; token: string; backgroundWork?: true } | null {
   try {
     const value: unknown = JSON.parse(bytes.toString('utf8'));
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
     const record = value as Record<string, unknown>;
     const keys = Object.keys(record).sort().join(',');
-    const { v, pid, port, token } = record;
-    if (keys !== 'pid,port,token,v' || v !== 1) return null;
+    const { v, pid, port, token, backgroundWork } = record;
+    if (
+      v !== 1 ||
+      (keys !== 'pid,port,token,v' &&
+        (keys !== 'backgroundWork,pid,port,token,v' || backgroundWork !== true))
+    )
+      return null;
     if (!Number.isSafeInteger(pid) || !Number.isSafeInteger(port) || typeof token !== 'string')
       return null;
-    return { v: 1, pid: pid as number, port: port as number, token };
+    return {
+      v: 1,
+      pid: pid as number,
+      port: port as number,
+      token,
+      ...(backgroundWork === true ? { backgroundWork } : {}),
+    };
   } catch {
     return null;
   }

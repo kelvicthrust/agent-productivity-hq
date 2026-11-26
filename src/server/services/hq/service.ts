@@ -217,7 +217,13 @@ export function createHqService(options: HqServiceOptions): HqService & { stop()
         const codex = feeds.codex?.status() === 'live' ? feeds.codex.read(readOptions) : null;
         const transcripts = [...(claude?.agents ?? []), ...(codex?.agents ?? [])];
         const hooks = options.hooks?.read();
-        if (paseo === null && transcripts.length === 0 && (hooks?.size ?? 0) === 0)
+        const background = options.hooks?.readBackground();
+        if (
+          paseo === null &&
+          transcripts.length === 0 &&
+          (hooks?.size ?? 0) === 0 &&
+          (background?.size ?? 0) === 0
+        )
           return response(statuses, [], false);
         const roster = buildRoster({
           agents: paseo?.agents ?? [],
@@ -230,6 +236,7 @@ export function createHqService(options: HqServiceOptions): HqService & { stop()
           pageTruncated: paseo?.truncated ?? false,
           memo,
           hooks,
+          background,
         });
         if (roster.repaired > 0) note('roster_repaired');
         const body = response(statuses, roster.agents, roster.truncated);

@@ -7,7 +7,13 @@ import type { ExactPrompts, HqFeed, HqRoster } from '../../../src/shared/contrac
 import { HqRoute } from '../../../src/client/features/hq/route';
 import { createQueryClient } from '../../../src/client/lib/queryClient';
 import { HQ_HOOKS_PROMPT_KEY, markShown } from '../../../src/client/lib/shownOnce';
-import { emptyRoster, liveFeeds, officeRoster, paseoDownRoster } from '../../fixtures/hq/scripted';
+import {
+  agent,
+  emptyRoster,
+  liveFeeds,
+  officeRoster,
+  paseoDownRoster,
+} from '../../fixtures/hq/scripted';
 
 // The HQ page's states, over a stubbed /api/hq.
 
@@ -353,6 +359,50 @@ describe('feed states', () => {
 });
 
 describe('the roster', () => {
+  it('shows a fresh background report in the focused roster and keeps older counts in Recent idle', async () => {
+    const backgroundWork = {
+      subagents: 1,
+      shellJobs: 1,
+      monitors: 0,
+      reportedAt: new Date(NOW - 8 * 60_000).toISOString(),
+      stale: false,
+    };
+    const roster = emptyRoster(NOW);
+    roster.agents = [
+      agent(NOW, { id: 'parent', provider: 'claude', state: 'idle', backgroundWork }),
+      agent(NOW, {
+        id: 'child',
+        provider: 'claude',
+        kind: 'child',
+        parentId: 'parent',
+        state: 'finished',
+        backgroundSubagent: true,
+      }),
+      agent(NOW, {
+        id: 'older',
+        provider: 'claude',
+        state: 'idle',
+        backgroundWork: { ...backgroundWork, subagents: 0, stale: true },
+      }),
+    ];
+    mount(() => json(roster));
+
+    const focused = within(await screen.findByRole('list', { name: 'Sessions' }));
+    expect(
+      focused.getByText(
+        'Idle for 5 min · 1 background subagent · 1 shell job · last reported 8 min ago',
+      ),
+    ).toBeTruthy();
+    expect(focused.getByText('Background subagent reported')).toBeTruthy();
+    expect(focused.queryByText('Background work running')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Recent idle (1)' }));
+    expect(
+      within(screen.getByRole('list', { name: 'Recent idle' })).getByText(
+        'Idle for 5 min · 1 shell job · last reported 8 min ago',
+      ),
+    ).toBeTruthy();
+  });
+
   it('opens Recent idle on demand below the AFK scene when no session needs a room', async () => {
     const roster = officeRoster(NOW);
     roster.agents = roster.agents.filter((agent) => agent.state === 'idle');

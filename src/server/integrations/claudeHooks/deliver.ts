@@ -32,6 +32,7 @@ export interface RegistryRead {
   pid: number;
   port: number;
   token: string;
+  backgroundWork?: true;
 }
 
 /** The registry in `dir`, read the way the installed script reads it; null where the script would give up. */

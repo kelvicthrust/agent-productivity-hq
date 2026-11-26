@@ -367,6 +367,32 @@ describe('pose, caption and mood', () => {
     expect(sceneCaption({ state: 'idle', activity: 'none', confidence: 'reported' })).toBe('idle');
   });
 
+  it('labels background activity from a report without implying a live signal', () => {
+    const parent = solo('parent', {
+      state: 'idle',
+      backgroundWork: {
+        subagents: 1,
+        shellJobs: 0,
+        monitors: 0,
+        reportedAt: new Date(NOW).toISOString(),
+        stale: false,
+      },
+    });
+    const child = solo('child', {
+      kind: 'child',
+      parentId: parent.id,
+      state: 'finished',
+      backgroundSubagent: true,
+    });
+    const [room] = lay(null, [parent, child]).rooms;
+    expect(room?.mood).toBe('normal');
+    expect(room?.characters.map(({ pose, caption }) => [pose, caption])).toEqual([
+      ['working', 'reported work'],
+      ['working', 'reported work'],
+    ]);
+    expect(sceneCaption({ ...child, reviewPending: true })).toBe('review');
+  });
+
   it('marks a room that needs the owner, then a room that is idle, then the rest', () => {
     const mood = (...states: HqAgent['state'][]) =>
       lay(null, [

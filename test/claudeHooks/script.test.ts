@@ -142,6 +142,64 @@ const full = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('the message', () => {
+  it('sends a bounded task projection only through an opted-in local registry', async () => {
+    const { port, seen } = await listen();
+    const input = full({
+      hook_event_name: 'Stop',
+      background_tasks: [
+        { id: 'worker', type: 'subagent', status: 'running', description: 'SENTINEL_DESCRIPTION' },
+        { id: 'job', type: 'shell', status: 'pending', command: 'SENTINEL_COMMAND' },
+        { id: 'ended', type: 'monitor', status: 'completed' },
+        { id: 'other', type: 'cloud session', status: 'running' },
+      ],
+    });
+    const enabled = folder(registryFor(port, { backgroundWork: true }));
+    expect(await run(enabled, JSON.stringify(input))).toMatchObject({
+      code: 0,
+      stdout: '',
+      stderr: '',
+    });
+    const projected = HqClaudeHookEvent.parse(JSON.parse(seen[0]!.body));
+    expect(projected.background_work).toEqual({
+      observed_at: expect.any(Number),
+      tasks: [
+        { id: 'worker', type: 'subagent', status: 'running' },
+        { id: 'job', type: 'shell', status: 'pending' },
+      ],
+    });
+    expect(seen[0]!.body).not.toMatch(/SENTINEL/);
+    expect(await run(folder(registryFor(port)), JSON.stringify(input))).toMatchObject({ code: 0 });
+    expect(JSON.parse(seen[1]!.body)).not.toHaveProperty('background_work');
+  });
+
+  it('distinguishes empty and unavailable snapshots and fits the wire limit', () => {
+    const project = (tasks: unknown) =>
+      HqClaudeHookEvent.parse(
+        messageFor(
+          full({
+            hook_event_name: 'Stop',
+            cwd: '/' + '嗨'.repeat(1023),
+            background_tasks: tasks,
+          }),
+          true,
+        ),
+      );
+    expect(project(undefined).background_work?.tasks).toBe(null);
+    expect(project([{ id: 'job', type: 'shell', status: 'unclear' }]).background_work?.tasks).toBe(
+      null,
+    );
+    expect(project([]).background_work?.tasks).toEqual([]);
+    const tasks = Array.from({ length: 24 }, (_, i) => ({
+      id: String(i).padStart(128, 'a'),
+      type: 'subagent',
+      status: 'running',
+    }));
+    const maximum = project(tasks);
+    expect(maximum.background_work?.tasks).toHaveLength(24);
+    expect(Buffer.byteLength(JSON.stringify(maximum))).toBeLessThan(8 * 1024);
+    expect(project([...tasks, tasks[0]]).background_work?.tasks).toBe(null);
+  });
+
   it('carries the five fields and nothing else, however much the event holds', () => {
     const message = messageFor(full());
     expect(message).toEqual({

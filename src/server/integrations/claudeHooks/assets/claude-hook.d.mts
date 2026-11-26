@@ -9,8 +9,18 @@ export interface HookMessage {
   notification_type?: string;
   reason?: string;
   cwd?: string;
+  background_work?: {
+    observed_at: number;
+    tasks:
+      | { id: string; type: 'subagent' | 'shell' | 'monitor'; status: 'running' | 'pending' }[]
+      | null;
+  };
 }
-export function messageFor(input: unknown): HookMessage | null;
+export function messageFor(
+  input: unknown,
+  backgroundWork?: boolean,
+  observedAt?: number,
+): HookMessage | null;
 export const MAX_REGISTRY_BYTES: number;
 export function isTrustedRegistry(stat: {
   isFile(): boolean;
@@ -20,8 +30,10 @@ export function isTrustedRegistry(stat: {
 }): boolean;
 export function parseRegistryBytes(
   bytes: Buffer,
-): { pid: number; port: number; token: string } | null;
-export function findApp(dir: string): Promise<{ port: number; token: string } | null>;
+): { pid: number; port: number; token: string; backgroundWork?: true } | null;
+export function findApp(
+  dir: string,
+): Promise<{ port: number; token: string; backgroundWork?: true } | null>;
 export function post(
   app: { port: number; token: string },
   message: HookMessage,

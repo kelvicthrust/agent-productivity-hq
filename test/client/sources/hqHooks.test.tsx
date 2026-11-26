@@ -67,7 +67,7 @@ describe('before the owner acts', () => {
         .filter((node) => (node.textContent ?? '') !== ''),
     ).toHaveLength(0);
     // The preview is not read, and nothing is written.
-    expect(paths(rig).every((call) => call === 'GET /api/hq')).toBe(true);
+    expect(paths(rig).sort()).toEqual(['GET /api/hq', 'GET /api/hq/claude-hooks/background-work']);
   });
 
   it('is a labelled region with a heading, and says it changes only what HQ can show', async () => {
@@ -108,11 +108,48 @@ describe('before the owner acts', () => {
 
   it('says so, under its heading, when the switch’s state cannot be read', async () => {
     mount({ roster: () => ({ not: 'a roster' }) });
-    expect((await screen.findByRole('alert')).textContent).toBe(
+    const alert = await screen.findByText(
       'Couldn’t read this setting. Reload the page to try again.',
     );
+    expect(alert.getAttribute('role')).toBe('alert');
     expect(screen.getByRole('region', { name: 'Know when Claude Code needs you' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull();
+  });
+});
+
+describe('Claude Code background reporting consent', () => {
+  const name = 'Report Claude Code background work';
+  const path = '/api/hq/claude-hooks/background-work';
+
+  it('previews the extra fields with the switch disabled while the wait hooks are off', async () => {
+    const rig = mount();
+    const toggle = await screen.findByRole('switch', { name });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    expect(toggle.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      screen.getByText(/background task IDs, categories, states and observation times/),
+    ).toBeTruthy();
+    expect(await screen.findByText(/Turn on or repair the wait hooks above/)).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(rig.calls.some((call) => call.method === 'PUT')).toBe(false);
+  });
+
+  it('requires an explicit switch action and turns background reporting off independently', async () => {
+    const rig = mount({ state: 'on' });
+    const toggle = (await screen.findByRole('switch', { name })) as HTMLInputElement;
+    await waitFor(() => expect(toggle.hasAttribute('aria-disabled')).toBe(false));
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.checked).toBe(true));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.checked).toBe(false));
+    expect(
+      rig.calls.filter((call) => call.method === 'PUT').map(({ path, body }) => [path, body]),
+    ).toEqual([
+      [path, { enabled: true }],
+      [path, { enabled: false }],
+    ]);
+    expect(screen.getByText('On. Claude Code tells HQ when it needs you.')).toBeTruthy();
   });
 });
 

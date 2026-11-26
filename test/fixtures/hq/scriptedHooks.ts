@@ -25,6 +25,7 @@ const COMMAND =
 export function createScriptedHooks(initial: ScriptedHooksScenario = 'off'): ScriptedHooks {
   let scenario = initial;
   let failure: HooksFailure | null = null;
+  let backgroundWork = false;
   const changes: boolean[] = [];
   /** What the real preview fingerprints, in miniature: it changes whenever the scenario does. */
   const preview = (): string => createHash('sha256').update(`scripted:${scenario}`).digest('hex');
@@ -95,7 +96,14 @@ export function createScriptedHooks(initial: ScriptedHooksScenario = 'off'): Scr
         throw new ClaudeHooksError(next);
       }
       scenario = enabled ? 'on' : 'off';
+      if (!enabled) backgroundWork = false;
       return status();
+    },
+    backgroundWorkStatus: async () => ({ enabled: backgroundWork, available: scenario === 'on' }),
+    setBackgroundWork: async (enabled) => {
+      if (enabled && scenario !== 'on') throw new ClaudeHooksError('no_folder');
+      backgroundWork = enabled;
+      return { enabled: backgroundWork, available: scenario === 'on' };
     },
     listening: async () => undefined,
     close: async () => undefined,

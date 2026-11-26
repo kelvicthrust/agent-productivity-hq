@@ -3,11 +3,12 @@ import { HqAgent } from '../../../shared/contracts/hq.ts';
 import { liveTime } from '../../lib/liveTime.ts';
 import { MAX_LIVE_TITLE_CHARS, clipped } from '../../lib/liveText.ts';
 import { normaliseProvider } from '../../collectors/paseo/agents.ts';
+import { claudeSubagentSessionId } from '../../collectors/claude/files.ts';
 import type { LiveAgent } from '../../collectors/paseo/liveAgent.ts';
 import { mapLiveState, type LiveState } from '../../collectors/paseo/liveState.ts';
 import type { TranscriptAgent, TranscriptParent } from '../../collectors/live/feed.ts';
 import { DROP_AFTER_MS, FINISHED_VISIBLE_MS } from '../../collectors/live/heuristics.ts';
-import type { HookRecord } from './hookStore.ts';
+import type { BackgroundSnapshot, HookRecord } from './hookStore.ts';
 import { liveSessionKey, type LiveSessionKey, type LiveSessionLabel } from '../../db/queries/hq.ts';
 
 // The roster: the agents Paseo lists and the sessions the transcript feeds see, merged into the `HqAgent` list the route answers with.
@@ -90,7 +91,13 @@ const RECENT_RANK = 5;
 function rankOf(shown: Shown): number {
   if (shown.state === 'waiting') return 0;
   if (shown.state === 'error' && shown.reviewPending !== false) return 1;
-  if (shown.state === 'working' || shown.state === 'starting' || shown.backgroundWorkActive)
+  if (
+    shown.state === 'working' ||
+    shown.state === 'starting' ||
+    shown.backgroundWorkActive ||
+    shown.backgroundSubagent ||
+    shown.backgroundWork?.stale === false
+  )
     return 2;
   if (shown.reviewPending) return 3;
   return RECENT_RANK;
@@ -106,6 +113,8 @@ interface Shown {
   lastActivityAt: number;
   reviewPending?: boolean | undefined;
   backgroundWorkActive?: boolean;
+  backgroundWork?: HqAgent['backgroundWork'];
+  backgroundSubagent?: boolean;
   confirmedEmpty?: boolean;
 }
 
@@ -153,6 +162,8 @@ export interface RosterInput {
   memo?: KeyMemo | undefined;
   /** The latest Claude Code hook event of each session, by the Claude session id (the hook store's `read()`). */
   hooks?: ReadonlyMap<string, HookRecord> | undefined;
+  /** The latest nonempty task snapshot reported by each Claude Code session. */
+  background?: ReadonlyMap<string, BackgroundSnapshot> | undefined;
 }
 
 export interface Roster {
@@ -426,6 +437,76 @@ export function buildRoster(input: RosterInput): Roster {
       sortKey: key,
       shown: spoken,
     });
+  }
+
+  const backgroundChildren = new Map<string, Set<string>>();
+  const represented = new Map(entities.map((entity) => [entity.session, entity]));
+  for (const [sessionId, snapshot] of input.background ?? []) {
+    const at = liveTime(snapshot.at, now);
+    if (at === null || snapshot.tasks.length === 0) continue;
+    const session = liveSessionKey('claude', sessionId);
+    let entity = represented.get(session);
+    if (entity?.shown.backgroundWorkActive || entity?.transcript?.parentSessionId) continue;
+    if (
+      entity === undefined &&
+      (transcriptByKey.has(session) || hookViews.get(session)?.kind === 'end')
+    )
+      continue;
+    const stale = now - at >= DROP_AFTER_MS;
+    const backgroundWork = {
+      reportedAt: toIso(at),
+      stale,
+      subagents: 0,
+      shellJobs: 0,
+      monitors: 0,
+    };
+    const counted = new Set<string>();
+    const children = new Set<string>();
+    for (const task of snapshot.tasks) {
+      const stem =
+        task.type === 'subagent' && !task.id.startsWith('agent-') ? `agent-${task.id}` : task.id;
+      const key = `${task.type}:${stem}`;
+      if (counted.has(key)) continue;
+      counted.add(key);
+      if (task.type === 'subagent') {
+        backgroundWork.subagents += 1;
+        if (!stale) children.add(claudeSubagentSessionId(sessionId, stem));
+      } else if (task.type === 'shell') backgroundWork.shellJobs += 1;
+      else backgroundWork.monitors += 1;
+    }
+    if (entity === undefined) {
+      entity = {
+        paseo: null,
+        transcript: null,
+        hook: { sessionId, kind: 'stop', at, cwd: snapshot.cwd },
+        identity: session,
+        session,
+        keys: [session],
+        sortKey: session,
+        shown: {
+          state: 'idle',
+          activity: 'none',
+          waitReason: null,
+          confidence: 'reported',
+          since: at,
+          lastActivityAt: at,
+        },
+      };
+      entities.push(entity);
+    }
+    entity.shown.backgroundWork = backgroundWork;
+    entity.shown.confirmedEmpty = false;
+    if (children.size > 0) backgroundChildren.set(sessionId, children);
+  }
+  for (const entity of entities) {
+    const transcript = entity.transcript;
+    if (
+      transcript?.provider === 'claude' &&
+      transcript.parentSessionId !== null &&
+      backgroundChildren.get(transcript.parentSessionId)?.has(transcript.sessionId)
+    ) {
+      entity.shown.backgroundSubagent = true;
+    }
   }
 
   // An expired Paseo parent can link a crew, but cannot take a provider session away from another source.
@@ -712,6 +793,10 @@ export function buildRoster(input: RosterInput): Roster {
         reviewPending: entity.shown.reviewPending,
       }),
       ...(entity.shown.backgroundWorkActive && { backgroundWorkActive: true }),
+      ...(entity.shown.backgroundWork !== undefined && {
+        backgroundWork: entity.shown.backgroundWork,
+      }),
+      ...(entity.shown.backgroundSubagent && { backgroundSubagent: true }),
       ...(entity.shown.confirmedEmpty && { confirmedEmpty: true }),
       provider,
       kind: hasClaim ? 'child' : 'root',

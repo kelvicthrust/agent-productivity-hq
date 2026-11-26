@@ -277,7 +277,7 @@ user-level `settings.json` in each Claude Code folder (`$CLAUDE_CONFIG_DIR`, els
 `~/.config/claude`), keeps everything else in the file, copies the hook script into
 `claude-hooks/` in the data directory and saves a copy of the file beside it once, as
 `settings.json.agent-productivity-backup`. **Turn off** removes only HQ's entries, the script and
-the registry, and leaves that copy. The hooks send HQ only the event name, the session id, the kind
+the registry, and leaves that copy. The wait hooks send HQ the event name, the session id, the kind
 of notification, why a session ended and the working folder, and only to this dashboard on
 `127.0.0.1`. If the dashboard isn't running, the hook does nothing and Claude Code carries on. If
 **Not available** appears, the preview says which file can't be changed (for example, it isn't valid
@@ -286,6 +286,12 @@ its own entries in place); fix the file and look again. After an upgrade, **Repa
 entries up to date. If HQ can't delete its own files after **Turn off**, the page says so and names
 the folder. **Repair** and **Remove HQ's files** in Sources & repos show their own file list for
 confirmation.
+
+With those hooks on, use **Report Claude Code background work** in the same card to let HQ show
+subagents, shell jobs, and monitors that Claude Code lists when it finishes a turn. The separate
+switch shares task IDs, categories, states, and the report time with HQ on this Mac. Turn it off to
+clear the background reports while keeping wait reporting. In Paseo, use **Open owner settings**
+from the card to change either setting. [How HQ shows background work](../product/hq.md#where-the-status-comes-from)
 
 ## Environment variables
 

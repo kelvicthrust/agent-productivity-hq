@@ -21,7 +21,14 @@ import {
 import { Int, Provider } from './common.ts';
 import { ErrorEnvelope } from './errors.ts';
 import { FilterQuery, LimitQuery } from './filters.ts';
-import { ClaudeHooksRequest, ClaudeHooksStatus, HqClaudeHookEvent, HqResponse } from './hq.ts';
+import {
+  ClaudeBackgroundWorkRequest,
+  ClaudeBackgroundWorkStatus,
+  ClaudeHooksRequest,
+  ClaudeHooksStatus,
+  HqClaudeHookEvent,
+  HqResponse,
+} from './hq.ts';
 import {
   GenerateWorkReview,
   WorkReviewAutomation,
@@ -228,6 +235,14 @@ export const ROUTES: readonly RouteContract[] = [
     csrf: true,
     body: { schema: ClaudeHooksRequest, required: true },
     responses: { '200': ClaudeHooksStatus, '400': E, '409': E, '422': E, '500': E },
+  },
+  get('/api/hq/claude-hooks/background-work', ClaudeBackgroundWorkStatus, { errors: ['500'] }),
+  {
+    method: 'put',
+    path: '/api/hq/claude-hooks/background-work',
+    csrf: true,
+    body: { schema: ClaudeBackgroundWorkRequest, required: true },
+    responses: { '200': ClaudeBackgroundWorkStatus, '400': E, '422': E, '500': E },
   },
   {
     method: 'post',

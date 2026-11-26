@@ -1,7 +1,12 @@
 import type { HqActivity, HqAgent, HqProvider } from '../../../shared/contracts/hq';
 import { dotJoin } from '../../lib/format';
 import { HQ_COPY, SCENE_COPY, agentDisplayTitle, elapsed, sceneCaption } from './copy';
-import { isReadyToReview, type AgentNode, type Session } from './sessions';
+import {
+  hasReportedBackgroundWork,
+  isReadyToReview,
+  type AgentNode,
+  type Session,
+} from './sessions';
 
 // The scene's layout model, pure and React-free: which session sits in which room, who stands in it and what they are doing. The
 // drawing (Scene.tsx and the files beside it) only follows this. Rooms keep their slot for as long as their session is present, so
@@ -86,12 +91,23 @@ const POSE_OF_ACTIVITY: Record<HqActivity, Pose> = {
 };
 
 export function poseOf(
-  agent: Pick<HqAgent, 'state' | 'activity' | 'reviewPending' | 'backgroundWorkActive'>,
+  agent: Pick<
+    HqAgent,
+    | 'state'
+    | 'activity'
+    | 'reviewPending'
+    | 'backgroundWorkActive'
+    | 'backgroundWork'
+    | 'backgroundSubagent'
+  >,
 ): Pose {
   if ((agent.state === 'idle' || agent.state === 'finished') && agent.backgroundWorkActive) {
     return 'working';
   }
   if (isReadyToReview(agent)) return 'finished';
+  if ((agent.state === 'idle' || agent.state === 'finished') && hasReportedBackgroundWork(agent)) {
+    return 'working';
+  }
   switch (agent.state) {
     case 'working':
       return POSE_OF_ACTIVITY[agent.activity];

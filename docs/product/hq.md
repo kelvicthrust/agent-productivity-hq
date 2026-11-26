@@ -15,6 +15,7 @@ HQ uses the Paseo workspace title for the main agent when available. Subagents s
 | **May be waiting for you** | HQ inferred a possible wait from recent activity. Check the session before assuming it needs an answer. |
 | **Ready to review** | A turn finished and Paseo reports that it is still unread. Open it in Paseo to review the result. |
 | **Background work running** | The turn has ended and Paseo still reports work running in the background. |
+| **Background subagents · last reported …** | Claude Code listed background jobs when it finished its turn. The roster also shows reported shell jobs and monitors. |
 | **Idle for…** | The elapsed time tells you how long the agent has been idle. |
 | **Something went wrong** | Open the original session for the error details. |
 
@@ -27,6 +28,8 @@ On Paseo clients that support workspace badges, **Needs your answer** appears un
 HQ uses recent local Claude Code and Codex session activity and, when available, the local Paseo daemon. While HQ is visible, the roster normally refreshes every two seconds. It is held in memory. For historical token totals or merged PRs, use **Overview**, **Usage**, or **Delivery**.
 
 For Claude Code sessions running outside Paseo, you can opt into more precise wait reporting. In **Sources & repos**, open **Know when Claude Code needs you** and press **Turn on**. Use **What will change** if you want to inspect the settings files and hook command first. You can also choose **Not now** on HQ’s first-visit prompt and use the roster immediately. The [setup guide](../delivery/setup.md#let-claude-code-tell-hq-when-it-needs-you-optional) explains the hook events, settings changes, repair, and removal.
+
+Once those hooks are on, choose **Report Claude Code background work** in the same settings card. In Paseo, open the owner settings from that card. Each Claude Code report keeps the session in the main roster for up to 15 minutes. An otherwise idle session then moves to **Recent idle**, where the last report stays visible for up to 24 hours. A later report can clear the job count sooner. To see what Claude Code is tracking between reports, open `/tasks` in the original Claude Code session.
 
 ## When the room is empty
 

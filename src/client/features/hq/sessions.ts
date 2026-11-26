@@ -23,6 +23,15 @@ type AttentionAgent = Pick<
   'state' | 'reviewPending' | 'backgroundWorkActive' | 'confirmedEmpty'
 >;
 
+type ReportedBackground = Pick<HqAgent, 'backgroundWork' | 'backgroundSubagent'>;
+
+export const hasReportedBackgroundWork = (agent: ReportedBackground): boolean =>
+  agent.backgroundWork?.stale === false || agent.backgroundSubagent === true;
+
+export const hasBackgroundWork = (
+  agent: ReportedBackground & Pick<HqAgent, 'backgroundWorkActive'>,
+): boolean => agent.backgroundWorkActive === true || hasReportedBackgroundWork(agent);
+
 export const isWorking = (agent: AttentionAgent): boolean =>
   agent.state === 'working' ||
   (agent.state === 'starting' && agent.confirmedEmpty !== true) ||
@@ -110,7 +119,7 @@ const RECENT_IDLE_RANK = 4;
 function focusRank(agent: HqAgent): number {
   if (agent.state === 'waiting') return 0;
   if (hasActionableError(agent)) return 1;
-  if (isWorking(agent)) return 2;
+  if (isWorking(agent) || hasReportedBackgroundWork(agent)) return 2;
   if (isReadyToReview(agent)) return 3;
   return RECENT_IDLE_RANK;
 }

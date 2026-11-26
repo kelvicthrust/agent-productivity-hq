@@ -87,6 +87,14 @@ export interface RosterAgent {
   confidence: 'reported' | 'inferred';
   reviewPending?: boolean;
   backgroundWorkActive?: boolean;
+  backgroundWork?: {
+    subagents: number;
+    shellJobs: number;
+    monitors: number;
+    reportedAt: string;
+    stale: boolean;
+  };
+  backgroundSubagent?: boolean;
   confirmedEmpty?: boolean;
   seenBy: { paseo: boolean };
 }

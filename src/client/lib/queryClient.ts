@@ -16,6 +16,7 @@ export const queryKeys = {
   hq: ['hq'] as const,
   /** The Claude Code hooks switch's preview and status: read when the owner opens "What will change", and after a change. */
   hqHooks: ['hq-hooks'] as const,
+  claudeBackgroundWork: ['claude-background-work'] as const,
   analytics: (route: string, scope?: unknown) =>
     scope === undefined ? (['analytics', route] as const) : (['analytics', route, scope] as const),
 };

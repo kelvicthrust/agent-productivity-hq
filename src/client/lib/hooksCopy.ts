@@ -98,6 +98,14 @@ export const HOOKS_COPY = {
   /** The Sources card, before the switch's state is known and when it could not be read. */
   stateLoading: 'Looking at the switch…',
   stateFailed: 'Couldn’t read this setting. Reload the page to try again.',
+  backgroundWork: {
+    label: 'Report Claude Code background work',
+    description:
+      'HQ receives background task IDs, categories, states and observation times. HQ keeps these details in memory. Turning this off clears them and keeps wait reporting on.',
+    prerequisite: 'Turn on or repair the wait hooks above to start reporting background work.',
+    readFailed: 'Couldn’t read the background reporting setting.',
+    changeFailed: 'Couldn’t change the background reporting setting.',
+  },
   /** HQ's first-time prompt: asked once, and says where the switch is afterwards. */
   firstTime: {
     foundLater: 'You can find this later under Sources.',

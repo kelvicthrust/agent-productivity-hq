@@ -29,6 +29,18 @@ export const HqAgent = z.object({
   reviewPending: z.boolean().optional(),
   /** Paseo reports work that continues outside the foreground turn. */
   backgroundWorkActive: z.boolean().optional(),
+  /** The last task snapshot reported by Claude Code for this session. */
+  backgroundWork: z
+    .object({
+      subagents: z.number().int().nonnegative(),
+      shellJobs: z.number().int().nonnegative(),
+      monitors: z.number().int().nonnegative(),
+      reportedAt: Instant,
+      stale: z.boolean(),
+    })
+    .optional(),
+  /** The parent's recent snapshot includes this subagent. */
+  backgroundSubagent: z.boolean().optional(),
   /** An empty thread retained in the roster to link descendants. */
   confirmedEmpty: z.boolean().optional(),
   provider: HqProvider,
@@ -217,6 +229,14 @@ export const ClaudeHooksRequest = z
   .strict();
 export type ClaudeHooksRequest = z.infer<typeof ClaudeHooksRequest>;
 
+export const ClaudeBackgroundWorkStatus = z.object({
+  enabled: z.boolean(),
+  available: z.boolean(),
+});
+export type ClaudeBackgroundWorkStatus = z.infer<typeof ClaudeBackgroundWorkStatus>;
+
+export const ClaudeBackgroundWorkRequest = z.strictObject({ enabled: z.boolean() });
+
 /** The most a hook's working directory may hold (UTF-16 units). */
 export const HOOK_CWD_MAX = 1024;
 /**
@@ -240,8 +260,8 @@ export const isHookCwd = (value: string): boolean =>
   !HOOK_TEXT_FORBIDDEN.test(value);
 
 /**
- * What Claude Code's hook script posts to `POST /api/hq/hooks/claude`: five fields and nothing else, built field by field in the
- * script. Extra keys are refused, and every value is held to the shape the script gives it: an event name of letters, a session id and
+ * What Claude Code's hook script posts to `POST /api/hq/hooks/claude`, built field by field. A Stop may carry a bounded task
+ * snapshot after the owner opts in. Extra keys are refused. The base fields are an event name of letters, a session id and
  * the two short words of letters, digits and `._:-`, and a working directory that is an absolute path with no control character. An event
  * name HQ does not use is accepted and ignored (204).
  */
@@ -256,8 +276,28 @@ export const HqClaudeHookEvent = z
     notification_type: z.string().min(1).max(64).refine(isHookWord).optional(),
     reason: z.string().min(1).max(64).refine(isHookWord).optional(),
     cwd: z.string().min(1).max(HOOK_CWD_MAX).refine(isHookCwd).optional(),
+    background_work: z
+      .strictObject({
+        observed_at: z.number().int().positive(),
+        tasks: z
+          .array(
+            z.strictObject({
+              id: z
+                .string()
+                .min(1)
+                .max(128)
+                .regex(/^[A-Za-z0-9._:-]+$/),
+              type: z.enum(['subagent', 'shell', 'monitor']),
+              status: z.enum(['running', 'pending']),
+            }),
+          )
+          .max(24)
+          .nullable(),
+      })
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((event) => event.background_work === undefined || event.hook_event_name === 'Stop');
 export type HqClaudeHookEvent = z.infer<typeof HqClaudeHookEvent>;
 export type HqProvider = z.infer<typeof HqProvider>;
 export type HqState = z.infer<typeof HqState>;

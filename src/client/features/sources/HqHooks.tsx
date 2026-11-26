@@ -1,5 +1,11 @@
+import { Switch } from '@astryxdesign/core/Switch';
 import { ClaudeHooksSwitch } from '../../components/ClaudeHooksSwitch';
-import { useExactPrompts } from '../../lib/hq';
+import { ApiRequestError } from '../../lib/api';
+import {
+  useClaudeBackgroundWorkStatus,
+  useClaudeBackgroundWorkSwitch,
+  useExactPrompts,
+} from '../../lib/hq';
 import { HOOKS_COPY } from '../../lib/hooksCopy';
 
 // "Know when Claude Code needs you": the opt-in switch that has Claude Code tell HQ exactly when an agent needs the owner (data-and-sources
@@ -8,6 +14,41 @@ import { HOOKS_COPY } from '../../lib/hooksCopy';
 // uses. The scope line says it touches only what HQ can show.
 
 const HEADING_ID = 'src-hq-hooks-title';
+
+function ClaudeBackgroundWorkSwitch() {
+  const status = useClaudeBackgroundWorkStatus();
+  const change = useClaudeBackgroundWorkSwitch();
+  const copy = HOOKS_COPY.backgroundWork;
+  const enabled = status.data?.enabled ?? false;
+  const problem = change.isError
+    ? change.error instanceof ApiRequestError
+      ? change.error.message || copy.changeFailed
+      : copy.changeFailed
+    : status.isError
+      ? copy.readFailed
+      : null;
+
+  return (
+    <div className="flex flex-col gap-1 border-t border-border pt-3">
+      <Switch
+        label={copy.label}
+        description={copy.description}
+        value={enabled}
+        isDisabled={status.data === undefined || (!status.data.available && !enabled)}
+        isLoading={status.isPending || change.isPending}
+        onChange={(next) => change.mutate(next)}
+      />
+      {status.data !== undefined && !status.data.available && (
+        <p className="text-caption text-ink-muted">{copy.prerequisite}</p>
+      )}
+      {problem !== null && (
+        <p role="alert" className="text-caption text-danger">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function HqHooks() {
   const state = useExactPrompts();
@@ -33,6 +74,7 @@ export function HqHooks() {
           {HOOKS_COPY.stateLoading}
         </p>
       )}
+      <ClaudeBackgroundWorkSwitch />
     </section>
   );
 }

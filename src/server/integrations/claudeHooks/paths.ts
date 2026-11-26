@@ -15,7 +15,7 @@ export interface HookPaths {
   dir: string;
   /** The hook script, copied from assets/ when the switch is turned on. */
   script: string;
-  /** `{ v, pid, port, token }`, written while the server listens and the switch is on. */
+  /** The running server's address and token, with the background-reporting flag when enabled. */
   registry: string;
 }
 

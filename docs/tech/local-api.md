@@ -160,6 +160,7 @@ Finish calls `POST /api/setup/complete`, remains on Repositories while pending, 
 | `GET /api/sources` | Local sources, accounts, GitHub, refresh state | Sources & repos, coverage strip, banner |
 | `GET /api/hq` | Live roster of agents on this machine, grouped into sessions, plus each feed's status. Polled every 2 s while visible; no SSE | HQ |
 | `GET /api/hq/claude-hooks`, `PUT /api/hq/claude-hooks` | Preview, and turn on or off, the Claude Code hooks that tell HQ exactly when an agent needs the owner (the owner's opt-in switch) | Sources & repos › Know when Claude Code needs you, and the first-visit HQ dialog |
+| `GET /api/hq/claude-hooks/background-work`, `PUT /api/hq/claude-hooks/background-work` | Read or change the separate opt-in for Claude Code background task reporting | Sources & repos › Know when Claude Code needs you |
 | `POST /api/hq/hooks/claude` | What Claude Code's hook script posts: five fields and a bearer token. Loopback listener only, never the browser's | The hook script |
 | `POST /api/refresh`, `GET /api/refresh/{runId}` | Start or poll a refresh | App bar Refresh, banner Retry, source Retry |
 | `GET` / `POST /api/repos`, `DELETE /api/repos/{owner}/{name}`, `POST /api/repos/{owner}/{name}/recheck` | Tracked repo management | Sources & repos, Setup step 3 |
@@ -538,6 +539,17 @@ components:
         paseoAgentId: { type: string, description: same-host Paseo navigation target when known in a managed installation }
         reviewPending: { type: boolean, description: true for an unread Paseo completion or error and false for an acknowledged Paseo error }
         backgroundWorkActive: { type: boolean, description: Paseo reports work that continues outside the foreground turn }
+        backgroundWork:
+          description: The last task snapshot reported by Claude Code for this session
+          type: object
+          required: [subagents, shellJobs, monitors, reportedAt, stale]
+          properties:
+            subagents: { type: integer, minimum: 0 }
+            shellJobs: { type: integer, minimum: 0 }
+            monitors: { type: integer, minimum: 0 }
+            reportedAt: { type: string, format: date-time }
+            stale: { type: boolean }
+        backgroundSubagent: { type: boolean, description: The parent's recent snapshot includes this subagent }
         confirmedEmpty: { type: boolean, description: empty thread retained to link its descendants }
         provider: { type: string, enum: [codex, claude, other] }
         kind: { type: string, enum: [root, child] }
@@ -975,6 +987,26 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /api/hq/claude-hooks/background-work:
+    get:
+      description: Read the saved background-reporting preference and whether the wait hooks are ready to deliver it. The default is off.
+      responses:
+        "200": { description: Background reporting setting, content: { application/json: { schema: { type: object, required: [enabled, available], properties: { enabled: { type: boolean }, available: { type: boolean } } } } } }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      description: >
+        Enable or withdraw consent for reporting Claude Code background work. Enabling requires working wait hooks (422
+        claude_hooks_unavailable if they are off or need repair). HQ updates its own private settings and hook registry.
+        Turning this setting off clears the task snapshots from memory and keeps wait reporting active. Turning off the
+        wait hooks also turns off background reporting. If the registry cannot be rewritten on opt-out, the server still
+        discards task snapshots and accepts ordinary wait events from that registry.
+      parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], additionalProperties: false, properties: { enabled: { type: boolean } } } } } }
+      responses:
+        "200": { description: Updated background reporting setting, content: { application/json: { schema: { type: object, required: [enabled, available], properties: { enabled: { type: boolean }, available: { type: boolean } } } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/hq/hooks/claude:
     post:
       description: >
@@ -985,9 +1017,9 @@ paths:
         (capital B, one space, base64url characters): a header sent twice or comma-joined, a lowercase scheme, extra spaces or tabs and
         any other form are the same `401`. The content type must be `application/json` (optionally `; charset=utf-8`), else `400`. The
         body is bounded (8 KiB, else `413` with an empty body), decoded as strict UTF-8 (invalid bytes or a byte-order mark are `400`;
-        nothing becomes a replacement character) and strictly the five fields below: any other key, wrong type or shape is `400` with
-        one fixed message that says nothing of why. An event name HQ does not use is accepted and
-        ignored (`204`). Events are kept in memory only, the latest per session.
+        nothing becomes a replacement character). Any extra key, wrong type or shape is `400` with one fixed message.
+        `background_work` is valid only on `Stop`. The server discards it when background reporting is off. An event name HQ
+        does not use is accepted and ignored (`204`). Events and task snapshots are kept in memory per session.
       parameters: [ { name: X-Agent-Productivity-Request, in: header, required: true, schema: { type: string, const: "1" } } ]
       requestBody:
         required: true
@@ -1003,6 +1035,24 @@ paths:
                 notification_type: { type: string, minLength: 1, maxLength: 64, description: "letters, digits and ._:-; permission_prompt and idle_prompt are used" }
                 reason: { type: string, minLength: 1, maxLength: 64, description: "why a session ended; letters, digits and ._:-" }
                 cwd: { type: string, minLength: 1, maxLength: 1024, description: "an absolute path (POSIX, or a Windows drive letter) with no control characters, line or paragraph separators or lone surrogates" }
+                background_work:
+                  type: object
+                  additionalProperties: false
+                  required: [observed_at, tasks]
+                  properties:
+                    observed_at: { type: integer, exclusiveMinimum: 0, description: Hook observation time in epoch milliseconds }
+                    tasks:
+                      type: [array, "null"]
+                      maxItems: 24
+                      description: Active tasks, or null when the snapshot is unavailable
+                      items:
+                        type: object
+                        additionalProperties: false
+                        required: [id, type, status]
+                        properties:
+                          id: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
+                          type: { type: string, enum: [subagent, shell, monitor] }
+                          status: { type: string, enum: [running, pending] }
       responses:
         "204": { description: Accepted, or ignored }
         "400": { $ref: "#/components/responses/Error" }
@@ -1217,5 +1267,5 @@ ModelShare:
 - **Scope echo (P-12, P-37).** `accounts[]` in `/api/overview` ignores `repos` and `provider` filters except to choose which provider cards to show. Its `scopeLabel` says it is the account's own report and that what it counts is not confirmed (the live E4 comparison found the figure below this machine's own total, so it is not called account-wide); the card adds a notice when the figure is lower than this machine's.
 - **Undo (P-26).** The client's Undo calls `DELETE` (for confirm, reject and add) or re-`PUT`s the previous decision (for remove), using the toast's captured prior state.
 - **Refresh concurrency.** Per-source locks run inside one run. Polling `GET /api/refresh/{id}` every 1 s while `running` is the only push mechanism. There is no SSE or WebSocket in MVP.
-- **Claude Code hooks (HQ).** The switch is the one place the app changes a provider's settings, and only when the owner presses it. `GET /api/hq/claude-hooks` is the preview and never writes. `PUT` adds (or removes) one entry for each of five events (`PermissionRequest`, `Notification`, `Stop`, `SessionStart`, `SessionEnd`) in the user-level `settings.json` of each existing Claude Code folder, as the shape `hooks.<Event>[] = { hooks: [{ type: "command", command, timeout: 3 }] }`. The ingest route reads five fields and refuses the rest; it is mounted on the loopback listener only, and a request that reaches the Tailscale listener finds no such route. Its answers carry no detail, and a wrong token is not logged. The route and its token are described in data-and-sources › Claude Code hooks.
+- **Claude Code hooks (HQ).** The switch is the one place the app changes a provider's settings, and only when the owner presses it. `GET /api/hq/claude-hooks` is the preview and never writes. `PUT` adds (or removes) one entry for each of five events (`PermissionRequest`, `Notification`, `Stop`, `SessionStart`, `SessionEnd`) in the user-level `settings.json` of each existing Claude Code folder, as the shape `hooks.<Event>[] = { hooks: [{ type: "command", command, timeout: 3 }] }`. The separate background-reporting switch uses HQ's private settings and can add a bounded task snapshot to `Stop` events. The ingest route is mounted on the loopback listener only. Its answers carry no event details, and a wrong token is not logged. The route and its token are described in data-and-sources › Claude Code hooks.
 - **Live roster (HQ).** `GET /api/hq` answers from an in-memory roster and never writes SQLite. The HQ page polls it every 2 s while the tab is visible, and every 10 s after a failed request; there is no SSE or WebSocket. A process with no live feeder answers 200 with all three feeds `unavailable`, no agents and `truncated: false`. The payload carries state words, a coarse activity category, timestamps, opaque ids and the title, repo and workspace labels; it never carries a prompt, response, tool name or argument, permission detail or error text. `exactPrompts` says whether the owner's Claude Code hooks switch is on; an agent whose hook reported that it waits has `confidence: reported`.

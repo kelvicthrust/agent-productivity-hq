@@ -6,8 +6,13 @@ import type {
   HqWaitReason,
 } from '../../../shared/contracts/hq';
 import { PROVIDER_NAMES, SOURCE_NAMES } from '../../lib/copy';
-import { dotJoin, int } from '../../lib/format';
-import { hasActionableError, isReadyToReview, isWorking } from './sessions';
+import { count, dotJoin, int } from '../../lib/format';
+import {
+  hasActionableError,
+  hasReportedBackgroundWork,
+  isReadyToReview,
+  isWorking,
+} from './sessions';
 
 // The words HQ uses. Every state is spoken in words, never by colour or art alone. The contract carries no prompt, tool name or
 // error text, so none can appear here; `activity` is a coarse category. Typographic apostrophes (’) are the product's.
@@ -102,29 +107,48 @@ export function elapsed(sinceMs: number, nowMs: number): string {
   return `${Math.floor(hours / 24)} d`;
 }
 
+type StateAgent = Pick<
+  HqAgent,
+  | 'state'
+  | 'activity'
+  | 'waitReason'
+  | 'confidence'
+  | 'since'
+  | 'reviewPending'
+  | 'backgroundWorkActive'
+  | 'backgroundWork'
+  | 'backgroundSubagent'
+>;
+
+function backgroundWorkWords(work: HqAgent['backgroundWork'], nowMs: number): string {
+  if (!work) return '';
+  return dotJoin([
+    work.subagents > 0 && count(work.subagents, 'background subagent'),
+    work.shellJobs > 0 && count(work.shellJobs, 'shell job'),
+    work.monitors > 0 && count(work.monitors, 'monitor'),
+    `last reported ${elapsed(Date.parse(work.reportedAt), nowMs)} ago`,
+  ]);
+}
+
 /**
  * What an agent is doing, in words: "Editing", "Needs you: permission", "May be waiting for you" (a waiting state that was
- * inferred from silence, not reported), "Idle for 12 min". `nowMs` is the clock the idle time is measured against.
+ * inferred from silence, not reported), "Idle for 12 min". Reported background work includes the age of the reading.
  */
-export function stateWords(
-  agent: Pick<
-    HqAgent,
-    | 'state'
-    | 'activity'
-    | 'waitReason'
-    | 'confidence'
-    | 'since'
-    | 'reviewPending'
-    | 'backgroundWorkActive'
-  >,
-  nowMs: number,
-): string {
+export function stateWords(agent: StateAgent, nowMs: number): string {
+  return dotJoin([
+    foregroundWords(agent, nowMs),
+    agent.backgroundSubagent && 'Background subagent reported',
+    backgroundWorkWords(agent.backgroundWork, nowMs),
+  ]);
+}
+
+function foregroundWords(agent: StateAgent, nowMs: number): string {
   if (agent.state === 'idle' || agent.state === 'finished') {
     const followUp = dotJoin([
       isReadyToReview(agent) && 'Ready to review',
       agent.backgroundWorkActive && 'Background work running',
     ]);
-    if (followUp) return followUp;
+    if (followUp || agent.backgroundSubagent) return followUp;
   }
   switch (agent.state) {
     case 'starting':
@@ -160,17 +184,27 @@ export function agentMeta(
  */
 type SummaryAgent = Pick<
   HqAgent,
-  'state' | 'confidence' | 'reviewPending' | 'backgroundWorkActive' | 'confirmedEmpty'
+  | 'state'
+  | 'confidence'
+  | 'reviewPending'
+  | 'backgroundWorkActive'
+  | 'confirmedEmpty'
+  | 'backgroundWork'
+  | 'backgroundSubagent'
 >;
 
 export function summaryLine(agents: readonly SummaryAgent[]): string {
-  const count = (predicate: (agent: SummaryAgent) => boolean) => agents.filter(predicate).length;
+  const tally = (predicate: (agent: SummaryAgent) => boolean) => agents.filter(predicate).length;
   const parts: [number, string][] = [
-    [count(isWorking), 'working'],
-    [count((a) => a.state === 'waiting' && a.confidence === 'reported'), 'needs you'],
-    [count((a) => a.state === 'waiting' && a.confidence === 'inferred'), 'may need you'],
-    [count(isReadyToReview), 'ready to review'],
-    [count(hasActionableError), 'with an error'],
+    [tally(isWorking), 'working'],
+    [
+      tally((a) => !isWorking(a) && a.backgroundWork?.stale === false),
+      'with background work reported',
+    ],
+    [tally((a) => a.state === 'waiting' && a.confidence === 'reported'), 'needs you'],
+    [tally((a) => a.state === 'waiting' && a.confidence === 'inferred'), 'may need you'],
+    [tally(isReadyToReview), 'ready to review'],
+    [tally(hasActionableError), 'with an error'],
   ];
   return dotJoin(parts.map(([n, label]) => n > 0 && `${int(n)} ${label}`));
 }
@@ -212,12 +246,19 @@ const SCENE_WORKING: Record<HqActivity, string> = {
 export function sceneCaption(
   agent: Pick<
     HqAgent,
-    'state' | 'activity' | 'confidence' | 'reviewPending' | 'backgroundWorkActive'
+    | 'state'
+    | 'activity'
+    | 'confidence'
+    | 'reviewPending'
+    | 'backgroundWorkActive'
+    | 'backgroundWork'
+    | 'backgroundSubagent'
   >,
 ): string {
   if (isReadyToReview(agent)) return 'review';
-  if ((agent.state === 'idle' || agent.state === 'finished') && agent.backgroundWorkActive) {
-    return 'working';
+  if (agent.state === 'idle' || agent.state === 'finished') {
+    if (agent.backgroundWorkActive) return 'working';
+    if (hasReportedBackgroundWork(agent)) return 'reported work';
   }
   switch (agent.state) {
     case 'starting':

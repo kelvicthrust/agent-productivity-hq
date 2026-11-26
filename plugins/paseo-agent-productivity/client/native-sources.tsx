@@ -579,6 +579,10 @@ export function NativeSources({
             Turning it on adds five entries to your Claude Code settings. Everything else in them is
             kept, and turning it off removes only those entries.
           </ReportText>
+          <ReportText size={12} muted>
+            Owner settings also has a separate option to report Claude Code background work. It
+            shares task IDs, categories, states and observation times while the wait hooks are on.
+          </ReportText>
         </View>
         {hooks && (
           <ReportText size={12} strong>
