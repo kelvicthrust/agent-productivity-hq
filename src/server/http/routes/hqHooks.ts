@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { ApiError } from '../../../shared/contracts/errors.ts';
 import {
   CLAUDE_HOOK_EVENTS,
+  ClaudeBackgroundWorkRequest,
   ClaudeHooksRequest,
   HqClaudeHookEvent,
   type ClaudeHooksFileReason,
@@ -199,6 +200,8 @@ export interface HookIngest {
   token: string;
   /** Checked after reading the request so a late event cannot undo the owner's opt-out. */
   acceptsEvents?: () => boolean;
+  /** Background metadata must come from the current opt-in period. */
+  acceptsBackgroundWork?: (observedAt: number) => boolean;
 }
 
 export function hqHooksRoutes(deps: {
@@ -256,6 +259,50 @@ export function hqHooksRoutes(deps: {
     }
   });
 
+  const backgroundFailed = () =>
+    new ApiError(
+      'claude_hooks_failed',
+      'HQ couldn’t update Claude Code background reporting. Try again.',
+    );
+
+  app.get('/api/hq/claude-hooks/background-work', async (c) => {
+    try {
+      return c.json(
+        (await deps.hooks?.backgroundWorkStatus()) ?? { enabled: false, available: false },
+      );
+    } catch {
+      throw new ApiError(
+        'claude_hooks_failed',
+        'HQ couldn’t read the Claude Code background reporting setting. Try again.',
+      );
+    }
+  });
+
+  app.put('/api/hq/claude-hooks/background-work', async (c) => {
+    const unavailable = () =>
+      new ApiError(
+        'claude_hooks_unavailable',
+        'Turn on or repair Claude Code’s wait hooks before enabling background reporting.',
+      );
+    if (!deps.hooks) throw unavailable();
+    let body: unknown;
+    try {
+      body = JSON.parse((await readBounded(c.req.raw, 1024)) ?? 'null');
+    } catch {
+      body = null;
+    }
+    const request = ClaudeBackgroundWorkRequest.safeParse(body);
+    if (!request.success) {
+      throw new ApiError('invalid_input', 'Send an enabled setting of true or false.');
+    }
+    try {
+      return c.json(await deps.hooks.setBackgroundWork(request.data.enabled));
+    } catch (error) {
+      if (error instanceof ClaudeHooksError && error.failure === 'no_folder') throw unavailable();
+      throw backgroundFailed();
+    }
+  });
+
   if (deps.ingest) app.route('/', hqHookIngestRoutes(deps.ingest));
   return app;
 }
@@ -284,7 +331,16 @@ export function hqHookIngestRoutes(ingest: HookIngest): Hono<HttpEnv> {
     }
     const event = HqClaudeHookEvent.safeParse(json);
     if (!event.success) throw invalid();
-    if (ingest.acceptsEvents?.() !== false) ingest.store.record(event.data);
+    if (ingest.acceptsEvents?.() !== false) {
+      const observedAt = event.data.background_work?.observed_at;
+      if (observedAt !== undefined && ingest.acceptsBackgroundWork?.(observedAt) !== true) {
+        const waitEvent = { ...event.data };
+        delete waitEvent.background_work;
+        ingest.store.record(waitEvent);
+      } else {
+        ingest.store.record(event.data);
+      }
+    }
     return c.body(null, 204);
   });
   return app;

@@ -55,6 +55,7 @@ export function groupSessions(agents: readonly RosterAgent[]): {
   focus: Session[];
   recentIdle: Session[];
 };
+export function hasBackgroundWork(agent: RosterAgent): boolean;
 export const HQ_COPY: { recentIdle: string; quiet: string; sessions: string; noName: string };
 export function agentDisplayTitle(agent: Pick<RosterAgent, 'id' | 'kind' | 'title'>): string | null;
 export function agentMeta(

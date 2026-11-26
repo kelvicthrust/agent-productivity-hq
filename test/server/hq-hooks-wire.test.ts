@@ -28,7 +28,9 @@ afterEach(async () => {
 
 type Fetch = (request: Request) => Response | Promise<Response>;
 
-async function start(options: { remote?: { host: string; ownerLogin: string } } = {}) {
+async function start(
+  options: { remote?: { host: string; ownerLogin: string }; now?: () => number } = {},
+) {
   const root = tempDir();
   const profile = join(root, 'claude config');
   mkdirSync(profile, { recursive: true });
@@ -43,7 +45,7 @@ async function start(options: { remote?: { host: string; ownerLogin: string } } 
   const server = await boot(config, {
     logger,
     listen,
-    now: () => NOW,
+    now: options.now ?? (() => NOW),
     timezone: TZ,
     scheduler: false,
     local: { env, home: root },
@@ -79,6 +81,43 @@ const hook = (server: RunningServer, token: string, body: unknown) =>
   });
 
 describe('Claude Code hooks through boot', () => {
+  it('ignores a task report from an earlier opt-in period after reporting is re-enabled', async () => {
+    let now = NOW;
+    const { server, registry } = await start({ now: () => now });
+    await put(server, true);
+    const token = tokenOf(registry);
+    const set = (enabled: boolean) =>
+      call(server.app, '/api/hq/claude-hooks/background-work', {
+        method: 'PUT',
+        headers: WRITE,
+        body: JSON.stringify({ enabled }),
+      });
+    const report = async (observed_at: number) => {
+      expect(
+        (
+          await hook(server, token, {
+            hook_event_name: 'Stop',
+            session_id: 'task-session',
+            background_work: {
+              observed_at,
+              tasks: [{ id: 'opaque-job', type: 'shell', status: 'running' }],
+            },
+          })
+        ).status,
+      ).toBe(204);
+      return (await roster(server)).agents[0];
+    };
+    expect((await set(true)).status).toBe(200);
+    now += 1_000;
+    expect((await report(now))?.backgroundWork?.shellJobs).toBe(1);
+    expect((await set(false)).status).toBe(200);
+    now += 1_000;
+    expect((await set(true)).status).toBe(200);
+    now += 1_000;
+    expect((await report(NOW + 1_000))?.backgroundWork).toBeUndefined();
+    expect((await report(now))?.backgroundWork?.shellJobs).toBe(1);
+  });
+
   it('starts off: no registry, no script, nothing written to the Claude Code folder', async () => {
     const { server, registry, config, profile } = await start();
     expect(existsSync(registry)).toBe(false);

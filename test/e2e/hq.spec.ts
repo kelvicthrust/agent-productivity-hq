@@ -136,6 +136,63 @@ test.describe('HQ', () => {
 });
 
 test.describe('HQ recent idle and review', { tag: ['@a11y', '@responsive'] }, () => {
+  test('reports background work on a phone and keeps an aging report under Recent idle', async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date(FIXED_NOW) });
+    const world = await openHq(page, 390, 'office');
+    const backgroundWork = {
+      subagents: 1,
+      shellJobs: 1,
+      monitors: 0,
+      reportedAt: new Date(FIXED_NOW - 8 * 60_000).toISOString(),
+      stale: false,
+    };
+    const roster = emptyRoster(FIXED_NOW);
+    const parent = agent(FIXED_NOW, {
+      id: 'terminal',
+      provider: 'claude',
+      title: 'Terminal session',
+      state: 'idle',
+      activity: 'none',
+      backgroundWork,
+    });
+    const helper = agent(FIXED_NOW, {
+      id: 'helper',
+      provider: 'claude',
+      title: 'Background helper',
+      state: 'idle',
+      activity: 'none',
+      kind: 'child',
+      parentId: parent.id,
+      parentBasis: 'native',
+      backgroundSubagent: true,
+    });
+    world.hq!.set({ ...roster, agents: [parent, helper] });
+    await expect(sessions(page)).toContainText(
+      '1 background subagent · 1 shell job · last reported 8 min ago',
+    );
+    await expect(sessions(page)).toContainText('Background subagent reported');
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(failures(await measureContainment(page))).toEqual([]);
+
+    const later = FIXED_NOW + 12 * 60_000;
+    await page.clock.setFixedTime(new Date(later));
+    world.hq!.set({
+      ...roster,
+      generatedAt: new Date(later).toISOString(),
+      agents: [{ ...parent, backgroundWork: { ...backgroundWork, stale: true } }],
+    });
+    await page.clock.fastForward(30_000);
+    const disclosure = page.getByRole('button', { name: 'Recent idle (1)' });
+    await disclosure.focus();
+    await disclosure.press('Space');
+    await expect(page.getByRole('list', { name: 'Recent idle' })).toContainText(
+      'last reported 20 min ago',
+    );
+    await expect(sessions(page)).toHaveCount(0);
+  });
+
   for (const width of [1280, 390]) {
     test(`${width}px: keeps attention in rooms and discloses recent idle in activity order`, async ({
       page,

@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClaudeHooksStatus, HqResponse } from '../../shared/contracts/hq';
+import {
+  ClaudeBackgroundWorkStatus,
+  ClaudeHooksStatus,
+  HqResponse,
+} from '../../shared/contracts/hq';
 import { apiGet, apiSend } from './api';
 import { queryKeys } from './queryClient';
 
@@ -32,6 +36,7 @@ export function useHq() {
 // fingerprint, so the server can reject changes to settings that occurred after the preview was read.
 
 const HOOKS_PATH = '/api/hq/claude-hooks';
+const BACKGROUND_WORK_PATH = `${HOOKS_PATH}/background-work`;
 
 /**
  * Whether the hooks switch is on, off, needs repair or is unavailable, for a screen that does not show the roster (Sources): the same
@@ -75,6 +80,31 @@ export function useClaudeHooksSwitch() {
       // The roster's wording follows the switch, and a refusal may mean the files are not what was shown: read both again at once.
       void client.invalidateQueries({ queryKey: queryKeys.hq });
       void client.invalidateQueries({ queryKey: queryKeys.hqHooks });
+      void client.invalidateQueries({ queryKey: queryKeys.claudeBackgroundWork });
+    },
+  });
+}
+
+export function useClaudeBackgroundWorkStatus() {
+  return useQuery({
+    queryKey: queryKeys.claudeBackgroundWork,
+    queryFn: ({ signal }) => apiGet(BACKGROUND_WORK_PATH, ClaudeBackgroundWorkStatus, { signal }),
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useClaudeBackgroundWorkSwitch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiSend('PUT', BACKGROUND_WORK_PATH, ClaudeBackgroundWorkStatus, { enabled }),
+    onSuccess: (status) => {
+      client.setQueryData(queryKeys.claudeBackgroundWork, status);
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.claudeBackgroundWork });
+      void client.invalidateQueries({ queryKey: queryKeys.hq });
     },
   });
 }

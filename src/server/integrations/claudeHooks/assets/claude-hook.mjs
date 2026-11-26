@@ -8,11 +8,12 @@
 // What it does, in this order, and never anything else:
 //   1. reads stdin, at most 16 MiB (anything larger is not sent), decodes it as strict UTF-8 (a byte that is not valid UTF-8 means
 //      nothing is sent: it is never turned into a replacement character) and parses it;
-//   2. builds the message FIELD BY FIELD from five fields only: hook_event_name, session_id, notification_type, reason, cwd, each held
+//   2. builds the message FIELD BY FIELD from hook_event_name, session_id, notification_type, reason, cwd, each held
 //      to the very shape the server accepts (a field that is not that shape is left out; the server refuses any other). The
 //      rest of the event (`message`, `tool_name`, `tool_input`, `tool_response`, `prompt`, `transcript_path`, the assistant's text,
 //      permission suggestions, ...) is never copied, held or sent;
-//   3. reads the registry, checks that the process it names is alive, and POSTs the message to http://127.0.0.1:<port> with the token.
+//   3. checks the local registry and its process. With background reporting enabled, a Stop adds a bounded task snapshot.
+//      It sends only IDs, known categories and states, and a timestamp. POSTs to http://127.0.0.1:<port> with the registry token.
 //
 // It has no dependencies, prints nothing (a hook's stdout can steer Claude Code; this one must not), and ALWAYS exits 0, quickly:
 // the whole run is cut off after about 1.5 s, and a missing registry, a stale pid, a refused connection or a malformed event simply
@@ -42,6 +43,11 @@ const ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const WORD = /^[A-Za-z0-9._:-]{1,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{20,200}$/;
 const EVENT_NAME = /^[A-Za-z]{1,40}$/;
+const TASK_TYPES = new Set(['subagent', 'shell', 'monitor']);
+const ACTIVE_TASK_STATES = new Set(['running', 'pending']);
+const TERMINAL_TASK_STATES = new Set(['completed', 'failed', 'killed', 'stopped']);
+// Keeps the largest message, including a multibyte working directory, under the 8 KiB ingest limit.
+const MAX_TASKS = 24;
 // The working directory's rule, the same as `isHookCwd` in src/shared/contracts/hq.ts (a test holds the two together): absolute (POSIX,
 // or a Windows drive letter), 1 to 1024 long, and no control character, line or paragraph separator, or lone surrogate.
 const CWD_MAX = 1024;
@@ -62,10 +68,10 @@ const isCwd = (value) =>
   !FORBIDDEN.test(value);
 
 /**
- * The message for one hook event, or null when it is not one. Only the five named fields are read, each checked and bounded;
+ * The message for one hook event, or null when it is not one. Only allowlisted fields are read, each checked and bounded;
  * a field that is missing or not the right shape is left out. `hook_event_name` and `session_id` are required.
  */
-export function messageFor(input) {
+export function messageFor(input, backgroundWork = false, observedAt = Date.now()) {
   if (!isRecord(input)) return null;
   const hook_event_name = shaped(input.hook_event_name, EVENT_NAME);
   const session_id = shaped(input.session_id, ID);
@@ -76,7 +82,29 @@ export function messageFor(input) {
   const reason = shaped(input.reason, WORD);
   if (reason !== undefined) message.reason = reason;
   if (isCwd(input.cwd)) message.cwd = input.cwd;
+  if (backgroundWork && hook_event_name === 'Stop') {
+    message.background_work = {
+      observed_at: observedAt,
+      tasks: activeTasks(input.background_tasks),
+    };
+  }
   return message;
+}
+
+/** A missing or unreadable snapshot means unknown. An empty one confirms no supported jobs. */
+function activeTasks(snapshot) {
+  if (!Array.isArray(snapshot)) return null;
+  const tasks = [];
+  for (const task of snapshot) {
+    if (!isRecord(task) || typeof task.type !== 'string') return null;
+    if (!TASK_TYPES.has(task.type) || TERMINAL_TASK_STATES.has(task.status)) continue;
+    const id = shaped(task.id, ID);
+    if (id === undefined || !ACTIVE_TASK_STATES.has(task.status) || tasks.length >= MAX_TASKS) {
+      return null;
+    }
+    tasks.push({ id, type: task.type, status: task.status });
+  }
+  return tasks;
 }
 
 const alive = (pid) => {
@@ -145,7 +173,7 @@ export function parseRegistryBytes(bytes) {
     if (!Number.isSafeInteger(pid) || pid <= 0 || !alive(pid)) return null;
     if (!Number.isSafeInteger(port) || port < 1 || port > 65535) return null;
     if (typeof token !== 'string' || !TOKEN.test(token)) return null;
-    return { pid, port, token };
+    return { pid, port, token, ...(registry.backgroundWork === true && { backgroundWork: true }) };
   } catch {
     return null;
   }
@@ -157,7 +185,9 @@ export async function findApp(dir) {
     const bytes = await readRegistry(join(dir, 'registry.json'));
     if (bytes === null) return null;
     const registry = parseRegistryBytes(bytes);
-    return registry === null ? null : { port: registry.port, token: registry.token };
+    if (registry === null) return null;
+    const { port, token, backgroundWork } = registry;
+    return { port, token, ...(backgroundWork === true && { backgroundWork: true }) };
   } catch {
     return null;
   }
@@ -239,12 +269,14 @@ function readStdin(limit = MAX_STDIN_BYTES) {
 
 /** One run, without the real stdin and process: `dir` holds the registry, `stdin` is the event's bytes. */
 export async function runHook({ dir, stdin, timeoutMs = DEADLINE_MS }) {
+  const observedAt = Date.now();
   try {
     if (stdin === null) return;
-    const message = messageFor(JSON.parse(strictUtf8.decode(stdin)));
-    if (message === null) return;
+    const input = JSON.parse(strictUtf8.decode(stdin));
     const app = await findApp(dir);
     if (app === null) return;
+    const message = messageFor(input, app.backgroundWork === true, observedAt);
+    if (message === null) return;
     await post(app, message, timeoutMs);
   } catch {
     // Anything at all: the hook never affects Claude Code.

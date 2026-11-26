@@ -4,6 +4,7 @@ import { join, resolve, sep } from 'node:path';
 import {
   CLAUDE_HOOK_EVENTS,
   ClaudeHooksFileReason,
+  type ClaudeBackgroundWorkStatus,
   type ClaudeHooksAction,
   type ClaudeHooksFile,
   type ClaudeHooksOwnFile,
@@ -12,6 +13,7 @@ import {
   type ExactPrompts,
 } from '../../../shared/contracts/hq.ts';
 import { claudeConfigDirs } from '../../collectors/discovery.ts';
+import { FILE_MODE } from '../../lib/fsModes.ts';
 import type { Logger } from '../../lib/logger.ts';
 import { settingsTarget } from '../claudeCapture/settings.ts';
 import { parseRegistryBytes } from './assets/claude-hook.mjs';
@@ -51,6 +53,7 @@ const SETTINGS_FILE = 'settings.json';
 /** How long a computed `state()` is reused, so the HQ poll does not read the settings files twice a second. */
 const STATE_CACHE_MS = 5_000;
 const MAX_VERDICTS = 64;
+const V1_2_0_SCRIPT_SHA256 = '23486d5311471d225e30c6d204c4f3a7821118dced86b910d72fa569901fbe29';
 
 export interface ClaudeHooksOptions {
   dataDir: string;
@@ -71,6 +74,10 @@ export interface ClaudeHooksOptions {
   nodeUsable?: (path: string) => boolean;
   /** Tells the host when the hook can report after startup or an owner-confirmed change. */
   onDeliveryChange?: (enabled: boolean) => void;
+  /** The owner's preference in HQ's private, resettable settings. */
+  backgroundWork?: { read(): boolean; write(enabled: boolean): void };
+  /** Controls admission and clears in-memory observations on opt-out. */
+  onBackgroundWorkChange?: (enabled: boolean) => void;
 }
 
 export interface SetOptions {
@@ -88,6 +95,8 @@ export interface ClaudeHooks {
   state(): Promise<ExactPrompts>;
   /** Installs, repairs or removes HQ's entries, and returns the new status. Throws `ClaudeHooksError` with a fixed code. */
   set(enabled: boolean, options?: SetOptions): Promise<ClaudeHooksStatus>;
+  backgroundWorkStatus(): Promise<ClaudeBackgroundWorkStatus>;
+  setBackgroundWork(enabled: boolean): Promise<ClaudeBackgroundWorkStatus>;
   /** The server is listening: tell the hook script where. Writes the registry while the switch is on. */
   listening(address: { port: number; token: string }): Promise<void>;
   /** Waits for a change in flight and removes (or neutralises) the registry this process published. Safe to call more than once; never throws. */
@@ -326,6 +335,32 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     }
   }
 
+  /** Upgrade the trusted script shipped with v1.2.0 without changing Claude Code's settings. */
+  function upgradePreviousScript(): boolean {
+    const previous = own.identify(HOOK_SCRIPT);
+    if (
+      previous === null ||
+      createHash('sha256').update(previous.bytes).digest('hex') !== V1_2_0_SCRIPT_SHA256
+    ) {
+      return false;
+    }
+    const stat = own.stat(HOOK_SCRIPT);
+    if (
+      stat === null ||
+      stat.dev !== previous.dev ||
+      stat.ino !== previous.ino ||
+      stat.nlink !== 1 ||
+      (stat.mode & 0o7777) !== FILE_MODE ||
+      !scriptFileIsUsable(stat, paths.script)
+    ) {
+      return false;
+    }
+    return (
+      own.replaceIfMade(HOOK_SCRIPT, previous, assetBytes()) !== 'left' &&
+      scriptState() === 'current'
+    );
+  }
+
   /** HQ's own files that are in its folder and HQ could remove (never a file that is not HQ's, nor a registry of an app still running). */
   function leftoverFiles(): {
     items: ClaudeHooksOwnFile[];
@@ -347,16 +382,24 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     return { items, made };
   }
 
-  const registryText = (): string => {
+  const backgroundWorkEnabled = (): boolean => options.backgroundWork?.read() === true;
+
+  const registryText = (backgroundWork: boolean): string => {
     if (address === null) return '';
-    return `${JSON.stringify({ v: 1, pid: process.pid, port: address.port, token: address.token })}\n`;
+    return `${JSON.stringify({
+      v: 1,
+      pid: process.pid,
+      port: address.port,
+      token: address.token,
+      ...(backgroundWork ? { backgroundWork: true } : {}),
+    })}\n`;
   };
 
   /**
    * Whether the registry on disk is this process's AND the installed script would accept it (its own trust and reading rules, deliver.ts).
    * Only asked once the server listens.
    */
-  function registryState(): RegistryState {
+  function registryState(backgroundWork?: boolean): RegistryState {
     if (address === null) return 'idle';
     try {
       if (own.identify(REGISTRY_FILE) === null) return 'undelivered';
@@ -364,7 +407,8 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
       return read !== null &&
         read.pid === process.pid &&
         read.port === address.port &&
-        read.token === address.token
+        read.token === address.token &&
+        (backgroundWork === undefined || (read.backgroundWork === true) === backgroundWork)
         ? 'delivers'
         : 'undelivered';
     } catch {
@@ -503,7 +547,12 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     if (action === 'off') ownFiles.push(...disk.leftover);
     else {
       if (disk.script !== 'current') ownFiles.push('script');
-      if (disk.registry === 'undelivered') ownFiles.push('registry');
+      if (
+        disk.registry === 'undelivered' ||
+        (address !== null &&
+          registryState(action === 'repair' && backgroundWorkEnabled()) !== 'delivers')
+      )
+        ownFiles.push('registry');
     }
     return {
       preview: fingerprint(action, disk.files.map(rowOf), disk),
@@ -581,17 +630,14 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
   }
 
   /**
-   * Whether the owner has turned the switch on and the hook script is HQ's own: some HQ entry is in the settings (whether or not it is
-   * exactly this app's, e.g. after the Node moved: the hook still runs the same script) and the script has this app's content. The
-   * registry is published at listen only then: it tells that script where the app is, and it is never offered to any other file.
+   * Whether an HQ entry is installed, including when the Node path changed but the hook still names this script.
    */
-  function switchIsOn(): boolean {
+  function switchHasEntries(): boolean {
     const found = inspectAll();
     return (
       found.length > 0 &&
       found.every((file) => file.blocked === null) &&
-      found.some((file) => file.entries !== 'absent') &&
-      scriptState() === 'current'
+      found.some((file) => file.entries !== 'absent')
     );
   }
 
@@ -603,9 +649,9 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
    * accept, or does not read back; what it wrote is then in `undo` (when given) so that the caller takes it back, and only while it is
    * still exactly what was written.
    */
-  function publish(undo?: Undo[]): void {
+  function publish(backgroundWork: boolean, undo?: Undo[]): void {
     if (address === null) throw new ClaudeHooksError('registry_failed');
-    const text = registryText();
+    const text = registryText(backgroundWork);
     // A token or port the hook script would refuse is never published.
     if (parseRegistryBytes(Buffer.from(text, 'utf8')) === null)
       throw new ClaudeHooksError('registry_failed');
@@ -628,7 +674,11 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     } catch {
       back = null;
     }
-    if (back === null || back.toString('utf8') !== text || registryState() !== 'delivers') {
+    if (
+      back === null ||
+      back.toString('utf8') !== text ||
+      registryState(backgroundWork) !== 'delivers'
+    ) {
       if (undo === undefined) own.removeIfMade(REGISTRY_FILE, made);
       throw new ClaudeHooksError('registry_failed');
     }
@@ -668,7 +718,10 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
   /**
    * Puts in place the script and the registry the plan lists, and ONLY those. Returns what undoes it.
    */
-  function prepareArtifacts(write: readonly ClaudeHooksOwnFile[]): {
+  function prepareArtifacts(
+    write: readonly ClaudeHooksOwnFile[],
+    backgroundWork: boolean,
+  ): {
     undo: Undo[];
     wasPublished: typeof published;
   } {
@@ -688,7 +741,7 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
           previous: previousScript,
         });
       }
-      if (write.includes('registry')) publish(undo);
+      if (write.includes('registry')) publish(backgroundWork, undo);
     } catch (error) {
       const left = undoArtifacts(undo, wasPublished);
       const failure =
@@ -726,7 +779,7 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
   const ownKey = (state: OwnState): string =>
     JSON.stringify([state.script, state.node, state.registry, leftoverKey(state)]);
 
-  async function change(enabled: boolean, setOptions: SetOptions): Promise<void> {
+  async function change(enabled: boolean, setOptions: SetOptions): Promise<ClaudeHooksAction> {
     const { preview } = setOptions;
     const scoped = !enabled && setOptions.currentInstallationOnly;
     const scriptKey = scoped ? fileKey(paths.script) : null;
@@ -771,7 +824,10 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
     if (current(again.files.map(rowOf), again) !== confirmed)
       throw new ClaudeHooksError('stale_preview');
     const plan = planFor(action, again, scope);
-    const artifacts = enabled ? prepareArtifacts(plan.ownFiles) : null;
+    // A fresh wait-hook install is a separate decision from consenting to background reporting.
+    const artifacts = enabled
+      ? prepareArtifacts(plan.ownFiles, action === 'repair' && backgroundWorkEnabled())
+      : null;
     // What HQ's own files are once this action has written its part of them: anything else seen later was changed by somebody else.
     const expected = ownKey(artifacts === null ? again : ownState());
     try {
@@ -816,6 +872,18 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
       throw error;
     }
     if (!enabled) cleanUp(plan.ownFiles, again.leftoverMade);
+    return action;
+  }
+
+  function backgroundWorkStatus(): ClaudeBackgroundWorkStatus {
+    return {
+      enabled: backgroundWorkEnabled(),
+      available:
+        options.backgroundWork !== undefined &&
+        !closed &&
+        address !== null &&
+        compute(false).state === 'on',
+    };
   }
 
   return {
@@ -837,8 +905,9 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
       return exclusive(async () => {
         if (closed) throw new ClaudeHooksError('no_folder');
         cached = null;
+        let action: ClaudeHooksAction;
         try {
-          await change(enabled, setOptions);
+          action = await change(enabled, setOptions);
         } catch (error) {
           // Whatever went wrong, the caller gets a fixed code: an error's own text (a path) never leaves this module.
           const failure =
@@ -848,9 +917,13 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
         }
         cached = null;
         options.onDeliveryChange?.(enabled && published !== null);
+        options.onBackgroundWorkChange?.(
+          action === 'repair' && published !== null && backgroundWorkEnabled(),
+        );
         logger.info(enabled ? 'hq hooks enabled' : 'hq hooks disabled', { source: 'hq_hooks' });
         // What is reported is what is on disk now, not what the change meant to do.
         try {
+          if (action !== 'repair' && backgroundWorkEnabled()) options.backgroundWork?.write(false);
           if (!enabled && setOptions.currentInstallationOnly && leftoverFiles().items.length > 0)
             throw new ClaudeHooksError('not_writable');
           return compute(true);
@@ -859,18 +932,61 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
         }
       });
     },
+    backgroundWorkStatus: async () => backgroundWorkStatus(),
+    setBackgroundWork(enabled) {
+      return exclusive(async () => {
+        const current = backgroundWorkStatus();
+        const preference = options.backgroundWork;
+        if (closed || preference === undefined || (enabled && !current.available)) {
+          throw new ClaudeHooksError('no_folder');
+        }
+        const undo: Undo[] = [];
+        const before = published;
+        if (!enabled) {
+          if (current.enabled) preference.write(false);
+          options.onBackgroundWorkChange?.(false);
+          // The old registry still delivers wait events if replacement fails. Admission already drops its task data.
+          if (registryState(true) === 'delivers') {
+            try {
+              publish(false, undo);
+            } catch {
+              undoArtifacts(undo, before);
+              warn('hq hooks registry failed', 'registry_failed');
+            }
+          }
+          return { ...current, enabled: false };
+        }
+
+        if (current.enabled) return current;
+        try {
+          publish(true, undo);
+          preference.write(true);
+        } catch (error) {
+          const left = undoArtifacts(undo, before);
+          const failure =
+            error instanceof ClaudeHooksError ? error : new ClaudeHooksError('registry_failed');
+          throw failure.with(left);
+        }
+
+        options.onBackgroundWorkChange?.(true);
+        return { ...current, enabled: true };
+      });
+    },
     listening(next) {
       return exclusive(async () => {
         address = next;
         if (closed) return;
         try {
-          if (switchIsOn()) {
-            if (registryState() !== 'delivers') publish();
+          if (switchHasEntries() && (scriptState() === 'current' || upgradePreviousScript())) {
+            const backgroundWork = backgroundWorkEnabled();
+            if (registryState(backgroundWork) !== 'delivers') publish(backgroundWork);
             else {
               const found = own.identify(REGISTRY_FILE);
-              if (found !== null) published = { text: registryText(), made: found };
+              if (found !== null) published = { text: registryText(backgroundWork), made: found };
             }
             options.onDeliveryChange?.(published !== null);
+            options.onBackgroundWorkChange?.(published !== null && backgroundWork);
+            cached = null;
           } else if (leftoverFiles().items.length > 0)
             warn('hq hooks cleanup incomplete', 'cleanup_incomplete');
         } catch {
@@ -887,6 +1003,7 @@ export function createClaudeHooks(options: ClaudeHooksOptions): ClaudeHooks {
       }
       address = null;
       cached = null;
+      options.onBackgroundWorkChange?.(false);
       // Only the registry this process published, and only while it is still exactly what the record names (this process's bytes in
       // the file the record follows): removed, else (the folder cannot be written) made to hold no token, and the next start reports
       // what is left. Anything else there is another process's, or the owner's, and is left exactly as it is.

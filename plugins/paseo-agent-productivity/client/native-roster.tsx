@@ -9,6 +9,7 @@ import {
   HQ_COPY,
   agentDisplayTitle,
   agentMeta,
+  hasBackgroundWork,
   recentIdleLabel,
   stateWords,
   summaryLine,
@@ -75,8 +76,7 @@ function RosterRow({
           mood={
             agent.state === 'error'
               ? 'dizzy'
-              : !agent.backgroundWorkActive &&
-                  (agent.state === 'idle' || agent.state === 'finished')
+              : !hasBackgroundWork(agent) && (agent.state === 'idle' || agent.state === 'finished')
                 ? 'sleep'
                 : 'awake'
           }
@@ -97,7 +97,7 @@ function RosterRow({
               {agentMeta(agent)}
             </NativeText>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             {agent.state === 'waiting' && (
               <Icon name="TriangleAlert" color={palette.warning} size={14} />
             )}
@@ -113,8 +113,8 @@ function RosterRow({
               }
               style={
                 agent.state === 'waiting' || agent.state === 'error'
-                  ? { fontWeight: '600' }
-                  : undefined
+                  ? { flexShrink: 1, fontWeight: '600' }
+                  : { flexShrink: 1 }
               }
             >
               {stateWords(agent, now)}

@@ -206,6 +206,7 @@ describe('what the server serves against the document', () => {
       'GET /api/health',
       'GET /api/hq',
       'GET /api/hq/claude-hooks',
+      'GET /api/hq/claude-hooks/background-work',
       'GET /api/models',
       'GET /api/overview',
       'GET /api/paseo-quota',
@@ -242,6 +243,7 @@ describe('what the server serves against the document', () => {
       'PUT /api/accounts/claude/usage-capture',
       'PUT /api/accounts/github/app',
       'PUT /api/hq/claude-hooks',
+      'PUT /api/hq/claude-hooks/background-work',
       'PUT /api/prs/{prId}/links/{sessionId}',
     ]);
   });
@@ -307,7 +309,10 @@ describe('what the server serves against the document', () => {
 
   /** An app whose Claude Code hooks switch runs over a temporary config folder and data folder, with the hook endpoint mounted. */
   function appWithHooks() {
-    const r = rig({ settings: '{"theme":"dark"}' });
+    const r = rig({
+      settings: '{"theme":"dark"}',
+      extra: { backgroundWork: { read: () => false, write: () => undefined } },
+    });
     return testApp({ claudeHooks: r.hooks, hookIngest }).app;
   }
 
@@ -486,7 +491,8 @@ describe('what the server serves against the document', () => {
                     ? '{"hook_event_name":"Stop","session_id":"contract-session"}'
                     : key === 'POST /api/setup/reset'
                       ? '{"confirmed":true}'
-                      : key === 'POST /api/work-review/automation'
+                      : key === 'POST /api/work-review/automation' ||
+                          key === 'PUT /api/hq/claude-hooks/background-work'
                         ? '{"enabled":false}'
                         : '{}';
     const path = key === 'GET /api/repos/discover' ? url + '?login=octo-kelvin&via=gh' : url;

@@ -5,7 +5,7 @@ import { Icon } from '../../components/Icon';
 import type { HqAgent } from '../../../shared/contracts/hq';
 import { cx } from '../../lib/cx';
 import { HQ_COPY, agentDisplayTitle, agentMeta, recentIdleLabel, stateWords } from './copy';
-import type { AgentNode, Session } from './sessions';
+import { hasBackgroundWork, type AgentNode, type Session } from './sessions';
 
 // The roster: the accessible account of who is running, as real nested lists. One card per session; inside it the root first, its
 // spawned agents indented beneath it. Rows are not interactive, and nothing on the page is a live region: a roster that changes
@@ -38,13 +38,13 @@ function State({ agent, nowMs }: { agent: HqAgent; nowMs: number }) {
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-[5px] text-caption',
+        'inline-flex min-w-0 items-center gap-[5px] text-caption',
         appearance ? `${appearance.toneClass} font-semibold` : 'text-ink-muted',
         agent.state === 'working' && 'text-ink',
       )}
     >
       {appearance && <Icon name={appearance.icon} />}
-      <span>{stateWords(agent, nowMs)}</span>
+      <span className="[overflow-wrap:anywhere]">{stateWords(agent, nowMs)}</span>
     </span>
   );
 }
@@ -60,7 +60,7 @@ function Row({ node, nowMs, depth = 0 }: { node: AgentNode; nowMs: number; depth
       <div className="flex min-w-0 items-start gap-3 py-2">
         <Buddy
           kind={BUDDY_KIND[agent.provider]}
-          mood={agent.backgroundWorkActive && agent.state !== 'error' ? 'awake' : MOOD[agent.state]}
+          mood={hasBackgroundWork(agent) && agent.state !== 'error' ? 'awake' : MOOD[agent.state]}
           size={28}
           className="mt-0.5"
         />

@@ -19,6 +19,14 @@ import { agent, officeAgents } from '../../fixtures/hq/scripted';
 const base = (over: Partial<HqAgent>): HqAgent =>
   agent(NOW, { id: 'a', provider: 'claude', ...over });
 
+const backgroundWork = {
+  subagents: 2,
+  shellJobs: 1,
+  monitors: 0,
+  reportedAt: new Date(NOW - 8 * 60_000).toISOString(),
+  stale: false,
+};
+
 it('distinguishes generic and unnamed subagents using the opaque roster id', () => {
   const child = base({ id: 'a123456789abc', kind: 'child', parentAway: true });
   expect(agentDisplayTitle(child)).toBe('Subagent · 789abc');
@@ -101,6 +109,33 @@ describe('stateWords', () => {
       'Ready to review · Background work running',
     );
   });
+
+  it('shows the reported counts and age independently of foreground and live states', () => {
+    const idle = base({ state: 'idle', backgroundWork });
+    const report = '2 background subagents · 1 shell job · last reported 8 min ago';
+    expect(stateWords(idle, NOW)).toBe(`Idle for 5 min · ${report}`);
+    expect(stateWords({ ...idle, backgroundWorkActive: true }, NOW)).toBe(
+      `Background work running · ${report}`,
+    );
+    expect(stateWords({ ...idle, state: 'waiting', waitReason: 'permission' }, NOW)).toBe(
+      `Needs you: permission · ${report}`,
+    );
+    expect(
+      stateWords(
+        { ...idle, state: 'finished', backgroundWork: { ...backgroundWork, stale: true } },
+        NOW,
+      ),
+    ).toBe(`Finished · ${report}`);
+    expect(
+      stateWords(
+        { ...idle, backgroundWork: { ...backgroundWork, subagents: 0, shellJobs: 2, monitors: 1 } },
+        NOW + 60_000,
+      ),
+    ).toBe('Idle for 6 min · 2 shell jobs · 1 monitor · last reported 9 min ago');
+    expect(stateWords({ ...idle, backgroundWork: undefined, backgroundSubagent: true }, NOW)).toBe(
+      'Background subagent reported',
+    );
+  });
 });
 
 describe('elapsed', () => {
@@ -138,6 +173,17 @@ describe('summaryLine', () => {
         base({ state: 'idle' }),
       ]),
     ).toBe('1 working · 1 ready to review · 1 with an error');
+  });
+
+  it('describes recent snapshot-only agents separately from working agents', () => {
+    expect(
+      summaryLine([
+        base({ state: 'idle', backgroundWork }),
+        base({ state: 'idle', backgroundSubagent: true }),
+        base({ state: 'idle', backgroundWork: { ...backgroundWork, stale: true } }),
+        base({ state: 'idle', backgroundWork, backgroundWorkActive: true }),
+      ]),
+    ).toBe('1 working · 1 with background work reported');
   });
 });
 
@@ -274,5 +320,17 @@ describe('groupSessions', () => {
     const grouped = groupSessions([empty, parent, idle]);
     expect(grouped.focus).toEqual([]);
     expect(grouped.recentIdle.map(({ id, size }) => [id, size])).toEqual([['parent', 2]]);
+  });
+
+  it('keeps a crew in focus for a fresh snapshot or marked child', () => {
+    const parent = base({ id: 'parent', state: 'idle', backgroundWork });
+    const child = base({ id: 'child', kind: 'child', parentId: 'parent', state: 'finished' });
+    expect(groupSessions([parent, child]).focus.map(({ id }) => id)).toEqual(['parent']);
+
+    const stale = { ...parent, backgroundWork: { ...backgroundWork, stale: true } };
+    expect(groupSessions([stale, child]).recentIdle.map(({ id }) => id)).toEqual(['parent']);
+    expect(
+      groupSessions([stale, { ...child, backgroundSubagent: true }]).focus.map(({ id }) => id),
+    ).toEqual(['parent']);
   });
 });

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSessions, layoutScene } from '../client/native-hq-art.generated.mjs';
+import {
+  buildSessions,
+  groupSessions,
+  layoutScene,
+  stateWords,
+} from '../client/native-hq-art.generated.mjs';
 import { inkFrames } from '../client/native-hq-boil.generated.ts';
 import { fitRoomLettering, playpenWidth } from '../client/native-hq-letter-metrics.ts';
 import type { RosterAgent } from '../client/native-types.ts';
@@ -50,6 +55,29 @@ test('the native scene retains room slots when the sessions reorder and a helper
     ],
   );
   assert.equal(next.cells, 3);
+});
+
+test('the native roster and scene show a last reported background snapshot', () => {
+  const parent = agent('parent', {
+    state: 'idle',
+    backgroundWork: {
+      subagents: 0,
+      shellJobs: 1,
+      monitors: 0,
+      reportedAt: '2026-11-21T11:52:00.000Z',
+      stale: false,
+    },
+  });
+  const nowMs = Date.parse(parent.since);
+  const { focus, recentIdle } = groupSessions([parent]);
+  assert.equal(focus.length, 1);
+  assert.equal(recentIdle.length, 0);
+  assert.equal(
+    stateWords(parent, nowMs),
+    'Idle for under a minute · 1 shell job · last reported 8 min ago',
+  );
+  const scene = layoutScene(null, focus, { columns: 1, nowMs });
+  assert.equal(scene.rooms[0].characters[0].caption, 'reported work');
 });
 
 test('outlined lettering fits wide names and keeps the session state on the sign', () => {

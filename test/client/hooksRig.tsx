@@ -63,6 +63,7 @@ export const json = (body: unknown, code = 200) =>
 
 export interface Rig {
   state: ExactPrompts;
+  backgroundWork: boolean;
   preview: () => Promise<Response>;
   put: (enabled: boolean) => Promise<Response>;
   roster: () => unknown;
@@ -72,6 +73,7 @@ export interface Rig {
 export function mountRig(ui: ReactElement, over: Partial<Rig> = {}) {
   const rig: Rig = {
     state: 'off',
+    backgroundWork: false,
     preview: () => json(status({ state: rig.state })),
     put: (enabled) => json(status({ state: enabled ? 'on' : 'off' })),
     roster: () => emptyRoster(NOW),
@@ -90,12 +92,19 @@ export function mountRig(ui: ReactElement, over: Partial<Rig> = {}) {
         headers: (init.headers ?? {}) as Record<string, string>,
       });
       if (url === '/api/hq') return json({ ...(rig.roster() as object), exactPrompts: rig.state });
+      if (url === '/api/hq/claude-hooks/background-work') {
+        if (method === 'PUT') rig.backgroundWork = (body as { enabled: boolean }).enabled;
+        return json({ enabled: rig.backgroundWork, available: rig.state === 'on' });
+      }
       if (url === '/api/hq/claude-hooks' && method === 'GET') return rig.preview();
       if (url === '/api/hq/claude-hooks' && method === 'PUT') {
         const enabled = (body as { enabled: boolean }).enabled;
         const answer = rig.put(enabled);
         return answer.then((response) => {
-          if (response.ok) rig.state = enabled ? 'on' : 'off';
+          if (response.ok) {
+            rig.state = enabled ? 'on' : 'off';
+            if (!enabled) rig.backgroundWork = false;
+          }
           return response;
         });
       }

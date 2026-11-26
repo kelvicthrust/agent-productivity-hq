@@ -22,6 +22,10 @@ export type Transcript =
 const SET_ASIDE = /\.orphaned-[^/]*\.jsonl$|\.jsonl\.superseded-/;
 const SUFFIX = '.jsonl';
 
+export function claudeSubagentSessionId(parentId: string, stem: string): string {
+  return `${parentId}:${stem}`;
+}
+
 /** `name` without `.jsonl`, or null when it is not a transcript name (or is a set-aside copy). */
 function transcriptStem(name: string): string | null {
   if (!name.endsWith(SUFFIX) || SET_ASIDE.test(name)) return null;
@@ -40,7 +44,7 @@ export function classifyTranscript(relativePath: string): Transcript | null {
     const parentId = parts[1] ?? '';
     const stem = transcriptStem(parts[3] ?? '');
     if (parentId === '' || stem === null) return null;
-    return { kind: 'subagent', sessionId: `${parentId}:${stem}`, parentId };
+    return { kind: 'subagent', sessionId: claudeSubagentSessionId(parentId, stem), parentId };
   }
   return null;
 }

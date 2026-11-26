@@ -34,7 +34,7 @@ export { LINE_BOIL_SEEDS, LineBoilFilter } from ${JSON.stringify(`${feature}/sce
 export { Buddy } from ${JSON.stringify(resolve(root, 'src/client/components/Buddy.tsx'))};
 export { CrewArt } from ${JSON.stringify(resolve(root, 'src/client/components/CrewArt.tsx'))};
 export { layoutScene } from ${JSON.stringify(`${feature}/scene.ts`)};
-export { buildSessions, groupSessions } from ${JSON.stringify(`${feature}/sessions.ts`)};
+export { buildSessions, groupSessions, hasBackgroundWork } from ${JSON.stringify(`${feature}/sessions.ts`)};
 export { HQ_COPY, agentDisplayTitle, agentMeta, recentIdleLabel, stateWords, summaryLine } from ${JSON.stringify(`${feature}/copy.ts`)};
 export { captionsCollide, planStage } from ${JSON.stringify(`${feature}/stage.ts`)};`
           : undefined,

@@ -41,6 +41,7 @@ import {
 } from './integrations/claudeHooks/index.ts';
 import { claudePlanProfile } from './integrations/claudePlan/credentials.ts';
 import { readLiveSessionLabels } from './db/queries/hq.ts';
+import { claudeBackgroundWorkPreference } from './db/queries/claudeBackgroundWork.ts';
 import { joinPaseoSessions } from './db/queries/paseo.ts';
 import { isResetSetupPending, readSetupState } from './db/queries/setup.ts';
 import { markRunningRunsInterrupted } from './db/queries/runs.ts';
@@ -357,6 +358,7 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
   const hookStore: HookStore = createHookStore({ now });
   const hookToken = newHookToken();
   let acceptsClaudeHookEvents = false;
+  let claudeBackgroundWorkSince: number | null = null;
   let requestChatgptRead: () => void = () => undefined;
   const listeners = new Set<ListeningServer>();
   let revokeBrowserAccess: (() => void) | undefined;
@@ -554,6 +556,11 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
             onDeliveryChange: (enabled) => {
               acceptsClaudeHookEvents = enabled;
               if (!enabled) hookStore.clear();
+            },
+            backgroundWork: claudeBackgroundWorkPreference(dbForTasks),
+            onBackgroundWorkChange: (enabled) => {
+              claudeBackgroundWorkSince = enabled ? (claudeBackgroundWorkSince ?? now()) : null;
+              if (!enabled) hookStore.clearBackground();
             },
             ...(claudeBoot.nodePath === undefined ? {} : { nodePath: claudeBoot.nodePath }),
           })
@@ -828,7 +835,13 @@ export async function boot(config: ServerConfig, deps: BootDeps = {}): Promise<R
         hq: hq ?? undefined,
         claudeHooks: claudeHooks ?? undefined,
         hookIngest: claudeHooks
-          ? { store: hookStore, token: hookToken, acceptsEvents: () => acceptsClaudeHookEvents }
+          ? {
+              store: hookStore,
+              token: hookToken,
+              acceptsEvents: () => acceptsClaudeHookEvents,
+              acceptsBackgroundWork: (observedAt) =>
+                claudeBackgroundWorkSince !== null && observedAt > claudeBackgroundWorkSince,
+            }
           : undefined,
         setup: {
           local: deps.local ?? deps.setup?.local,

@@ -1236,6 +1236,8 @@ var REFRESH_COPY = {
 };
 REFRESH_COPY.viewSource, REFRESH_COPY.retry, REFRESH_COPY.retrying;
 // src/client/features/hq/sessions.ts
+var hasReportedBackgroundWork = (agent) => agent.backgroundWork?.stale === false || agent.backgroundSubagent === true;
+var hasBackgroundWork = (agent) => agent.backgroundWorkActive === true || hasReportedBackgroundWork(agent);
 var isWorking = (agent) => agent.state === "working" || agent.state === "starting" && agent.confirmedEmpty !== true || agent.backgroundWorkActive === true;
 var isReadyToReview = (agent) => (agent.state === "finished" || agent.state === "idle") && agent.reviewPending === true;
 var hasActionableError = (agent) => agent.state === "error" && agent.reviewPending !== false;
@@ -1289,7 +1291,7 @@ var RECENT_IDLE_RANK = 4;
 function focusRank(agent) {
 	if (agent.state === "waiting") return 0;
 	if (hasActionableError(agent)) return 1;
-	if (isWorking(agent)) return 2;
+	if (isWorking(agent) || hasReportedBackgroundWork(agent)) return 2;
 	if (isReadyToReview(agent)) return 3;
 	return RECENT_IDLE_RANK;
 }
@@ -1406,14 +1408,30 @@ function elapsed(sinceMs, nowMs) {
 	if (hours < 24) return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
 	return `${Math.floor(hours / 24)} d`;
 }
+function backgroundWorkWords(work, nowMs) {
+	if (!work) return "";
+	return dotJoin([
+		work.subagents > 0 && count$1(work.subagents, "background subagent"),
+		work.shellJobs > 0 && count$1(work.shellJobs, "shell job"),
+		work.monitors > 0 && count$1(work.monitors, "monitor"),
+		`last reported ${elapsed(Date.parse(work.reportedAt), nowMs)} ago`
+	]);
+}
 /**
 * What an agent is doing, in words: "Editing", "Needs you: permission", "May be waiting for you" (a waiting state that was
-* inferred from silence, not reported), "Idle for 12 min". `nowMs` is the clock the idle time is measured against.
+* inferred from silence, not reported), "Idle for 12 min". Reported background work includes the age of the reading.
 */
 function stateWords(agent, nowMs) {
+	return dotJoin([
+		foregroundWords(agent, nowMs),
+		agent.backgroundSubagent && "Background subagent reported",
+		backgroundWorkWords(agent.backgroundWork, nowMs)
+	]);
+}
+function foregroundWords(agent, nowMs) {
 	if (agent.state === "idle" || agent.state === "finished") {
 		const followUp = dotJoin([isReadyToReview(agent) && "Ready to review", agent.backgroundWorkActive && "Background work running"]);
-		if (followUp) return followUp;
+		if (followUp || agent.backgroundSubagent) return followUp;
 	}
 	switch (agent.state) {
 		case "starting": return "Starting";
@@ -1435,13 +1453,14 @@ function agentMeta(agent) {
 	]);
 }
 function summaryLine(agents) {
-	const count = (predicate) => agents.filter(predicate).length;
+	const tally = (predicate) => agents.filter(predicate).length;
 	return dotJoin([
-		[count(isWorking), "working"],
-		[count((a) => a.state === "waiting" && a.confidence === "reported"), "needs you"],
-		[count((a) => a.state === "waiting" && a.confidence === "inferred"), "may need you"],
-		[count(isReadyToReview), "ready to review"],
-		[count(hasActionableError), "with an error"]
+		[tally(isWorking), "working"],
+		[tally((a) => !isWorking(a) && a.backgroundWork?.stale === false), "with background work reported"],
+		[tally((a) => a.state === "waiting" && a.confidence === "reported"), "needs you"],
+		[tally((a) => a.state === "waiting" && a.confidence === "inferred"), "may need you"],
+		[tally(isReadyToReview), "ready to review"],
+		[tally(hasActionableError), "with an error"]
 	].map(([n, label]) => n > 0 && `${int(n)} ${label}`));
 }
 /** What the quiet state's drawing says on its own sign and note (decorative: the footnote `HQ_COPY.quiet` is the statement). */
@@ -1477,7 +1496,10 @@ var SCENE_WORKING = {
 */
 function sceneCaption(agent) {
 	if (isReadyToReview(agent)) return "review";
-	if ((agent.state === "idle" || agent.state === "finished") && agent.backgroundWorkActive) return "working";
+	if (agent.state === "idle" || agent.state === "finished") {
+		if (agent.backgroundWorkActive) return "working";
+		if (hasReportedBackgroundWork(agent)) return "reported work";
+	}
 	switch (agent.state) {
 		case "starting": return "starting";
 		case "working": return SCENE_WORKING[agent.activity];
@@ -2086,6 +2108,7 @@ var POSE_OF_ACTIVITY = {
 function poseOf(agent) {
 	if ((agent.state === "idle" || agent.state === "finished") && agent.backgroundWorkActive) return "working";
 	if (isReadyToReview(agent)) return "finished";
+	if ((agent.state === "idle" || agent.state === "finished") && hasReportedBackgroundWork(agent)) return "working";
 	switch (agent.state) {
 		case "working": return POSE_OF_ACTIVITY[agent.activity];
 		case "waiting": return "waiting";
@@ -2970,4 +2993,4 @@ function CrewArt({ mood = "awake", className }) {
 		]
 	});
 }
-export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, HQ_COPY, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, agentDisplayTitle, agentMeta, buildSessions, captionsCollide, groupSessions, layoutScene, planStage, recentIdleLabel, stateWords, summaryLine };
+export { AfkRoom, Buddy, CrewArt, EmptyRoom, Ground, HQ_COPY, Heading, LINE_BOIL_SEEDS, LineBoilFilter, ROOM_HEIGHT, ROOM_HEIGHT_TALL, Roof, Room, Vent, agentDisplayTitle, agentMeta, buildSessions, captionsCollide, groupSessions, hasBackgroundWork, layoutScene, planStage, recentIdleLabel, stateWords, summaryLine };
