@@ -80,6 +80,38 @@ test('the native roster and scene show a last reported background snapshot', () 
   assert.equal(scene.rooms[0].characters[0].caption, 'reported work');
 });
 
+test('the native scene loads and formats counts without Intl.PluralRules', async () => {
+  const original = Intl.PluralRules;
+  Object.defineProperty(Intl, 'PluralRules', { value: undefined });
+  try {
+    // Use a new module instance so its initialization runs with PluralRules unavailable.
+    const path = new URL(
+      '../client/native-hq-art.generated.mjs?without-plural-rules',
+      import.meta.url,
+    );
+    const art: typeof import('../client/native-hq-art.generated.mjs') = await import(path.href);
+    const parent = agent('parent', { state: 'idle' });
+    const nowMs = Date.parse(parent.since);
+    const backgroundWork = {
+      subagents: 0,
+      monitors: 0,
+      reportedAt: new Date(nowMs - 8 * 60_000).toISOString(),
+      stale: false,
+    };
+
+    assert.equal(
+      art.stateWords({ ...parent, backgroundWork: { ...backgroundWork, shellJobs: 1 } }, nowMs),
+      'Idle for under a minute · 1 shell job · last reported 8 min ago',
+    );
+    assert.equal(
+      art.stateWords({ ...parent, backgroundWork: { ...backgroundWork, shellJobs: 2 } }, nowMs),
+      'Idle for under a minute · 2 shell jobs · last reported 8 min ago',
+    );
+  } finally {
+    Object.defineProperty(Intl, 'PluralRules', { value: original });
+  }
+});
+
 test('outlined lettering fits wide names and keeps the session state on the sign', () => {
   const measure = (text: string) => playpenWidth(text, 13);
   const room = 120;
