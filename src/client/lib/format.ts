@@ -15,11 +15,12 @@ export function int(n: number | null | undefined): string {
   return n == null || Number.isNaN(n) ? '—' : INTEGER.format(n);
 }
 
-const PLURAL = new Intl.PluralRules('en-US');
+const PLURAL = typeof Intl.PluralRules === 'function' ? new Intl.PluralRules('en-US') : undefined;
 
 /** The singular for exactly one, else `many` (default: `one` + "s"): plural(2, 'child', 'children') is "children". */
 export function plural(n: number, one: string, many?: string): string {
-  return PLURAL.select(n) === 'one' ? one : (many ?? `${one}s`);
+  const singular = PLURAL ? PLURAL.select(n) === 'one' : Math.abs(n) === 1;
+  return singular ? one : (many ?? `${one}s`);
 }
 
 /** The number and its noun together, so a label always agrees with its number: "1 session", "2 children". */

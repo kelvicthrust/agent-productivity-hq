@@ -1186,10 +1186,10 @@ var INTEGER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 function int(n) {
 	return n == null || Number.isNaN(n) ? "—" : INTEGER.format(n);
 }
-var PLURAL = new Intl.PluralRules("en-US");
+var PLURAL = typeof Intl.PluralRules === "function" ? new Intl.PluralRules("en-US") : void 0;
 /** The singular for exactly one, else `many` (default: `one` + "s"): plural(2, 'child', 'children') is "children". */
 function plural(n, one, many) {
-	return PLURAL.select(n) === "one" ? one : many ?? `${one}s`;
+	return (PLURAL ? PLURAL.select(n) === "one" : Math.abs(n) === 1) ? one : many ?? `${one}s`;
 }
 /** The number and its noun together, so a label always agrees with its number: "1 session", "2 children". */
 function count$1(n, one, many) {
