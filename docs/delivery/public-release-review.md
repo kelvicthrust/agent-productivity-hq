@@ -1,8 +1,7 @@
 # Public source and distribution readiness
 
-**Public product distribution remains on hold.** A sanitized source snapshot is a separate
-publication candidate. Removing private information does not resolve product security,
-provider-access, licensing, packaging or installation concerns.
+This review records the source disclosure boundary for the sanitized snapshot and the product
+findings from that assessment.
 
 ## Source disclosure boundary
 
@@ -18,18 +17,15 @@ requires a separate action after the candidate and its remaining limits have bee
 ## Provider credential access
 
 The current Claude plan-check integration reads the active Claude Code sign-in from native secure
-storage and sends a bearer token to Anthropic's subscription usage endpoint. After a successful
-check, an explicit Refresh can request another reading. This cleanup does not remove that feature
-or establish provider authorization for public distribution. See the
+storage and sends a bearer token to Anthropic's undocumented subscription usage endpoint. After a
+successful check, an explicit Refresh can request another reading. See the
 [credential reader](../../src/server/integrations/claudePlan/credentials.ts),
 [request implementation](../../src/server/integrations/claudePlan/usage.ts) and
 [source contract](../tech/data-and-sources.md#claude-account-report).
 
-A public product needs a supported, authorized integration or a separately reviewed change that
-omits this credential reader and request path, including refresh behavior. Review current
-[provider credential guidance](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
-before distribution. Public source should describe actual behavior accurately; deleting its
-explanation would not change the implementation.
+The maintainer accepted the risk of retaining this integration in public releases. Anthropic
+describes restrictions on third-party use of Claude subscription credentials in its
+[credential guidance](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use).
 
 ## Host and access limits
 
