@@ -40,9 +40,6 @@ check action or an explicit **Refresh** or **Refresh all** action for a previous
 Legacy status-line settings are restored by their owner. Do not introduce API keys or
 broader access to make setup work.
 
-In Delivery, edit only setup/project documentation within the assignment's boundary. Product,
-dependency and executable-configuration fixes return to Implementation and the affected assessors.
-PDLC owns commits, clean-export exercise and pull-request publication in this managed workflow.
 Merge and production release require separate authority.
 
 ## Check the affected work
@@ -55,10 +52,10 @@ the appropriate functional, accessibility and responsive browser groups. Preserv
 project gates for candidate assessment; a focused pass cannot replace them.
 
 For documentation changes, check links, script names, environment-variable descriptions and the
-install/build/start order against the repository. The README and local setup guide guards are in
-`test/verification/readme.test.ts`; PDLC runs declared checks in the clean export. Do not run runtime
-suites solely because a document changed. Do not claim an unrun check or a skipped socket probe
-passed. Historical Delivery statements do not establish current check results.
+install/build/start order against the repository. The README and local setup guide checks are in
+`test/verification/readme.test.ts`. Do not run runtime suites solely because a document changed.
+Do not claim an unrun check or a skipped socket probe passed. Historical assessments do not
+establish current check results.
 
 Reuse evidence only when the assessed source, dependencies, configuration, command and environment
 remain applicable; rerun affected checks after changes. Independent Verification and code/security
