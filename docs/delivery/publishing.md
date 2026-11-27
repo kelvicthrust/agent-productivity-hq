@@ -10,9 +10,17 @@ In npm package settings, add a GitHub Actions [trusted publisher](https://docs.n
 
 Configure both publishers when the first new release is ready. Each configuration expires unless it completes its first new publish within two days. A manual build or a comparison with an already published version leaves the configuration unvalidated. [npm expiry rules](https://docs.npmjs.com/trusted-publishers/#trusted-publisher-configuration-expiry)
 
+### Prepare a release from labels
+
+Add `release:patch` for a compatible fix, `release:minor` for a compatible feature, or `release:major` for a breaking change to any change PR before merging it into `main`. **Prepare release** uses the highest label on merged PRs since the last published release to maintain one draft PR on `automation/hq-release`. Unlabeled changes can also appear in the draft notes. Use **Actions → Prepare release → Run workflow** on `main` to reconcile labels changed after a PR merged.
+
+Review the version and edit the generated [What's new](#draft-whats-new) file in the draft. The workflow preserves those edits when it refreshes the draft. If GitHub shows **Approve workflows to run**, approve the checks, then mark the PR ready and merge it once **Check release version** passes. GitHub requires **Allow GitHub Actions to create and approve pull requests** in the repository's Actions settings for the draft creation. [GitHub workflow approval](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
+
+If a higher-labeled change merges ahead of a stale release PR, **Release** blocks the lower version before building or publishing. **Prepare release** queues a correction PR with the higher version. Review and merge that PR to continue.
+
 ### Publish a new version
 
-1. In the release PR, update the stable version in `package.json`, `packages/cli/package.json`, and `plugins/paseo-agent-productivity/package.json` together. Match the version in both entries in `plugins/paseo-agent-productivity/package-lock.json`. Use a patch bump for fixes, a minor bump for compatible features, or a major bump for breaking changes. Include the matching [What's new](#draft-whats-new) Markdown.
+1. In the release PR, check that the stable version matches in `package.json`, `packages/cli/package.json`, `plugins/paseo-agent-productivity/package.json`, and both entries in `plugins/paseo-agent-productivity/package-lock.json`. For a manual release PR, update those versions together and include the matching [What's new](#draft-whats-new) Markdown.
 2. Confirm **Check release version** passes before merging the reviewed PR into `main`. The higher version starts the Release workflow and serves as the release signal. Merges that leave the version unchanged skip publication. **Run workflow** still builds archives for testing.
 3. Follow the workflow run. It publishes both packages under `next`, verifies the downloaded bytes from npm, promotes both to `latest`, and tags the tested commit. GitHub uses the reviewed Markdown as the release body and attaches it alongside both tarballs and `SHA256SUMS`. A new npm package version can take several minutes to become downloadable after acceptance.
 
