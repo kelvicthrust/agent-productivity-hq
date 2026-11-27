@@ -35,7 +35,6 @@ const pkg = JSON.parse(read('package.json')) as {
 };
 const cli = JSON.parse(read('packages/cli/package.json')) as {
   name: string;
-  version: string;
   bin: Record<string, string>;
 };
 
@@ -56,7 +55,7 @@ const facts = (override: Partial<ReadmeInput> = {}): ReadmeInput => ({
   engines: pkg.engines.node,
   packageManager: pkg.packageManager,
   cliPackage: cli.name,
-  cliArchive: `${cli.name.slice(1).replace('/', '-')}-${cli.version}.tgz`,
+  cliArchive: `${cli.name.slice(1).replace('/', '-')}-VERSION.tgz`,
   cliCommand: Object.keys(cli.bin)[0]!,
   host: LOOPBACK_HOST,
   port: DEFAULT_PORT,
@@ -130,11 +129,14 @@ describe('the README and setup guide match package.json and the code', () => {
       ]);
     });
 
-    it('a fallback command out of sync with the CLI archive', () => {
-      expect(problems({ cliArchive: 'other.tgz' })).toEqual([
-        'The setup guide must show the npx command for the packed CLI',
-      ]);
-    });
+    it.each([{ cliArchive: 'other.tgz' }, { cliCommand: 'other-cli' }])(
+      'a fallback command out of sync with the CLI archive or binary (%j)',
+      (override) => {
+        expect(problems(override)).toEqual([
+          'The setup guide must show the npx command for the packed CLI',
+        ]);
+      },
+    );
 
     it('a script renamed in package.json', () => {
       const { start, ...rest } = pkg.scripts;

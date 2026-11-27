@@ -237,9 +237,12 @@ describe('turning it on and off', () => {
   it('turns on with one PUT that carries the app header, says so politely, and the page follows', async () => {
     const rig = mount();
     const panel = await section();
-    expect(screen.queryAllByRole('status').every((node) => (node.textContent ?? '') === '')).toBe(
-      true,
-    );
+    // The background-work switch can announce loading in Astryx's shared live region.
+    expect(
+      within(panel)
+        .queryAllByRole('status')
+        .every((node) => (node.textContent ?? '') === ''),
+    ).toBe(true);
     fireEvent.click(within(panel).getByRole('button', { name: 'Turn on' }));
     const puts = () => rig.calls.filter((call) => call.method === 'PUT');
     await waitFor(() => expect(puts()).toHaveLength(1));

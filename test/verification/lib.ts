@@ -328,8 +328,6 @@ export function readmeProblems(input: ReadmeInput): string[] {
     problems.push('The README must show the launch table before the source instructions');
 
   const launchRows = new Map(tableRows(section(readme, launchHeading)).map((row) => [row[0], row]));
-  const archivePath = `/absolute/path/to/${input.cliArchive}`;
-  const archiveCommand = `npx --package="${archivePath}" ${input.cliCommand}`;
   for (const [method, setupLink, action] of [
     [
       'Terminal',
@@ -347,7 +345,10 @@ export function readmeProblems(input: ReadmeInput): string[] {
       );
   }
   const terminalSetup = section(setup, '## Run a release archive with npx');
-  if (!terminalSetup.includes(archiveCommand))
+  if (
+    !terminalSetup.includes(`archive="/absolute/path/to/${input.cliArchive}"`) ||
+    !terminalSetup.includes(`npx --package="$archive" ${input.cliCommand}`)
+  )
     problems.push('The setup guide must show the npx command for the packed CLI');
 
   // Commands in either document are defined in the manifest. Together they must cover every script.
