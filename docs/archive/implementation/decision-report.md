@@ -30,5 +30,7 @@ Transcript import continues independently, and legacy hook installations retain 
 restoring the original setting.
 
 The endpoint is undocumented and may change. Anthropic restricts third-party subscription
-credential use. The local action gate limits collection, and distribution remains subject to
-provider approval. [Anthropic credential guidance](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
+credential use. The local action gate limits collection. The project initially held public
+distribution pending provider approval. The
+[release review](../../delivery/public-release-review.md#provider-credential-access) records the
+maintainer's later decision and links to Anthropic's credential guidance.

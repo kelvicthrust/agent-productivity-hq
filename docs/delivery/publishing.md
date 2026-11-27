@@ -1,9 +1,5 @@
 # Publish Agent Productivity HQ
 
-Public product distribution remains on hold pending resolution of the provider-authorization
-requirement in the [public release review](public-release-review.md). The maintainer runs this
-procedure after that hold is cleared and public release is authorized.
-
 ## Release with GitHub Actions
 
 The [Release workflow](../../.github/workflows/release.yml) builds both packages on a GitHub-hosted Apple Silicon runner. It runs `pnpm verify` and both package smoke tests, then uploads the tarballs and `SHA256SUMS` to the workflow run. Use **Actions → Release → Run workflow** to build and download these assets without publishing.
@@ -62,9 +58,8 @@ Use this procedure when you need to exercise installed packages on your own Mac 
    `SHA256SUMS`, and attach the Markdown file with the archives.
    [GitHub release instructions](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
-4. Once the distribution hold is cleared, make `kelvicthrust/agent-productivity-hq` public
-   under **Settings → General → Danger Zone → Change repository visibility**. Verify that
-   the source loads in a signed-out session. [GitHub visibility instructions](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility)
+4. Verify that the [release repository](https://github.com/kelvicthrust/agent-productivity-hq)
+   loads in a signed-out session.
 
 Rebuild with `pnpm pack:cli` and `pnpm pack:paseo` on Apple Silicon if the approved source changes.
 Use Node.js 26 or newer for the source build and npm 11 on `PATH` to pack the Paseo publication lock.
