@@ -21,6 +21,7 @@ import type {
   RecordsResponse,
 } from '../../src/shared/contracts/prs.ts';
 import type { SeriesResponse, YearResponse } from '../../src/shared/contracts/series.ts';
+import type { WorkReviewState } from '../../src/shared/contracts/work-review.ts';
 import { RefreshRun } from '../../src/shared/contracts/sources.ts';
 import type {
   ModelsResponse,
@@ -36,6 +37,7 @@ it('keeps the installed plugin report types aligned with the local API codecs', 
   type Operations = (typeof reportOperations)[number];
   type ApiOutputs = {
     overview: z.output<typeof OverviewResponse>;
+    workReview: WorkReviewState;
     series: z.output<typeof SeriesResponse>;
     year: z.output<typeof YearResponse>;
     models: z.output<typeof ModelsResponse>;
@@ -79,6 +81,9 @@ it('does not dispatch an unregistered operation or accept a route as an argument
   const call = createPaseoNative({ server: { app }, config: { host: '127.0.0.1', port: 4317 } });
   for (const request of [
     { operation: 'reset' },
+    { operation: 'workReviewGenerate' },
+    { operation: 'workReview', parameters: { version: 0 } },
+    { operation: 'workReview', parameters: { consent: true } },
     { operation: 'claudeHooks' },
     { operation: 'claudePlanCheck' },
     { operation: 'constructor' },
@@ -108,6 +113,7 @@ it('uses the guarded report routes and their query filters', async () => {
     const range = 'start=2026-11-02&end=2026-11-04';
     const calls = [
       ['overview', { ...span, provider: 'codex' }, `/api/overview?${range}&provider=codex`],
+      ['workReview', { ...span, provider: 'codex' }, `/api/work-review?${range}&provider=codex`],
       ['series', { ...span, gran: 'week' }, `/api/series?${range}&gran=week`],
       ['year', { author: 'all' }, '/api/year?author=all'],
       ['records', { ...span, limit: 1 }, `/api/records?${range}&limit=1`],

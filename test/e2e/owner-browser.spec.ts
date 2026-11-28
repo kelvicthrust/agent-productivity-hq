@@ -8,6 +8,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { getRequestListener } from '@hono/node-server';
 import type { Page } from '@playwright/test';
 import { boot, type ListenFn } from '../../src/server/boot.ts';
+import { saveVersion } from '../../src/server/db/queries/work-review.ts';
 import { completeSetup } from '../../src/server/db/queries/setup.ts';
 import { TAILSCALE_LOGIN_HEADER } from '../../src/server/http/guards.ts';
 import { OWNER_BROWSER_CODE_FILE } from '../../src/server/http/owner-browser.ts';
@@ -84,6 +85,28 @@ async function withPrivateShare(
     });
     try {
       completeSetup(server.db!, { at: now, timezone: FIXED_TIMEZONE });
+      const scope = JSON.stringify([
+        '2026-11-02',
+        '2026-11-08',
+        FIXED_TIMEZONE,
+        [],
+        'all',
+        'mine',
+        null,
+      ]);
+      for (const version of [1, 2]) {
+        saveVersion(server.db!, scope, now, 'fixture', {
+          version,
+          createdAt: new Date(now).toISOString(),
+          headline:
+            version === 2
+              ? 'Shipped the dashboard improvements.'
+              : 'Started the dashboard improvements.',
+          headlineEvidence: [],
+          bullets: [],
+          coverage: [],
+        });
+      }
       const share = await server.attachRemote!({ host, ownerLogin });
       await run({
         origin,
@@ -155,13 +178,21 @@ test('Open full dashboard enters a fresh browser without the owner code @a11y @r
 
     await page.reload();
     await expect(page.getByRole('heading', { name: /^Overview:/ })).toBeVisible();
-    await page.getByRole('link', { name: 'Delivery' }).click();
+    const summary = page.getByRole('button', { name: /Work Review.*Shipped the dashboard/ });
+    await expect(summary).toBeVisible();
+    await summary.click();
+    const review = page.getByRole('dialog', { name: /Weekly work review/i });
+    await expect(review.getByText('Shipped the dashboard improvements.')).toBeVisible();
+    await expect(review.getByRole('button', { name: 'Copy update' })).toBeVisible();
+    await expect(review).toHaveCSS('opacity', '1');
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await review.getByRole('link', { name: 'View saved reviews' }).click();
     await expect(page.getByRole('heading', { name: 'Delivery', exact: true })).toBeVisible();
-    await page.getByRole('radio', { name: 'Work Review' }).click();
-    await expect(page.getByRole('link', { name: 'Open owner Work Review' })).toHaveAttribute(
-      'href',
-      '/work-review',
-    );
+    await expect(page.getByText('Shipped the dashboard improvements.')).toBeVisible();
+    await page.getByLabel('Review version').selectOption('1');
+    await expect(page.getByText('Started the dashboard improvements.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open owner Work Review' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Unlock Agent HQ' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'ChatGPT plan' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Sources & repos' }).click();
     await expect(page.getByRole('heading', { name: 'Sources & repos', exact: true })).toBeVisible();

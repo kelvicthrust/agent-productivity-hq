@@ -31,6 +31,12 @@ Use the pinned versions and scripts in [package.json](package.json) and
 Tailwind + Astryx, Hono and SQLite. Follow the layer/import rules in [TECH.md](TECH.md).
 Generate theme files from `design-system/DESIGN.md`; never edit generated theme output by hand.
 
+Keep the main dashboard and the Paseo plugin in 1:1 feature and behavior parity.
+For every main-dashboard feature or change, update the corresponding Paseo plugin
+experience in the same PR and verify both surfaces. Match the behavior, states,
+and actions using each surface’s native controls and documented access policy.
+For a shared web change, also check the remote dashboard opened from Paseo.
+
 Keep local usage and account reports separate. Paseo adds enrichment, never tokens. Count a PR once
 regardless of its linked sessions, and never allocate session tokens to PRs. Read transcript content in memory only. Retain permitted metadata and evidence identifiers. The [Work Review](docs/tech/data-and-sources.md#work-review) opt-in permits sending selected excerpts to OpenAI and retaining derived notes and reports. Preserve loopback-only
 serving, the outbound boundary and approved credential storage. The app changes a provider's settings only when the owner

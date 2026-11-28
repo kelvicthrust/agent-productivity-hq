@@ -1,14 +1,15 @@
 import type { PluginScreenProps } from '@getpaseo/plugin/client';
 import { View } from 'react-native';
 import { formatRange } from '../shared/reporting-dates.ts';
-import { periodOf, searchFor } from '../shared/reporting-filters.ts';
+import { periodOf } from '../shared/reporting-filters.ts';
 import { colors } from '../shared/reporting-palette.ts';
 import type { NativeRequest } from './native-api.ts';
+import { NativeAbout } from './native-about.tsx';
 import { NativeDelivery } from './native-delivery.tsx';
 import { NativeOverview, NativeOverviewHeading } from './native-overview.tsx';
 import { NativeRosterPanel } from './native-roster.tsx';
 import { useDashboardRefresh } from './native-refresh.ts';
-import { deliveryScope, usageScope } from './native-report-details.tsx';
+import { deliveryScope, ReportSegments, usageScope } from './native-report-details.tsx';
 import {
   ReportingFilters,
   reportPeriodLabel,
@@ -25,12 +26,14 @@ import {
   useDashboardLayout,
 } from './native-ui.tsx';
 import { NativeUsage } from './native-usage.tsx';
+import { NativeWorkReview, NativeWorkReviewPreview } from './native-work-review.tsx';
 
 const names = {
   hq: 'HQ',
   overview: 'Overview',
   trends: 'Trends',
   delivery: 'Delivery',
+  'work-review': 'Delivery',
   usage: 'Usage',
   sources: 'Sources & repos',
 };
@@ -42,17 +45,18 @@ export function NativeDashboard({
   request,
   onSetupRequired,
   onOpenOwnerSettings,
-  onOpenWorkReview,
+  onOpenDashboard,
 }: Pick<PluginScreenProps, 'host' | 'navigation'> & {
   page: DashboardPage;
   request: NativeRequest;
   onSetupRequired(): void;
   onOpenOwnerSettings(): void;
-  onOpenWorkReview(search: string): void;
+  onOpenDashboard(): void;
 }) {
   const refresh = useDashboardRefresh();
   const { compact } = useDashboardLayout();
   const { bootstrap, filters, navigate } = useDashboard();
+  const delivery = page === 'delivery' || page === 'work-review';
   const actions = (
     <NativeActions>
       {compact && (
@@ -76,6 +80,13 @@ export function NativeDashboard({
         disabled={refresh.busy}
         onPress={() => refresh.refresh()}
       />
+      <NativeButton
+        label="Open full dashboard"
+        icon="ExternalLink"
+        iconOnly={compact}
+        onPress={onOpenDashboard}
+      />
+      <NativeAbout />
     </NativeActions>
   );
   const refreshNotice = (
@@ -97,6 +108,7 @@ export function NativeDashboard({
         onSetupRequired={onSetupRequired}
         headingActions={actions}
         refreshNotice={refreshNotice}
+        workReview={<NativeWorkReviewPreview />}
       />
     );
   }
@@ -110,8 +122,12 @@ export function NativeDashboard({
             ? `by ${filters.gran}`
             : page === 'delivery'
               ? deliveryScope(filters)
-              : usageScope(filters),
-        ].join(' · ');
+              : page === 'work-review'
+                ? null
+                : usageScope(filters),
+        ]
+          .filter(Boolean)
+          .join(' · ');
   return (
     <>
       <View
@@ -138,19 +154,21 @@ export function NativeDashboard({
       </View>
       {refreshNotice}
       {page !== 'sources' && <ReportingFilters key={page} page={page} />}
-      {page === 'overview' && (
-        <>
-          <NativeOverview />
-          <NativeActions>
-            <NativeButton
-              label="Open Work Review"
-              onPress={() => onOpenWorkReview(searchFor('', filters, bootstrap))}
-            />
-          </NativeActions>
-        </>
-      )}
+      {page === 'overview' && <NativeOverview workReview={<NativeWorkReviewPreview />} />}
       {page === 'trends' && <NativeTrends />}
+      {delivery && (
+        <ReportSegments
+          label="Delivery section"
+          options={[
+            { value: 'delivery', label: 'Merged PRs' },
+            { value: 'work-review', label: 'Work Review' },
+          ]}
+          value={page}
+          onChange={navigate}
+        />
+      )}
       {page === 'delivery' && <NativeDelivery compact={compact} />}
+      {page === 'work-review' && <NativeWorkReview />}
       {page === 'usage' && <NativeUsage compact={compact} />}
       {page === 'sources' && (
         <NativeSources

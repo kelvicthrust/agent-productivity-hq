@@ -9,6 +9,7 @@ import { overviewQuery } from '../../../lib/analytics';
 import { apiGet, apiSend, queryString } from '../../../lib/api';
 import { useBootstrap } from '../../../lib/bootstrap';
 import { weekEnd, weekStart, type Filters } from '../../../lib/filters';
+import { isPaseoBrowser } from '../../../lib/paseoBrowser';
 import { queryKeys } from '../../../lib/queryClient';
 
 const PATH = '/api/work-review';
@@ -36,8 +37,10 @@ export function useWorkReview(filters: Filters, version?: number) {
     filters.author === 'mine' &&
     filters.provider === 'all' &&
     filters.repos.length === 0;
-  const automation = useReviewAutomation(automationScope);
-  const followAutomaticUpdates = automationScope && !automation.isError && automation.data?.enabled;
+  const paseo = isPaseoBrowser();
+  const automation = useReviewAutomation(automationScope && !paseo);
+  const followAutomaticUpdates =
+    automationScope && (paseo || (!automation.isError && automation.data?.enabled));
   return useQuery({
     queryKey: reviewKey(filters, version),
     queryFn: async ({ signal }) => {
@@ -45,7 +48,7 @@ export function useWorkReview(filters: Filters, version?: number) {
         signal,
         query: { ...overviewQuery(filters), version },
       });
-      if (state.status === 'failed')
+      if (!paseo && state.status === 'failed')
         void client.invalidateQueries({ queryKey: ACCOUNT_KEY, exact: true });
       return state;
     },
@@ -84,9 +87,10 @@ export function useGenerateWorkReview(filters: Filters) {
   });
 }
 
-export function useReviewAccount(pollPending = false) {
+export function useReviewAccount(pollPending = false, enabled = true) {
   return useQuery({
     queryKey: ACCOUNT_KEY,
+    enabled,
     queryFn: ({ signal }) => apiGet(ACCOUNT_PATH, WorkReviewAccount, { signal }),
     refetchInterval: (query) =>
       pollPending && query.state.data?.status === 'pending' ? 2_000 : false,

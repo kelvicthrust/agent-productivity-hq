@@ -82,9 +82,11 @@ sign-in in a browser on the Mac running HQ. The first sign-in registers this ins
 with OpenAI and keeps its connection in macOS Keychain. You can disconnect or choose a
 different account from Work Review.
 
-In Paseo, use **Overview → Open Work Review** to carry your selected filters into the owner
-dashboard. If you already opened the full browser dashboard from Paseo, use **Open owner Work
-Review**. Open Work Review with the [Mac owner's browser unlock code](#unlock-the-owner-browser).
+In Paseo, read and copy saved reports from the Work Review card on **HQ** or **Overview**.
+The remote browser dashboard shows the card on **Overview**. Both surfaces show saved
+versions under **Delivery → Work Review** using ordinary Paseo dashboard access.
+To manage the connection or generate a report, use the local dashboard or open
+`/work-review` at the private dashboard origin with the [Mac owner's browser unlock code](#unlock-the-owner-browser).
 
 Select a period and choose **Generate update** to confirm which evidence goes to OpenAI.
 Opening a saved review uses no plan allowance. If GPT-6 Luna is unavailable to the
@@ -154,7 +156,7 @@ for up to eight hours or until the share closes. Launch a fresh browser session 
 
 #### Unlock the owner browser
 
-For **Open owner settings** or **Open Work Review**, open `paseo-browser-code.txt` as the macOS account running Paseo.
+For **Open owner settings** or Work Review management at `/work-review`, open `paseo-browser-code.txt` as the macOS account running Paseo.
 The default location is `~/Library/Application Support/agent-productivity/paseo-browser-code.txt`.
 Enter its current code in the unlock form. Use an owner-only HQ data directory without macOS
 access-control list entries for browser sharing. Closing the share removes the code file and

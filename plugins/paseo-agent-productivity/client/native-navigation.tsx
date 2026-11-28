@@ -25,7 +25,7 @@ export function NativeNavigation({
   const { compact, rail } = useDashboardLayout();
   const entries = compact ? pages.filter(([page]) => page !== 'hq') : pages;
   const items = entries.map(([page, name, icon, shortName]) => {
-    const active = current === page;
+    const active = current === page || (current === 'work-review' && page === 'delivery');
     const showIssues = page === 'sources' && issues > 0;
     const label = compact ? (shortName ?? name) : name;
     return (

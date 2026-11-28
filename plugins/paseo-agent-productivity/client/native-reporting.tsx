@@ -26,7 +26,8 @@ import {
   useDashboardLayout,
 } from './native-ui.tsx';
 
-export type DashboardPage = 'hq' | 'overview' | 'trends' | 'delivery' | 'usage' | 'sources';
+export type DashboardPage =
+  'hq' | 'overview' | 'trends' | 'delivery' | 'work-review' | 'usage' | 'sources';
 export interface DrillDown {
   start: string;
   end: string;
@@ -155,7 +156,11 @@ export function reportPeriodLabel(period: PeriodPreset | 'custom') {
   return presets.find(([key]) => key === period)?.[1] ?? 'Custom range';
 }
 
-export function ReportingFilters({ page }: { page: 'overview' | 'trends' | 'delivery' | 'usage' }) {
+export function ReportingFilters({
+  page,
+}: {
+  page: 'overview' | 'trends' | 'delivery' | 'work-review' | 'usage';
+}) {
   const { filters, bootstrap, changeFilters } = useDashboard();
   const { compact } = useDashboardLayout();
   const [expanded, setExpanded] = useState(false);

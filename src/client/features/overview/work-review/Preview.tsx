@@ -35,19 +35,13 @@ export function WorkReviewPreview({
 }) {
   return (
     <section aria-label="Work Review">
-      {isPaseoBrowser() ? (
-        <a href={`/work-review${searchFor('', filters, ctx)}`} className={CARD}>
-          <CardContent>Open owner Work Review</CardContent>
-        </a>
-      ) : (
-        <PreviewContent
-          key={reviewScopeKey(filters)}
-          filters={filters}
-          href={`/delivery${searchFor('section=work-review', filters, ctx)}`}
-          timeZone={timeZone}
-          period={periodOf(filters, ctx)}
-        />
-      )}
+      <PreviewContent
+        key={reviewScopeKey(filters)}
+        filters={filters}
+        href={`/delivery${searchFor('section=work-review', filters, ctx)}`}
+        timeZone={timeZone}
+        period={periodOf(filters, ctx)}
+      />
     </section>
   );
 }
@@ -225,7 +219,8 @@ function ReviewFooter({
   href: string;
   copyFeedback: HTMLDivElement | null;
 }) {
-  const account = useReviewAccount();
+  const canManage = !isPaseoBrowser();
+  const account = useReviewAccount(false, canManage);
   const review = state?.review;
   const copyButton = useRef<HTMLButtonElement>(null);
   const [sawGeneration, setSawGeneration] = useState(false);
@@ -239,12 +234,13 @@ function ReviewFooter({
     if (doc.activeElement === doc.body && doc.hasFocus()) button.focus({ preventScroll: true });
   }, [completed]);
 
-  const canGenerate = account.data?.status === 'connected' && !account.isError;
-  const connect = !review && state && !loadFailed && !account.isPending && !canGenerate;
+  const canGenerate = canManage && account.data?.status === 'connected' && !account.isError;
+  const connect =
+    canManage && !review && state && !loadFailed && !account.isPending && !canGenerate;
   return (
     <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-border px-4 py-3 min-[551px]:px-[22px] min-[551px]:py-[15px] [&>button]:justify-self-end [&>p]:col-span-full">
       <Link to={href} className={`${REVIEW_LINK} max-w-full [overflow-wrap:anywhere]`}>
-        {connect ? 'Manage ChatGPT connection' : 'Manage review'}
+        {connect ? 'Manage ChatGPT connection' : canManage ? 'Manage review' : 'View saved reviews'}
       </Link>
       {review ? (
         <CopyReview

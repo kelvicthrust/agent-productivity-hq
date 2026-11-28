@@ -24,6 +24,7 @@ type PrSession = { prId: string; sessionId: number };
 
 export interface ReportInputs {
   overview: OverviewFilters;
+  workReview: OverviewFilters & { version?: number | undefined };
   series: OverviewFilters & { gran?: Granularity | undefined };
   year: Pick<OverviewFilters, 'repos' | 'author'>;
   models: UsageFilters;
@@ -42,6 +43,7 @@ export interface ReportInputs {
 
 export const reportOperations = [
   'overview',
+  'workReview',
   'series',
   'year',
   'models',
@@ -455,6 +457,7 @@ export interface RefreshRun {
 }
 
 export interface ReportOutputs {
+  workReview: WorkReviewState;
   overview: OverviewResponse;
   series: SeriesResponse;
   year: YearResponse;
@@ -469,4 +472,35 @@ export interface ReportOutputs {
   usageRoots: UsageRootsResponse;
   refresh: RefreshRun;
   refreshStatus: RefreshRun;
+}
+
+export interface WorkReviewEvidence {
+  kind: 'pr' | 'session';
+  id: string;
+  label: string;
+  date: string;
+  repo: string | null;
+  notes?: string[] | undefined;
+}
+
+export interface WorkReviewVersion {
+  version: number;
+  createdAt: string;
+  headline: string;
+  headlineEvidence: WorkReviewEvidence[];
+  bullets: {
+    kind: 'shipped' | 'team' | 'progress' | 'open';
+    text: string;
+    evidence: WorkReviewEvidence[];
+  }[];
+  coverage: string[];
+}
+
+export interface WorkReviewState {
+  status: 'idle' | 'running' | 'failed';
+  message: string | null;
+  review: WorkReviewVersion | null;
+  versions: number[];
+  changed: boolean;
+  locked: boolean;
 }
