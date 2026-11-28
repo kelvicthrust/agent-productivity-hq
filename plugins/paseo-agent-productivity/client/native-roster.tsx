@@ -244,11 +244,13 @@ export function NativeRosterPanel({
   onSetupRequired,
   headingActions,
   refreshNotice,
+  workReview,
 }: Pick<PluginScreenProps, 'host' | 'navigation'> & {
   request: NativeRequest;
   onSetupRequired(): void;
   headingActions?: ReactNode;
   refreshNotice?: ReactNode;
+  workReview?: ReactNode;
 }) {
   const [roster, setRoster] = useState<NativeRoster>();
   const [problem, setProblem] = useState<string>();
@@ -314,6 +316,7 @@ export function NativeRosterPanel({
         {headingActions}
       </View>
       {refreshNotice}
+      {workReview}
       {problem ? (
         <View style={{ gap: 8 }}>
           <NativeProblem message={problem} />

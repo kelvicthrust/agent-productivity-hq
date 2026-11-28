@@ -10,10 +10,11 @@ import { ApiError, type ErrorEnvelope } from '../../shared/contracts/errors.ts';
 import type { HttpEnv } from './errors.ts';
 
 // These are the web equivalents of the native Paseo reporting and management operations.
-// Setup runs in Paseo. Owner-only actions, even read-only previews, require the owner session.
+// Setup runs in Paseo. Review generation, account, and settings require the owner session.
 const operations: Readonly<Record<string, readonly RegExp[]>> = {
   GET: [
     /^\/api\/(?:bootstrap|hq|overview|series|year|models|records|sources|paseo-quota)$/,
+    /^\/api\/work-review$/,
     /^\/api\/prs(?:\/[^/]+)?$/,
     /^\/api\/usage\/(?:categories|groups(?:\/[^/]+\/roots)?)$/,
     /^\/api\/repos(?:\/discover)?$/,

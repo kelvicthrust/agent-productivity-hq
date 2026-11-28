@@ -22,6 +22,7 @@ import {
   UsageGroupsResponse,
   UsageRootsResponse,
 } from '../shared/contracts/usage.ts';
+import { WorkReviewState } from '../shared/contracts/work-review.ts';
 import { CSRF_HEADER, CSRF_VALUE } from './http/guards.ts';
 import { MAX_PRS_LIMIT, MAX_SEARCH_LENGTH } from './services/delivery.ts';
 import { MAX_RECORDS_LIMIT } from './services/metrics.ts';
@@ -183,6 +184,11 @@ const nativeRoutes = {
   usageFallback: (value: unknown) =>
     post(`/api/paseo-quota/${fallback.parse(value).provider}/check`),
   overview: report('/api/overview', overview, OverviewResponse),
+  workReview: report(
+    '/api/work-review',
+    overview.extend({ version: z.int().positive().optional() }),
+    WorkReviewState,
+  ),
   series: report('/api/series', series, SeriesResponse),
   year: report('/api/year', year, YearResponse),
   models: report('/api/models', usage, ModelsResponse),

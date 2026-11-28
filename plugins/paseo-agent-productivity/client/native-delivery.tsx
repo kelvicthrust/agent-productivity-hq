@@ -160,7 +160,7 @@ function useLinkActions() {
   return { ...action, feedback, perform, undo };
 }
 
-function PullRequestTitle({ pr }: { pr: PullRequest }) {
+export function PullRequestTitle({ pr }: { pr: PullRequest }) {
   const open = useNativeAction();
   let href: string | undefined;
   try {

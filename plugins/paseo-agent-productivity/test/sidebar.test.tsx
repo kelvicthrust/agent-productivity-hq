@@ -22,6 +22,7 @@ const {
   useWorkspace,
   listWorkspaces,
   externalBrowser,
+  copyText,
 } = vi.hoisted(() => ({
   useSettings: vi.fn(),
   launch: vi.fn(),
@@ -33,6 +34,7 @@ const {
   useWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
   externalBrowser: { open: undefined as ((url: string) => Promise<void>) | undefined },
+  copyText: vi.fn(),
 }));
 vi.mock('@getpaseo/plugin/client', () => ({
   useSettings,
@@ -62,10 +64,19 @@ vi.mock('@getpaseo/plugin/client', () => ({
   },
 }));
 vi.mock('@getpaseo/plugin/client/ui', () => ({
+  copyText,
   ExternalLink: ({ href, children }: { href: string; children: ReactNode }) => (
     <a href={href}>{children}</a>
   ),
   Icon: () => null,
+  Modal: Object.assign(
+    ({ title, children }: { title: string; children: ReactNode }) => (
+      <div role="dialog" aria-label={title}>
+        {children}
+      </div>
+    ),
+    { Content: ({ children }: { children: ReactNode }) => <div>{children}</div> },
+  ),
   WorkspaceRowBadge: ({ label, tone }: { label: string; tone: string }) => (
     <span data-tone={tone}>{label}</span>
   ),
@@ -326,12 +337,14 @@ function openDashboard() {
 }
 
 beforeEach(() => {
+  copyText.mockReset().mockResolvedValue(undefined);
   native.mockReset().mockImplementation(async ({ operation }) => {
     if (operation === 'bootstrap') return ok({ setupComplete: true });
     if (operation === 'roster') return ok({ agents: [], feeds: [], truncated: false });
     if (operation === 'sources') return ok({ sources: [], accounts: [] });
     if (operation === 'repos') return ok({ active: [] });
     if (operation === 'usage') return ok({ providers: [] });
+    if (operation === 'workReview') return ok({ status: 'idle', review: null, versions: [] });
     throw new Error(`Unexpected operation ${operation}`);
   });
   installNativeRuntime.mockReset();
@@ -1036,24 +1049,67 @@ it('opens owner settings at the protected Sources destination after an explicit 
   expect(handoff).not.toHaveBeenCalled();
 });
 
-it('opens Work Review at the protected owner destination from Overview', async () => {
-  const openExternal = vi.fn(async () => {});
-  externalBrowser.open = openExternal;
+it('shows the saved review on launch, with evidence and versions accessible in Paseo', async () => {
+  const fallback = native.getMockImplementation()!;
+  native.mockImplementation(async (input) => {
+    if (input.operation !== 'workReview') return fallback(input);
+    const version = input.parameters?.version ?? 2;
+    return ok({
+      status: 'idle',
+      review: {
+        version,
+        createdAt: '2026-11-20T12:00:00Z',
+        headline:
+          version === 2
+            ? 'Shipped the dashboard improvements.'
+            : 'Started the dashboard improvements.',
+        headlineEvidence: [
+          {
+            kind: 'session',
+            id: '1',
+            label: 'Agent session',
+            date: '2026-11-20',
+            repo: null,
+            notes: ['Updated the main dashboard.'],
+          },
+        ],
+        bullets: [],
+        coverage: [],
+      },
+      versions: [2, 1],
+    });
+  });
   renderLauncher(vi.fn());
   fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
-  await screen.findByText('Live agents aren’t available in this session.');
-  fireEvent.click(screen.getByRole('tab', { name: /^Overview/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Filters' }));
-  fireEvent.click(await screen.findByRole('radio', { name: 'Last week' }));
-  const review = await screen.findByRole('button', { name: 'Open Work Review' });
-  expect(launch).not.toHaveBeenCalled();
-  expect(openExternal).not.toHaveBeenCalled();
-  fireEvent.click(review);
-  await waitFor(() =>
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-      privateUrl + '/work-review?start=2026-11-09&end=2026-11-15',
-    ),
+  const card = await screen.findByRole('button', { name: /Work Review.*Shipped the dashboard/ });
+  expect(native).toHaveBeenCalledWith({
+    operation: 'workReview',
+    parameters: { start: '2026-11-16', end: '2026-11-22', provider: 'all', author: 'mine' },
+  });
+  fireEvent.click(card);
+  expect(screen.getByRole('dialog', { name: 'Weekly work review' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Agent session' }));
+  expect(screen.getByText(/Updated the main dashboard/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Copy update' }));
+  await screen.findByText('Copied to clipboard.');
+  expect(copyText).toHaveBeenCalledWith(
+    expect.stringContaining('Shipped the dashboard improvements.'),
   );
-  expect(launch).toHaveBeenCalledExactlyOnceWith({});
+  fireEvent.click(screen.getByRole('button', { name: 'View saved reviews' }));
+  fireEvent.click(await screen.findByRole('radio', { name: 'Version 1' }));
+  await screen.findByRole('heading', { name: 'Started the dashboard improvements.' });
+  expect(launch).not.toHaveBeenCalled();
   expect(handoff).not.toHaveBeenCalled();
+});
+
+it('puts the full dashboard and About actions beside Refresh', async () => {
+  renderLauncher(vi.fn());
+  fireEvent.click(screen.getByRole('button', { name: 'Agent HQ' }));
+  const refresh = await screen.findByRole('button', { name: 'Refresh' });
+  const launchButton = screen.getByRole('button', { name: 'Open full dashboard' });
+  expect(refresh.nextElementSibling).toBe(launchButton);
+  fireEvent.click(screen.getByRole('button', { name: 'About Agent Productivity HQ' }));
+  expect(screen.getByRole('dialog', { name: 'About Agent Productivity HQ' })).toBeTruthy();
+  expect(screen.getByText('App version')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Release notes' })).toBeTruthy();
 });

@@ -1,4 +1,4 @@
-export type DashboardDestination = 'sources' | 'work-review';
+export type DashboardDestination = 'sources';
 
 interface LaunchRequest {
   id: string;

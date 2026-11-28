@@ -85,7 +85,7 @@ In the browser, open **About Agent Productivity HQ** from the app bar to check y
 
 ### Generate a work update
 
-In **Overview**, choose your date range and select the **Work Review** card to read the full update. Use **Manage review** to open the same period in **Delivery → Work Review**. On first use, choose **Manage ChatGPT connection** to set up the separate sign-in. In Paseo, **Overview → Open Work Review** opens the owner dashboard with your selected filters. [Work Review setup and owner access](docs/delivery/setup.md#connect-work-review)
+In **Overview**, choose your date range and select the **Work Review** card to read the full update. Use **Manage review** to open the same period in **Delivery → Work Review**. On first use, choose **Manage ChatGPT connection** to set up the separate sign-in. In Paseo, the **Work Review** card is also on **HQ**. Both Paseo dashboards show saved reviews in **Delivery → Work Review**. [Work Review setup and owner access](docs/delivery/setup.md#connect-work-review)
 
 Choose **Generate update** and confirm to send selected session excerpts and PR metadata to OpenAI. Check the evidence on a bullet, or use **Copy update** for a team update. Opening saved reviews uses no model allowance. If new evidence arrives after a period closes, **Create revision** saves a new version.
 

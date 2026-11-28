@@ -35,12 +35,11 @@ function ProductivityScreen({
   const [launch, setLaunch] = useState<{
     id: string;
     destination?: DashboardDestination;
-    search?: string;
   }>();
   const [view, setView] = useState<{ page: DashboardPage; drill?: DrillDown }>({ page: 'hq' });
 
-  function openDashboard(destination?: DashboardDestination, search?: string) {
-    setLaunch({ id: requests.issue(props.host.id, destination), destination, search });
+  function openDashboard(destination?: DashboardDestination) {
+    setLaunch({ id: requests.issue(props.host.id, destination), destination });
   }
 
   return launch === undefined ? (
@@ -50,7 +49,6 @@ function ProductivityScreen({
       navigate={(page, drill) => setView({ page, drill })}
       onOpenDashboard={() => openDashboard()}
       onOpenOwnerSettings={() => openDashboard('sources')}
-      onOpenWorkReview={(search) => openDashboard('work-review', search)}
     />
   ) : (
     <>
@@ -63,7 +61,6 @@ function ProductivityScreen({
         {...props}
         params={{ launch: launch.id }}
         destination={launch.destination}
-        search={launch.search}
         requests={requests}
       />
     </>

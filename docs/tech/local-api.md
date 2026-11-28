@@ -770,7 +770,7 @@ paths:
         "502": { $ref: "#/components/responses/Error" }
   /api/work-review:
     get:
-      description: Read or poll a scoped review from local data. An optional version selects a saved revision. This read never starts a model run.
+      description: Read or poll a scoped review from local data. An optional version selects a saved revision. This read is available through the standard Paseo dashboard session and native reporting RPC and never starts a model run.
       parameters:
         - { $ref: "#/components/parameters/start" }
         - { $ref: "#/components/parameters/end" }

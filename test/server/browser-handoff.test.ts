@@ -148,7 +148,14 @@ it('grants the usual reports and management operations with owner-only routes de
     const { ticket } = share.issueBrowserTicket()!;
     const { credential } = (await (await exchange(ticket)).json()) as { credential: string };
     const headers = { ...writeHeaders, [PASEO_BROWSER_SESSION_HEADER]: credential };
-    for (const path of ['/api/overview', '/api/sources', '/api/repos', '/api/prs', '/api/hq']) {
+    for (const path of [
+      '/api/overview',
+      '/api/sources',
+      '/api/repos',
+      '/api/prs',
+      '/api/hq',
+      '/api/work-review',
+    ]) {
       expect((await request(path, { headers })).status, path).toBe(200);
     }
     for (const [method, path, body, status] of [
@@ -170,6 +177,10 @@ it('grants the usual reports and management operations with owner-only routes de
       ['PUT', '/api/hq/claude-hooks'],
       ['GET', '/api/accounts/claude/usage-capture/preview'],
       ['PUT', '/api/accounts/claude/usage-capture'],
+      ['GET', '/api/work-review/account'],
+      ['POST', '/api/work-review/account/connect'],
+      ['POST', '/api/work-review/account/disconnect'],
+      ['POST', '/api/work-review/generate'],
       ['GET', '/api/work-review/automation'],
       ['POST', '/api/work-review/automation'],
       ['POST', '/api/setup/reset'],

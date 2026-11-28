@@ -10,6 +10,7 @@ import {
   useNativePoll,
   useNativeRequest,
 } from './native-api.ts';
+import { NativeAbout } from './native-about.tsx';
 import { NativeDashboard } from './native-dashboard.tsx';
 import { NativeNavigation } from './native-navigation.tsx';
 import {
@@ -43,7 +44,6 @@ export function NativeScreen({
   navigate,
   onOpenDashboard,
   onOpenOwnerSettings,
-  onOpenWorkReview,
   ...surface
 }: PluginScreenProps & {
   page: DashboardPage;
@@ -51,7 +51,6 @@ export function NativeScreen({
   navigate(page: DashboardPage, drill?: DrillDown): void;
   onOpenDashboard(): void;
   onOpenOwnerSettings(): void;
-  onOpenWorkReview(search: string): void;
 }) {
   const request = useNativeRequest();
   const cache = useQueryClient();
@@ -156,11 +155,22 @@ export function NativeScreen({
       }
     >
       {mode === undefined && (
-        <View style={{ gap: 5 }}>
-          <NativeText heading size={28}>
-            Agent HQ
-          </NativeText>
-          <NativeText tone="foregroundMuted">{host.label}</NativeText>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+            <NativeText heading size={28}>
+              Agent HQ
+            </NativeText>
+            <NativeText tone="foregroundMuted">{host.label}</NativeText>
+          </View>
+          <NativeActions>
+            <NativeButton
+              label="Open full dashboard"
+              icon="ExternalLink"
+              iconOnly
+              onPress={onOpenDashboard}
+            />
+            <NativeAbout />
+          </NativeActions>
         </View>
       )}
       {mode === undefined ? (
@@ -230,15 +240,10 @@ export function NativeScreen({
             navigation={navigation}
             onSetupRequired={showSetup}
             onOpenOwnerSettings={onOpenOwnerSettings}
-            onOpenWorkReview={onOpenWorkReview}
+            onOpenDashboard={onOpenDashboard}
           />
         </ReportingProvider>
       ) : null}
-      {mode !== 'setup' && (
-        <NativeActions>
-          <NativeButton label="Open full dashboard" onPress={onOpenDashboard} />
-        </NativeActions>
-      )}
       {mode !== undefined && <NativeProjectCredit />}
     </NativePage>
   );

@@ -4,18 +4,17 @@ import { formatRange } from '../../../../shared/domain/periods';
 import { deliveryScopeLabel, usageScopeLabel } from '../../../../shared/domain/scope';
 import { ScopeLine } from '../../../components/ScopeLine';
 import { useBootstrap } from '../../../lib/bootstrap';
-import { searchFor, useFilters, type Filters } from '../../../lib/filters';
+import { useFilters, type Filters } from '../../../lib/filters';
 import { isPaseoBrowser } from '../../../lib/paseoBrowser';
 import { GenerateReview } from './GenerateReview';
-import { REVIEW_LINK } from './Preview';
 import { ReviewAccount } from './ReviewAccount';
 import { CopyReview, ReviewReport } from './ReviewReport';
 import { reviewScopeKey, useReviewAccount, useWorkReview } from './data';
 
 export function WorkReviewSection() {
-  const { filters, ctx } = useFilters();
+  const { filters } = useFilters();
   const timeZone = useBootstrap().data?.timezone;
-  const ownerLink = filters && ctx ? `/work-review${searchFor('', filters, ctx)}` : '/work-review';
+  const canManage = !isPaseoBrowser();
   return (
     <section aria-labelledby="delivery-review-title" className="flex min-w-0 flex-col gap-4">
       <div className="min-w-0">
@@ -28,30 +27,39 @@ export function WorkReviewSection() {
           </ScopeLine>
         )}
       </div>
-      {isPaseoBrowser() ? (
-        <a href={ownerLink} className={REVIEW_LINK}>
-          Open owner Work Review
-        </a>
-      ) : !filters || !timeZone ? (
+      {!filters || !timeZone ? (
         <p role="status" className="text-copy text-ink-muted">
           Loading work review…
         </p>
       ) : (
         <>
-          <ReviewScope key={reviewScopeKey(filters)} filters={filters} timeZone={timeZone} />
-          <ReviewAccount />
+          <ReviewScope
+            key={reviewScopeKey(filters)}
+            filters={filters}
+            timeZone={timeZone}
+            canManage={canManage}
+          />
+          {canManage && <ReviewAccount />}
         </>
       )}
     </section>
   );
 }
 
-function ReviewScope({ filters, timeZone }: { filters: Filters; timeZone: string }) {
+function ReviewScope({
+  filters,
+  timeZone,
+  canManage,
+}: {
+  filters: Filters;
+  timeZone: string;
+  canManage: boolean;
+}) {
   const [version, setVersion] = useState<number>();
   const result = useWorkReview(filters, version);
-  const account = useReviewAccount();
+  const account = useReviewAccount(false, canManage);
   const state = result.data;
-  const canGenerate = account.data?.status === 'connected' && !account.isError;
+  const canGenerate = canManage && account.data?.status === 'connected' && !account.isError;
 
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-md border border-border bg-surface p-4 shadow-card">
@@ -91,6 +99,11 @@ function ReviewScope({ filters, timeZone }: { filters: Filters; timeZone: string
       {state?.status === 'failed' && version === undefined && (
         <p role="alert" className="text-copy text-danger">
           {state.message ?? 'The work review couldn’t be generated. Try again.'}
+        </p>
+      )}
+      {!canManage && state?.status === 'running' && version === undefined && (
+        <p role="status" className="text-copy text-ink-muted">
+          Generating the work review…
         </p>
       )}
       {state?.review && state.changed && state.status === 'idle' && version === undefined && (

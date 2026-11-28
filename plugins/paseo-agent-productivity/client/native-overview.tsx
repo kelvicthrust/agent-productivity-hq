@@ -59,7 +59,7 @@ export function NativeOverviewHeading() {
   );
 }
 
-export function NativeOverview() {
+export function NativeOverview({ workReview }: { workReview: ReactNode }) {
   const { bootstrap, request } = useDashboard();
   const { width: screenWidth } = useDashboardLayout();
   const { start, end, repos, provider, author } = useReportFilters();
@@ -155,6 +155,7 @@ export function NativeOverview() {
           )}
         </>
       )}
+      {workReview}
       <View
         style={{
           gap: 16,

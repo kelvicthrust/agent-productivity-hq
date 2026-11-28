@@ -19,7 +19,6 @@ import type { DashboardDestination, LaunchRequests } from './launch.ts';
 interface LauncherScreenProps extends paseoClient.PluginScreenProps {
   requests: LaunchRequests;
   destination?: DashboardDestination;
-  search?: string;
 }
 
 const expiredHandoff = 'This browser handoff expired. Retry to open the dashboard.';
@@ -31,13 +30,12 @@ export function LauncherScreen({
   params,
   requests,
   destination,
-  search,
   theme,
 }: LauncherScreenProps) {
   const launch = paseoClient.useRpc(launchDashboard);
   const handoff = paseoClient.useRpc(browserHandoff);
   const install = paseoClient.useRpc(runtimeInstall);
-  const ownerView = destination === 'sources' || destination === 'work-review';
+  const ownerView = destination === 'sources';
   const externalOpen =
     typeof paseoClient.openExternalUrl === 'function' ? paseoClient.openExternalUrl : undefined;
   // Paseo Desktop also reports `web`. Only Desktop supplies workspace browser navigation.
@@ -156,12 +154,7 @@ export function LauncherScreen({
           return;
         }
         if (ownerView) {
-          const page = new URL(
-            destination === 'work-review' ? '/work-review' : '/sources',
-            result.url,
-          );
-          if (destination === 'work-review' && search) page.search = search;
-          const target = page.href;
+          const target = new URL('/sources', result.url).href;
           if (browserNeedsClick && externalOpen) {
             setPrivateUrl(target);
             setStatus('Open the dashboard in your browser or copy the private address.');
@@ -195,17 +188,7 @@ export function LauncherScreen({
         if (active.current) setBusy(false);
       }
     },
-    [
-      launch,
-      handoff,
-      browserNeedsClick,
-      ownerView,
-      destination,
-      search,
-      externalOpen,
-      openInBrowser,
-      waitForRuntime,
-    ],
+    [launch, handoff, browserNeedsClick, ownerView, externalOpen, openInBrowser, waitForRuntime],
   );
 
   async function openPreparedHandoff() {
